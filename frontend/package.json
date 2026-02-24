@@ -1,0 +1,7 @@
+{
+  "name": "kubedeck-frontend",
+  "private": true,
+  "workspaces": [
+    "shell"
+  ]
+}
