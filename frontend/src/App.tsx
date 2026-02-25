@@ -16,7 +16,11 @@ import Typography from '@mui/material/Typography';
 import { ListPageShell } from './components/page-shell/ResourcePageShell';
 import { composeMenus } from './core/menuComposer';
 import { groupMenusBySource } from './core/menuGrouping';
-import { parseMenusResponse } from './sdk/metaApi';
+import {
+  parseClustersResponse,
+  parseMenusResponse,
+  parseRegistryResponse,
+} from './sdk/metaApi';
 import type { MenuItem } from './sdk/types';
 import type { ThemePreference } from './themeMode';
 
@@ -81,7 +85,9 @@ function MenuSection({
 function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const apiTargetHint = resolveApiTargetHint();
   const [activeCluster, setActiveCluster] = useState('default');
+  const [clusters, setClusters] = useState<string[]>(['default']);
   const [menus, setMenus] = useState<MenuItem[]>([]);
+  const [resourceTypeCount, setResourceTypeCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<ProbeStatus>('checking');
@@ -101,20 +107,56 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
   useEffect(() => {
     let active = true;
 
-    async function loadMenus() {
+    async function loadClusters() {
+      try {
+        const response = await fetch('/api/meta/clusters');
+        if (!response.ok) {
+          throw new Error(`clusters request failed: ${response.status}`);
+        }
+        const payload = parseClustersResponse(await response.json());
+        if (active && payload.clusters.length > 0) {
+          setClusters(payload.clusters);
+          if (!payload.clusters.includes(activeCluster)) {
+            setActiveCluster(payload.clusters[0]);
+          }
+        }
+      } catch {
+        if (active) {
+          setClusters(['default']);
+        }
+      }
+    }
+
+    loadClusters();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadClusterMetadata() {
       setLoading(true);
       setError(null);
+      setMenus([]);
+      setResourceTypeCount(0);
       try {
-        const response = await fetch(
-          `/api/meta/menus?cluster=${encodeURIComponent(activeCluster)}`,
-        );
-        if (!response.ok) {
-          throw new Error(`menus request failed: ${response.status}`);
+        const [menusResponse, registryResponse] = await Promise.all([
+          fetch(`/api/meta/menus?cluster=${encodeURIComponent(activeCluster)}`),
+          fetch(`/api/meta/registry?cluster=${encodeURIComponent(activeCluster)}`),
+        ]);
+        if (!menusResponse.ok) {
+          throw new Error(`menus request failed: ${menusResponse.status}`);
         }
-
-        const payload = parseMenusResponse(await response.json());
+        if (!registryResponse.ok) {
+          throw new Error(`registry request failed: ${registryResponse.status}`);
+        }
+        const menusPayload = parseMenusResponse(await menusResponse.json());
+        const registryPayload = parseRegistryResponse(await registryResponse.json());
         if (active) {
-          setMenus(payload.menus);
+          setMenus(menusPayload.menus);
+          setResourceTypeCount(registryPayload.resourceTypes.length);
         }
       } catch (e) {
         if (active) {
@@ -128,7 +170,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
       }
     }
 
-    loadMenus();
+    loadClusterMetadata();
 
     return () => {
       active = false;
@@ -237,10 +279,11 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                 label="Cluster"
                 inputProps={{ id: 'cluster-select' }}
               >
-                <option value="default">default</option>
-                <option value="dev">dev</option>
-                <option value="staging">staging</option>
-                <option value="prod">prod</option>
+                {clusters.map((clusterId) => (
+                  <option key={clusterId} value={clusterId}>
+                    {clusterId}
+                  </option>
+                ))}
               </Select>
             </FormControl>
 
@@ -269,6 +312,9 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             >
               <Typography variant="body2" sx={{ mb: 0.5 }}>
                 API target ({apiTargetHint})
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 0.5 }}>
+                Registry resource types: {resourceTypeCount}
               </Typography>
               <Typography variant="body2" sx={{ mb: 0.5 }}>
                 Last checked: {lastCheckedAt ?? 'never'}

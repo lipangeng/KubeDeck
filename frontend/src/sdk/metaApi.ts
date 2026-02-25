@@ -1,4 +1,10 @@
-import type { MenuItem, MenusResponse, MenuSource } from './types';
+import type {
+  ClustersResponse,
+  MenuItem,
+  MenusResponse,
+  MenuSource,
+  RegistryResponse,
+} from './types';
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -69,5 +75,55 @@ export function parseMenusResponse(value: unknown): MenusResponse {
   return {
     cluster,
     menus: menus.map(parseMenuItem),
+  };
+}
+
+export function parseClustersResponse(value: unknown): ClustersResponse {
+  if (!isObject(value)) {
+    throw new Error('invalid clusters response: not an object');
+  }
+
+  const { clusters } = value;
+  if (!Array.isArray(clusters) || !clusters.every((item) => typeof item === 'string')) {
+    throw new Error('invalid clusters response: clusters must be string[]');
+  }
+
+  return { clusters };
+}
+
+export function parseRegistryResponse(value: unknown): RegistryResponse {
+  if (!isObject(value)) {
+    throw new Error('invalid registry response: not an object');
+  }
+
+  const { cluster, resourceTypes } = value;
+  if (typeof cluster !== 'string' || cluster === '') {
+    throw new Error('invalid registry response: cluster is required');
+  }
+  if (!Array.isArray(resourceTypes)) {
+    throw new Error('invalid registry response: resourceTypes must be array');
+  }
+
+  for (const item of resourceTypes) {
+    if (!isObject(item)) {
+      throw new Error('invalid registry response: resourceType item must be object');
+    }
+    if (
+      typeof item.id !== 'string' ||
+      typeof item.group !== 'string' ||
+      typeof item.version !== 'string' ||
+      typeof item.kind !== 'string' ||
+      typeof item.plural !== 'string' ||
+      typeof item.namespaced !== 'boolean' ||
+      typeof item.preferredVersion !== 'string' ||
+      typeof item.source !== 'string'
+    ) {
+      throw new Error('invalid registry response: malformed resourceType');
+    }
+  }
+
+  return {
+    cluster,
+    resourceTypes: resourceTypes as RegistryResponse['resourceTypes'],
   };
 }
