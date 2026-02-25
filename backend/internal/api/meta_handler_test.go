@@ -7,6 +7,34 @@ import (
 	"testing"
 )
 
+type registryResponse struct {
+	Cluster       string `json:"cluster"`
+	ResourceTypes []struct {
+		ID               string `json:"id"`
+		Group            string `json:"group"`
+		Version          string `json:"version"`
+		Kind             string `json:"kind"`
+		Plural           string `json:"plural"`
+		Namespaced       bool   `json:"namespaced"`
+		PreferredVersion string `json:"preferredVersion"`
+		Source           string `json:"source"`
+	} `json:"resourceTypes"`
+}
+
+type menusResponse struct {
+	Cluster string `json:"cluster"`
+	Menus   []struct {
+		ID         string `json:"id"`
+		Group      string `json:"group"`
+		Title      string `json:"title"`
+		TargetType string `json:"targetType"`
+		TargetRef  string `json:"targetRef"`
+		Source     string `json:"source"`
+		Order      int    `json:"order"`
+		Visible    bool   `json:"visible"`
+	} `json:"menus"`
+}
+
 func TestRegistryEndpoint(t *testing.T) {
 	router := NewRouter()
 
@@ -19,13 +47,19 @@ func TestRegistryEndpoint(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, resp.Code)
 	}
 
-	var body map[string]any
+	var body registryResponse
 	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
 		t.Fatalf("expected JSON response, got error: %v", err)
 	}
 
-	if _, ok := body["resourceTypes"]; !ok {
-		t.Fatalf("expected response to contain resourceTypes key, body=%s", resp.Body.String())
+	if body.Cluster != "dev" {
+		t.Fatalf("expected cluster dev, got %q", body.Cluster)
+	}
+	if len(body.ResourceTypes) == 0 {
+		t.Fatalf("expected non-empty resourceTypes, body=%s", resp.Body.String())
+	}
+	if body.ResourceTypes[0].ID == "" || body.ResourceTypes[0].Kind == "" {
+		t.Fatalf("expected typed resource fields, body=%s", resp.Body.String())
 	}
 }
 
@@ -63,13 +97,20 @@ func TestMenusEndpoint(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, resp.Code)
 	}
 
-	var body map[string]any
+	var body menusResponse
 	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
 		t.Fatalf("expected JSON response, got error: %v", err)
 	}
 
-	if _, ok := body["menus"]; !ok {
-		t.Fatalf("expected response to contain menus key, body=%s", resp.Body.String())
+	if body.Cluster != "dev" {
+		t.Fatalf("expected cluster dev, got %q", body.Cluster)
+	}
+	if len(body.Menus) == 0 {
+		t.Fatalf("expected non-empty menus, body=%s", resp.Body.String())
+	}
+	first := body.Menus[0]
+	if first.ID == "" || first.TargetType == "" || first.TargetRef == "" {
+		t.Fatalf("expected typed menu fields, body=%s", resp.Body.String())
 	}
 }
 
