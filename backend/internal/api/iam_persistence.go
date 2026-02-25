@@ -1,28 +1,26 @@
 package api
 
 import (
-	"database/sql"
 	"encoding/json"
 	"log"
 	"os"
 	"strings"
 	"sync"
-	"time"
 
-	_ "modernc.org/sqlite"
+	"kubedeck/backend/internal/storage"
 )
 
 var (
 	iamPersistenceOnce sync.Once
-	iamPersistenceDB   *sql.DB
+	iamPersistenceRepo storage.IAMPersistence
 	iamPersistenceErr  error
 )
 
 func resetIAMPersistenceForTest() {
-	if iamPersistenceDB != nil {
-		_ = iamPersistenceDB.Close()
+	if iamPersistenceRepo != nil {
+		_ = iamPersistenceRepo.Close()
 	}
-	iamPersistenceDB = nil
+	iamPersistenceRepo = nil
 	iamPersistenceErr = nil
 	iamPersistenceOnce = sync.Once{}
 }
@@ -32,22 +30,15 @@ func ensureIAMPersistence() {
 		if !iamPersistenceEnabled() {
 			return
 		}
+		driver := strings.TrimSpace(os.Getenv("KUBEDECK_DB_DRIVER"))
 		dsn := strings.TrimSpace(os.Getenv("KUBEDECK_SQLITE_DSN"))
-		if dsn == "" {
-			dsn = "kubedeck.sqlite"
-		}
-		db, err := sql.Open("sqlite", dsn)
+		repo, err := storage.NewIAMPersistence(driver, dsn)
 		if err != nil {
 			iamPersistenceErr = err
 			return
 		}
-		if err := ensureIAMSchema(db); err != nil {
-			_ = db.Close()
-			iamPersistenceErr = err
-			return
-		}
-		iamPersistenceDB = db
-		if err := loadIAMPersistentState(db); err != nil {
+		iamPersistenceRepo = repo
+		if err := loadIAMPersistentState(repo); err != nil {
 			iamPersistenceErr = err
 			return
 		}
@@ -68,189 +59,66 @@ func iamPersistenceEnabled() bool {
 	return true
 }
 
-func ensureIAMSchema(db *sql.DB) error {
-	statements := []string{
-		`CREATE TABLE IF NOT EXISTS iam_groups (
-			id TEXT PRIMARY KEY,
-			tenant_id TEXT NOT NULL,
-			name TEXT NOT NULL,
-			description TEXT NOT NULL,
-			permissions_json TEXT NOT NULL
-		);`,
-		`CREATE TABLE IF NOT EXISTS iam_memberships (
-			id TEXT PRIMARY KEY,
-			tenant_id TEXT NOT NULL,
-			user_id TEXT NOT NULL,
-			user_label TEXT NOT NULL,
-			group_ids_json TEXT NOT NULL,
-			effective_from TEXT NOT NULL,
-			effective_until TEXT
-		);`,
-		`CREATE TABLE IF NOT EXISTS iam_invites (
-			token TEXT PRIMARY KEY,
-			id TEXT NOT NULL,
-			tenant_id TEXT NOT NULL,
-			tenant_code TEXT NOT NULL,
-			invitee_email TEXT NOT NULL,
-			invitee_phone TEXT NOT NULL,
-			role_hint TEXT NOT NULL,
-			invite_link TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			expires_at TEXT NOT NULL,
-			status TEXT NOT NULL
-		);`,
-		`CREATE TABLE IF NOT EXISTS auth_sessions (
-			token TEXT PRIMARY KEY,
-			user_json TEXT NOT NULL,
-			available_json TEXT NOT NULL,
-			active_tenant_id TEXT NOT NULL
-		);`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_iam_groups_tenant_name ON iam_groups(tenant_id, name);`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_iam_memberships_tenant_user ON iam_memberships(tenant_id, user_id);`,
-	}
-	for _, stmt := range statements {
-		if _, err := db.Exec(stmt); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func loadIAMPersistentState(db *sql.DB) error {
-	loadGroups := map[string]iamGroup{}
-	rows, err := db.Query(`SELECT id, tenant_id, name, description, permissions_json FROM iam_groups`)
+func loadIAMPersistentState(repo storage.IAMPersistence) error {
+	snapshot, err := repo.Load()
 	if err != nil {
 		return err
 	}
-	for rows.Next() {
-		var g iamGroup
-		var permissionsJSON string
-		if err := rows.Scan(&g.ID, &g.TenantID, &g.Name, &g.Description, &permissionsJSON); err != nil {
-			rows.Close()
-			return err
+
+	loadGroups := map[string]iamGroup{}
+	for _, item := range snapshot.Groups {
+		loadGroups[item.ID] = iamGroup{
+			ID:          item.ID,
+			TenantID:    item.TenantID,
+			Name:        item.Name,
+			Description: item.Description,
+			Permissions: append([]string{}, item.Permissions...),
 		}
-		if permissionsJSON != "" {
-			if err := json.Unmarshal([]byte(permissionsJSON), &g.Permissions); err != nil {
-				rows.Close()
-				return err
-			}
-		}
-		loadGroups[g.ID] = g
 	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return err
-	}
-	rows.Close()
 
 	loadMemberships := map[string]iamMembership{}
-	rows, err = db.Query(`SELECT id, tenant_id, user_id, user_label, group_ids_json, effective_from, effective_until FROM iam_memberships`)
-	if err != nil {
-		return err
+	for _, item := range snapshot.Memberships {
+		loadMemberships[item.ID] = iamMembership{
+			ID:             item.ID,
+			TenantID:       item.TenantID,
+			UserID:         item.UserID,
+			UserLabel:      item.UserLabel,
+			GroupIDs:       append([]string{}, item.GroupIDs...),
+			EffectiveFrom:  item.EffectiveFrom,
+			EffectiveUntil: item.EffectiveUntil,
+		}
 	}
-	for rows.Next() {
-		var m iamMembership
-		var groupIDsJSON string
-		var effectiveFrom string
-		var effectiveUntil sql.NullString
-		if err := rows.Scan(&m.ID, &m.TenantID, &m.UserID, &m.UserLabel, &groupIDsJSON, &effectiveFrom, &effectiveUntil); err != nil {
-			rows.Close()
-			return err
-		}
-		if groupIDsJSON != "" {
-			if err := json.Unmarshal([]byte(groupIDsJSON), &m.GroupIDs); err != nil {
-				rows.Close()
-				return err
-			}
-		}
-		parsedFrom, err := time.Parse(time.RFC3339, effectiveFrom)
-		if err != nil {
-			rows.Close()
-			return err
-		}
-		m.EffectiveFrom = parsedFrom.UTC()
-		if effectiveUntil.Valid && strings.TrimSpace(effectiveUntil.String) != "" {
-			parsedUntil, err := time.Parse(time.RFC3339, effectiveUntil.String)
-			if err != nil {
-				rows.Close()
-				return err
-			}
-			parsedUntil = parsedUntil.UTC()
-			m.EffectiveUntil = &parsedUntil
-		}
-		loadMemberships[m.ID] = m
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return err
-	}
-	rows.Close()
 
 	loadInvites := map[string]iamInvite{}
-	rows, err = db.Query(`SELECT token, id, tenant_id, tenant_code, invitee_email, invitee_phone, role_hint, invite_link, created_at, expires_at, status FROM iam_invites`)
-	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var invite iamInvite
-		var createdAt string
-		var expiresAt string
-		if err := rows.Scan(&invite.Token, &invite.ID, &invite.TenantID, &invite.TenantCode, &invite.InviteeEmail, &invite.InviteePhone, &invite.RoleHint, &invite.InviteLink, &createdAt, &expiresAt, &invite.Status); err != nil {
-			rows.Close()
-			return err
+	for _, item := range snapshot.Invites {
+		loadInvites[item.Token] = iamInvite{
+			Token:        item.Token,
+			ID:           item.ID,
+			TenantID:     item.TenantID,
+			TenantCode:   item.TenantCode,
+			InviteeEmail: item.InviteeEmail,
+			InviteePhone: item.InviteePhone,
+			RoleHint:     item.RoleHint,
+			InviteLink:   item.InviteLink,
+			CreatedAt:    item.CreatedAt,
+			ExpiresAt:    item.ExpiresAt,
+			Status:       item.Status,
 		}
-		parsedCreatedAt, err := time.Parse(time.RFC3339, createdAt)
-		if err != nil {
-			rows.Close()
-			return err
-		}
-		parsedExpiresAt, err := time.Parse(time.RFC3339, expiresAt)
-		if err != nil {
-			rows.Close()
-			return err
-		}
-		invite.CreatedAt = parsedCreatedAt.UTC()
-		invite.ExpiresAt = parsedExpiresAt.UTC()
-		loadInvites[invite.Token] = invite
 	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return err
-	}
-	rows.Close()
 
 	loadSessions := map[string]authSession{}
-	rows, err = db.Query(`SELECT token, user_json, available_json, active_tenant_id FROM auth_sessions`)
-	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var token string
-		var userJSON string
-		var availableJSON string
-		var activeTenantID string
-		if err := rows.Scan(&token, &userJSON, &availableJSON, &activeTenantID); err != nil {
-			rows.Close()
-			return err
-		}
+	for _, item := range snapshot.Sessions {
 		var session authSession
-		if err := json.Unmarshal([]byte(userJSON), &session.User); err != nil {
-			rows.Close()
+		if err := json.Unmarshal([]byte(item.UserJSON), &session.User); err != nil {
 			return err
 		}
-		if err := json.Unmarshal([]byte(availableJSON), &session.Available); err != nil {
-			rows.Close()
+		if err := json.Unmarshal([]byte(item.AvailableJSON), &session.Available); err != nil {
 			return err
 		}
-		session.Token = token
-		session.ActiveTenantID = activeTenantID
-		loadSessions[token] = session
+		session.Token = item.Token
+		session.ActiveTenantID = item.ActiveTenantID
+		loadSessions[item.Token] = session
 	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return err
-	}
-	rows.Close()
 
 	iamGroupsMu.Lock()
 	iamGroups = loadGroups
@@ -273,179 +141,97 @@ func loadIAMPersistentState(db *sql.DB) error {
 
 func persistIAMGroups() {
 	ensureIAMPersistence()
-	if iamPersistenceDB == nil {
+	if iamPersistenceRepo == nil {
 		return
 	}
 	iamGroupsMu.RLock()
-	snapshot := make([]iamGroup, 0, len(iamGroups))
+	snapshot := make([]storage.IAMGroupRecord, 0, len(iamGroups))
 	for _, item := range iamGroups {
-		snapshot = append(snapshot, item)
+		snapshot = append(snapshot, storage.IAMGroupRecord{
+			ID:          item.ID,
+			TenantID:    item.TenantID,
+			Name:        item.Name,
+			Description: item.Description,
+			Permissions: append([]string{}, item.Permissions...),
+		})
 	}
 	iamGroupsMu.RUnlock()
-
-	tx, err := iamPersistenceDB.Begin()
-	if err != nil {
-		log.Printf("persist iam groups begin failed: %v", err)
-		return
-	}
-	if _, err := tx.Exec(`DELETE FROM iam_groups`); err != nil {
-		_ = tx.Rollback()
-		log.Printf("persist iam groups clear failed: %v", err)
-		return
-	}
-	for _, g := range snapshot {
-		permissionsJSON, _ := json.Marshal(g.Permissions)
-		if _, err := tx.Exec(
-			`INSERT INTO iam_groups(id, tenant_id, name, description, permissions_json) VALUES(?, ?, ?, ?, ?)`,
-			g.ID,
-			g.TenantID,
-			g.Name,
-			g.Description,
-			string(permissionsJSON),
-		); err != nil {
-			_ = tx.Rollback()
-			log.Printf("persist iam groups insert failed: %v", err)
-			return
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		log.Printf("persist iam groups commit failed: %v", err)
+	if err := iamPersistenceRepo.ReplaceGroups(snapshot); err != nil {
+		log.Printf("persist iam groups failed: %v", err)
 	}
 }
 
 func persistIAMMemberships() {
 	ensureIAMPersistence()
-	if iamPersistenceDB == nil {
+	if iamPersistenceRepo == nil {
 		return
 	}
 	iamMembershipsMu.RLock()
-	snapshot := make([]iamMembership, 0, len(iamMemberships))
+	snapshot := make([]storage.IAMMembershipRecord, 0, len(iamMemberships))
 	for _, item := range iamMemberships {
-		snapshot = append(snapshot, item)
+		snapshot = append(snapshot, storage.IAMMembershipRecord{
+			ID:             item.ID,
+			TenantID:       item.TenantID,
+			UserID:         item.UserID,
+			UserLabel:      item.UserLabel,
+			GroupIDs:       append([]string{}, item.GroupIDs...),
+			EffectiveFrom:  item.EffectiveFrom,
+			EffectiveUntil: item.EffectiveUntil,
+		})
 	}
 	iamMembershipsMu.RUnlock()
-
-	tx, err := iamPersistenceDB.Begin()
-	if err != nil {
-		log.Printf("persist iam memberships begin failed: %v", err)
-		return
-	}
-	if _, err := tx.Exec(`DELETE FROM iam_memberships`); err != nil {
-		_ = tx.Rollback()
-		log.Printf("persist iam memberships clear failed: %v", err)
-		return
-	}
-	for _, m := range snapshot {
-		groupIDsJSON, _ := json.Marshal(m.GroupIDs)
-		effectiveUntil := ""
-		if m.EffectiveUntil != nil {
-			effectiveUntil = m.EffectiveUntil.UTC().Format(time.RFC3339)
-		}
-		if _, err := tx.Exec(
-			`INSERT INTO iam_memberships(id, tenant_id, user_id, user_label, group_ids_json, effective_from, effective_until) VALUES(?, ?, ?, ?, ?, ?, ?)`,
-			m.ID,
-			m.TenantID,
-			m.UserID,
-			m.UserLabel,
-			string(groupIDsJSON),
-			m.EffectiveFrom.UTC().Format(time.RFC3339),
-			effectiveUntil,
-		); err != nil {
-			_ = tx.Rollback()
-			log.Printf("persist iam memberships insert failed: %v", err)
-			return
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		log.Printf("persist iam memberships commit failed: %v", err)
+	if err := iamPersistenceRepo.ReplaceMemberships(snapshot); err != nil {
+		log.Printf("persist iam memberships failed: %v", err)
 	}
 }
 
 func persistIAMInvites() {
 	ensureIAMPersistence()
-	if iamPersistenceDB == nil {
+	if iamPersistenceRepo == nil {
 		return
 	}
 	invitesMu.RLock()
-	snapshot := make([]iamInvite, 0, len(invites))
+	snapshot := make([]storage.IAMInviteRecord, 0, len(invites))
 	for _, item := range invites {
-		snapshot = append(snapshot, item)
+		snapshot = append(snapshot, storage.IAMInviteRecord{
+			Token:        item.Token,
+			ID:           item.ID,
+			TenantID:     item.TenantID,
+			TenantCode:   item.TenantCode,
+			InviteeEmail: item.InviteeEmail,
+			InviteePhone: item.InviteePhone,
+			RoleHint:     item.RoleHint,
+			InviteLink:   item.InviteLink,
+			CreatedAt:    item.CreatedAt,
+			ExpiresAt:    item.ExpiresAt,
+			Status:       item.Status,
+		})
 	}
 	invitesMu.RUnlock()
-
-	tx, err := iamPersistenceDB.Begin()
-	if err != nil {
-		log.Printf("persist iam invites begin failed: %v", err)
-		return
-	}
-	if _, err := tx.Exec(`DELETE FROM iam_invites`); err != nil {
-		_ = tx.Rollback()
-		log.Printf("persist iam invites clear failed: %v", err)
-		return
-	}
-	for _, i := range snapshot {
-		if _, err := tx.Exec(
-			`INSERT INTO iam_invites(token, id, tenant_id, tenant_code, invitee_email, invitee_phone, role_hint, invite_link, created_at, expires_at, status) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			i.Token,
-			i.ID,
-			i.TenantID,
-			i.TenantCode,
-			i.InviteeEmail,
-			i.InviteePhone,
-			i.RoleHint,
-			i.InviteLink,
-			i.CreatedAt.UTC().Format(time.RFC3339),
-			i.ExpiresAt.UTC().Format(time.RFC3339),
-			i.Status,
-		); err != nil {
-			_ = tx.Rollback()
-			log.Printf("persist iam invites insert failed: %v", err)
-			return
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		log.Printf("persist iam invites commit failed: %v", err)
+	if err := iamPersistenceRepo.ReplaceInvites(snapshot); err != nil {
+		log.Printf("persist iam invites failed: %v", err)
 	}
 }
 
 func persistAuthSessions() {
 	ensureIAMPersistence()
-	if iamPersistenceDB == nil {
+	if iamPersistenceRepo == nil {
 		return
 	}
 	authSessionsMu.RLock()
-	snapshot := make([]authSession, 0, len(authSessions))
+	snapshot := make([]storage.AuthSessionRecord, 0, len(authSessions))
 	for _, item := range authSessions {
-		snapshot = append(snapshot, item)
+		userJSON, _ := json.Marshal(item.User)
+		availableJSON, _ := json.Marshal(item.Available)
+		snapshot = append(snapshot, storage.AuthSessionRecord{
+			Token:          item.Token,
+			UserJSON:       string(userJSON),
+			AvailableJSON:  string(availableJSON),
+			ActiveTenantID: item.ActiveTenantID,
+		})
 	}
 	authSessionsMu.RUnlock()
-
-	tx, err := iamPersistenceDB.Begin()
-	if err != nil {
-		log.Printf("persist auth sessions begin failed: %v", err)
-		return
-	}
-	if _, err := tx.Exec(`DELETE FROM auth_sessions`); err != nil {
-		_ = tx.Rollback()
-		log.Printf("persist auth sessions clear failed: %v", err)
-		return
-	}
-	for _, s := range snapshot {
-		userJSON, _ := json.Marshal(s.User)
-		availableJSON, _ := json.Marshal(s.Available)
-		if _, err := tx.Exec(
-			`INSERT INTO auth_sessions(token, user_json, available_json, active_tenant_id) VALUES(?, ?, ?, ?)`,
-			s.Token,
-			string(userJSON),
-			string(availableJSON),
-			s.ActiveTenantID,
-		); err != nil {
-			_ = tx.Rollback()
-			log.Printf("persist auth sessions insert failed: %v", err)
-			return
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		log.Printf("persist auth sessions commit failed: %v", err)
+	if err := iamPersistenceRepo.ReplaceSessions(snapshot); err != nil {
+		log.Printf("persist auth sessions failed: %v", err)
 	}
 }
