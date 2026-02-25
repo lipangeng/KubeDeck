@@ -9,23 +9,6 @@ interface MenusResponse {
   menus: MenuItem[];
 }
 
-function resolveMenusEndpoint(cluster: string): string {
-  const path = `/api/meta/menus?cluster=${encodeURIComponent(cluster)}`;
-
-  try {
-    if (
-      window.location.protocol === 'http:' ||
-      window.location.protocol === 'https:'
-    ) {
-      return new URL(path, window.location.origin).toString();
-    }
-  } catch {
-    // Fall through to local backend default below.
-  }
-
-  return `http://127.0.0.1:8080${path}`;
-}
-
 function App() {
   const [activeCluster, setActiveCluster] = useState('default');
   const [menus, setMenus] = useState<MenuItem[]>([]);
@@ -39,7 +22,9 @@ function App() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(resolveMenusEndpoint(activeCluster));
+        const response = await fetch(
+          `/api/meta/menus?cluster=${encodeURIComponent(activeCluster)}`,
+        );
         if (!response.ok) {
           throw new Error(`menus request failed: ${response.status}`);
         }
