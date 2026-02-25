@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +15,8 @@ import (
 )
 
 type AuthHandler struct {
-	provider auth.Provider
+	provider      auth.Provider
+	oauthProvider auth.OAuthProvider
 }
 
 type tenantInfo struct {
@@ -37,7 +39,12 @@ var (
 
 func NewAuthHandler() *AuthHandler {
 	ensureIAMPersistence()
-	return &AuthHandler{provider: auth.NewLocalProvider()}
+	oauthProviderName := strings.TrimSpace(os.Getenv("KUBEDECK_OAUTH_PROVIDER"))
+	oauthAuthorizeURL := strings.TrimSpace(os.Getenv("KUBEDECK_OAUTH_AUTHORIZE_URL"))
+	return &AuthHandler{
+		provider:      auth.NewLocalProvider(),
+		oauthProvider: auth.NewOAuthProvider(oauthProviderName, oauthAuthorizeURL),
+	}
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -63,38 +70,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
-
-	tenants, memberships := defaultMembershipsForUser(user.ID)
-	activeTenantID := resolveActiveTenant(req.TenantCode, req.TenantID, tenants)
-	if activeTenantID == "" {
-		_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, Action: "auth.login", TargetType: "tenant", Result: "denied", Reason: "tenant_not_found"})
-		writeJSONError(w, http.StatusForbidden, "tenant_not_found")
-		return
-	}
-	if !isMembershipActiveForTenant(memberships, activeTenantID, time.Now().UTC()) {
-		_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, TenantID: activeTenantID, Action: "auth.login", TargetType: "tenant_membership", Result: "denied", Reason: "membership_expired"})
-		writeJSONError(w, http.StatusForbidden, "membership_expired")
-		return
-	}
-
-	user.Memberships = memberships
-	user.ActiveTenantID = activeTenantID
-	token := newToken()
-
-	saveAuthSession(token, authSession{
-		Token:          token,
-		User:           user,
-		Available:      tenants,
-		ActiveTenantID: activeTenantID,
-	})
-	_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, TenantID: activeTenantID, Action: "auth.login", TargetType: "session", TargetID: token, Result: "allowed"})
-
-	_ = writeJSON(w, http.StatusOK, map[string]any{
-		"token":            token,
-		"user":             map[string]any{"id": user.ID, "username": user.Username, "roles": user.Roles},
-		"tenants":          tenants,
-		"active_tenant_id": activeTenantID,
-	})
+	h.loginWithResolvedUser(w, user, req.TenantCode, req.TenantID, "auth.login")
 }
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
@@ -258,6 +234,83 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		"status":    "accepted",
 		"tenant_id": invite.TenantID,
 		"username":  req.Username,
+	})
+}
+
+func (h *AuthHandler) OAuthURL(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+	state := newToken()
+	_ = writeJSON(w, http.StatusOK, map[string]any{
+		"provider": h.oauthProvider.Name(),
+		"state":    state,
+		"auth_url": h.oauthProvider.BeginAuthURL(state),
+	})
+}
+
+func (h *AuthHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w, http.MethodPost)
+		return
+	}
+
+	var req struct {
+		Code       string `json:"code"`
+		TenantCode string `json:"tenant_code"`
+		TenantID   string `json:"tenant_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	user, err := h.oauthProvider.ExchangeCode(req.Code)
+	if err != nil {
+		_ = defaultAuditWriter.Write(audit.Event{Action: "auth.oauth.callback", TargetType: "session", Result: "denied", Reason: "invalid_oauth_code"})
+		writeJSONError(w, http.StatusUnauthorized, "invalid_oauth_code")
+		return
+	}
+	h.loginWithResolvedUser(w, user, req.TenantCode, req.TenantID, "auth.oauth.callback")
+}
+
+func (h *AuthHandler) loginWithResolvedUser(
+	w http.ResponseWriter,
+	user auth.User,
+	tenantCode string,
+	tenantID string,
+	auditAction string,
+) {
+	tenants, memberships := defaultMembershipsForUser(user.ID)
+	activeTenantID := resolveActiveTenant(tenantCode, tenantID, tenants)
+	if activeTenantID == "" {
+		_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, Action: auditAction, TargetType: "tenant", Result: "denied", Reason: "tenant_not_found"})
+		writeJSONError(w, http.StatusForbidden, "tenant_not_found")
+		return
+	}
+	if !isMembershipActiveForTenant(memberships, activeTenantID, time.Now().UTC()) {
+		_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, TenantID: activeTenantID, Action: auditAction, TargetType: "tenant_membership", Result: "denied", Reason: "membership_expired"})
+		writeJSONError(w, http.StatusForbidden, "membership_expired")
+		return
+	}
+
+	user.Memberships = memberships
+	user.ActiveTenantID = activeTenantID
+	token := newToken()
+
+	saveAuthSession(token, authSession{
+		Token:          token,
+		User:           user,
+		Available:      tenants,
+		ActiveTenantID: activeTenantID,
+	})
+	_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, TenantID: activeTenantID, Action: auditAction, TargetType: "session", TargetID: token, Result: "allowed"})
+
+	_ = writeJSON(w, http.StatusOK, map[string]any{
+		"token":            token,
+		"user":             map[string]any{"id": user.ID, "username": user.Username, "roles": user.Roles},
+		"tenants":          tenants,
+		"active_tenant_id": activeTenantID,
 	})
 }
 

@@ -22,6 +22,8 @@ func NewRouter() http.Handler {
 		{pattern: "/api/meta/clusters", handler: meta.Clusters},
 		{pattern: "/api/meta/menus", handler: meta.Menus},
 		{pattern: "/api/auth/login", handler: authHandler.Login},
+		{pattern: "/api/auth/oauth/url", handler: authHandler.OAuthURL},
+		{pattern: "/api/auth/oauth/callback", handler: authHandler.OAuthCallback},
 		{pattern: "/api/auth/me", handler: authHandler.Me, policy: routePolicy{requireSession: true}},
 		{
 			pattern: "/api/auth/switch-tenant",

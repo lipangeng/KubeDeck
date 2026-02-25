@@ -572,6 +572,81 @@ func TestAuthLoginMeSwitchLogoutFlow(t *testing.T) {
 	}
 }
 
+func TestOAuthURLFlow(t *testing.T) {
+	resetAuthSessions()
+	resetAuditWriter()
+	router := NewRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/oauth/url", nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, resp.Code, resp.Body.String())
+	}
+	var body struct {
+		Provider string `json:"provider"`
+		State    string `json:"state"`
+		AuthURL  string `json:"auth_url"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected oauth url response json, got %v", err)
+	}
+	if strings.TrimSpace(body.State) == "" {
+		t.Fatalf("expected non-empty state")
+	}
+	if strings.TrimSpace(body.AuthURL) == "" || !strings.Contains(body.AuthURL, "state=") {
+		t.Fatalf("expected auth url with state, got %q", body.AuthURL)
+	}
+}
+
+func TestOAuthCallbackFlow(t *testing.T) {
+	resetAuthSessions()
+	resetAuditWriter()
+	router := NewRouter()
+
+	payload := []byte(`{"code":"oauth-admin","tenant_code":"staging"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/callback", bytes.NewReader(payload))
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, resp.Code, resp.Body.String())
+	}
+	var body struct {
+		Token          string `json:"token"`
+		ActiveTenantID string `json:"active_tenant_id"`
+		User           struct {
+			Username string   `json:"username"`
+			Roles    []string `json:"roles"`
+		} `json:"user"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected oauth callback json, got %v", err)
+	}
+	if body.Token == "" {
+		t.Fatalf("expected token in oauth callback response")
+	}
+	if body.ActiveTenantID != "tenant-staging" {
+		t.Fatalf("expected tenant-staging, got %q", body.ActiveTenantID)
+	}
+	if body.User.Username != "oauth-admin" {
+		t.Fatalf("expected oauth-admin user, got %q", body.User.Username)
+	}
+}
+
+func TestOAuthCallbackRejectsInvalidCode(t *testing.T) {
+	resetAuthSessions()
+	resetAuditWriter()
+	router := NewRouter()
+
+	payload := []byte(`{"code":"invalid-oauth-code","tenant_code":"dev"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/callback", bytes.NewReader(payload))
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	if resp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusUnauthorized, resp.Code, resp.Body.String())
+	}
+}
+
 func TestAuthMeReloadsSessionFromPersistenceWhenCacheMiss(t *testing.T) {
 	resetIAMPersistenceForTest()
 	t.Cleanup(func() {
