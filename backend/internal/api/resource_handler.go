@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"kubedeck/backend/internal/core/audit"
 	"gopkg.in/yaml.v3"
+	"kubedeck/backend/internal/core/audit"
 )
 
 type ResourceHandler struct{}
@@ -48,6 +48,14 @@ type manifest struct {
 func (h *ResourceHandler) Apply(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w, http.MethodPost)
+		return
+	}
+	session, ok := mustSession(r, w)
+	if !ok {
+		return
+	}
+	if !hasResourceApplyWrite(session.User.Roles) {
+		writeJSONError(w, http.StatusForbidden, "permission_denied")
 		return
 	}
 
@@ -148,7 +156,8 @@ func (h *ResourceHandler) Apply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = defaultAuditWriter.Write(audit.Event{
-		TenantID:   "default",
+		TenantID:   session.ActiveTenantID,
+		ActorID:    session.User.ID,
 		Action:     "resource.apply",
 		TargetType: "manifest",
 		Result:     status,
@@ -157,6 +166,15 @@ func (h *ResourceHandler) Apply(w http.ResponseWriter, r *http.Request) {
 			"total":   strconv.Itoa(len(results)),
 		},
 	})
+}
+
+func hasResourceApplyWrite(roles []string) bool {
+	for _, role := range roles {
+		if role == "admin" || role == "owner" {
+			return true
+		}
+	}
+	return false
 }
 
 func splitYAMLDocuments(raw []byte) [][]byte {
