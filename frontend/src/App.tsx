@@ -109,6 +109,36 @@ function readStoredExpandedGroups(): Record<string, boolean> {
   }
 }
 
+function readHashRoute(): string {
+  if (typeof window === 'undefined') {
+    return '/';
+  }
+  const route = window.location.hash.replace(/^#/, '').trim();
+  return route === '' ? '/' : route;
+}
+
+function normalizeRoute(route: string): string {
+  const trimmed = route.trim();
+  if (trimmed === '') {
+    return '/';
+  }
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+function menuIcon(group: string, targetType: 'page' | 'resource'): string {
+  const normalizedGroup = group.trim().toUpperCase();
+  if (normalizedGroup === 'WORKLOAD') {
+    return '◈';
+  }
+  if (normalizedGroup === 'FAVORITES') {
+    return '★';
+  }
+  if (targetType === 'resource') {
+    return '◉';
+  }
+  return '•';
+}
+
 function countYamlDocuments(yaml: string): number {
   return yaml
     .split(/^---\s*$/m)
@@ -151,6 +181,7 @@ function App({
   const [readyError, setReadyError] = useState<string | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
   const [selectedMenuID, setSelectedMenuID] = useState<string>('');
+  const [currentRoute, setCurrentRoute] = useState<string>(() => readHashRoute());
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
     () => readStoredExpandedGroups(),
   );
@@ -232,6 +263,37 @@ function App({
       setSelectedMenuID(menuIDs[0]);
     }
   }, [menuIDs, selectedMenuID]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const onHashChange = () => {
+      setCurrentRoute(readHashRoute());
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => {
+      window.removeEventListener('hashchange', onHashChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const matched = configuredMenus.find(
+      (menu) => normalizeRoute(menu.targetRef) === normalizeRoute(currentRoute),
+    );
+    if (matched && matched.id !== selectedMenuID) {
+      setSelectedMenuID(matched.id);
+    }
+  }, [configuredMenus, currentRoute, selectedMenuID]);
+
+  function navigateMenu(menu: MenuItem) {
+    const nextRoute = normalizeRoute(menu.targetRef);
+    setSelectedMenuID(menu.id);
+    setCurrentRoute(nextRoute);
+    if (typeof window !== 'undefined') {
+      window.location.hash = nextRoute;
+    }
+  }
 
   async function applyResources() {
     setApplyStatus(null);
@@ -532,8 +594,11 @@ function App({
                 {favoritesMenus.map((menu) => (
                   <ListItem key={menu.id} disablePadding>
                     <ListItemButton
-                      selected={selectedMenuID === menu.id}
-                      onClick={() => setSelectedMenuID(menu.id)}
+                      selected={
+                        selectedMenuID === menu.id ||
+                        normalizeRoute(menu.targetRef) === normalizeRoute(currentRoute)
+                      }
+                      onClick={() => navigateMenu(menu)}
                       sx={{
                         borderRadius: 1.2,
                         mb: 0.3,
@@ -545,7 +610,7 @@ function App({
                         },
                       }}
                     >
-                      <ListItemText primary={`★ ${menu.title}`} />
+                      <ListItemText primary={`${menuIcon(menu.group, menu.targetType)} ${menu.title}`} />
                     </ListItemButton>
                   </ListItem>
                 ))}
@@ -588,8 +653,11 @@ function App({
                       {group.items.map((item) => (
                         <ListItem key={item.id} disablePadding>
                           <ListItemButton
-                            selected={selectedMenuID === item.id}
-                            onClick={() => setSelectedMenuID(item.id)}
+                            selected={
+                              selectedMenuID === item.id ||
+                              normalizeRoute(item.targetRef) === normalizeRoute(currentRoute)
+                            }
+                            onClick={() => navigateMenu(item)}
                             sx={{
                               borderRadius: 1.2,
                               mb: 0.2,
