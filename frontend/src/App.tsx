@@ -48,8 +48,12 @@ import {
 import {
   parseGroup,
   parseGroupsResponse,
+  parseInvitesResponse,
+  parseMembershipsResponse,
   parsePermissionsResponse,
   type IAMGroup,
+  type IAMInvite,
+  type IAMMembership,
   type IAMPermission,
 } from './sdk/iamApi';
 import {
@@ -308,9 +312,18 @@ function App({
   const [iamError, setIamError] = useState<string | null>(null);
   const [iamPermissions, setIamPermissions] = useState<IAMPermission[]>([]);
   const [iamGroups, setIamGroups] = useState<IAMGroup[]>([]);
+  const [iamMemberships, setIamMemberships] = useState<IAMMembership[]>([]);
+  const [iamInvites, setIamInvites] = useState<IAMInvite[]>([]);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDescription, setNewGroupDescription] = useState('');
   const [groupPermissionDrafts, setGroupPermissionDrafts] = useState<Record<string, string>>({});
+  const [membershipGroupDrafts, setMembershipGroupDrafts] = useState<Record<string, string>>({});
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePhone, setInvitePhone] = useState('');
+  const [inviteRoleHint, setInviteRoleHint] = useState('member');
+  const [inviteExpiresInHours, setInviteExpiresInHours] = useState('72');
+  const [inviteCreateBusy, setInviteCreateBusy] = useState(false);
+  const [inviteLinkCopied, setInviteLinkCopied] = useState<string | null>(null);
   const [inviteUsername, setInviteUsername] = useState('');
   const [invitePassword, setInvitePassword] = useState('');
   const [inviteBusy, setInviteBusy] = useState(false);
@@ -797,14 +810,18 @@ function App({
       setIamError('auth_required');
       setIamPermissions([]);
       setIamGroups([]);
+      setIamMemberships([]);
+      setIamInvites([]);
       return;
     }
     setIamLoading(true);
     setIamError(null);
     try {
-      const [permissionsResponse, groupsResponse] = await Promise.all([
+      const [permissionsResponse, groupsResponse, membershipsResponse, invitesResponse] = await Promise.all([
         apiFetch('/api/iam/permissions'),
         apiFetch('/api/iam/groups'),
+        apiFetch('/api/iam/memberships'),
+        apiFetch('/api/iam/invites'),
       ]);
       if (!permissionsResponse.ok) {
         throw new Error(`permissions request failed: ${permissionsResponse.status}`);
@@ -812,13 +829,29 @@ function App({
       if (!groupsResponse.ok) {
         throw new Error(`groups request failed: ${groupsResponse.status}`);
       }
+      if (!membershipsResponse.ok) {
+        throw new Error(`memberships request failed: ${membershipsResponse.status}`);
+      }
+      if (!invitesResponse.ok) {
+        throw new Error(`invites request failed: ${invitesResponse.status}`);
+      }
       const permissions = parsePermissionsResponse(await permissionsResponse.json());
       const groups = parseGroupsResponse(await groupsResponse.json());
+      const memberships = parseMembershipsResponse(await membershipsResponse.json());
+      const invites = parseInvitesResponse(await invitesResponse.json());
       setIamPermissions(permissions);
       setIamGroups(groups);
+      setIamMemberships(memberships);
+      setIamInvites(invites);
       setGroupPermissionDrafts(
         groups.reduce<Record<string, string>>((acc, group) => {
           acc[group.id] = group.permissions.join(', ');
+          return acc;
+        }, {}),
+      );
+      setMembershipGroupDrafts(
+        memberships.reduce<Record<string, string>>((acc, membership) => {
+          acc[membership.id] = membership.groupIDs.join(', ');
           return acc;
         }, {}),
       );
@@ -888,6 +921,99 @@ function App({
       }));
     } catch (e) {
       setIamError(e instanceof Error ? e.message : 'save permissions failed');
+    }
+  }
+
+  async function saveMembershipGroups(membership: IAMMembership) {
+    if (!authUser) {
+      setIamError('auth_required');
+      return;
+    }
+    setIamError(null);
+    try {
+      const groupIDs = normalizePermissionsDraft(membershipGroupDrafts[membership.id] ?? '');
+      const response = await apiFetch(
+        `/api/iam/memberships/${encodeURIComponent(membership.id)}/groups`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ group_ids: groupIDs }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`save membership groups failed: ${response.status}`);
+      }
+      const updated = parseMembershipsResponse({
+        memberships: [await response.json()],
+      })[0];
+      if (!updated) {
+        throw new Error('invalid membership update response');
+      }
+      setIamMemberships((previous) =>
+        previous.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setMembershipGroupDrafts((previous) => ({
+        ...previous,
+        [updated.id]: updated.groupIDs.join(', '),
+      }));
+    } catch (e) {
+      setIamError(e instanceof Error ? e.message : 'save membership groups failed');
+    }
+  }
+
+  async function createInvite() {
+    if (!authUser) {
+      setIamError('auth_required');
+      return;
+    }
+    if (inviteEmail.trim() === '' && invitePhone.trim() === '') {
+      setIamError('email_or_phone_required');
+      return;
+    }
+    setIamError(null);
+    setInviteCreateBusy(true);
+    try {
+      const response = await apiFetch('/api/iam/invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          phone: invitePhone.trim(),
+          role_hint: inviteRoleHint.trim(),
+          expires_in_hours: Number(inviteExpiresInHours) || 72,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`create invite failed: ${response.status}`);
+      }
+      const created = parseInvitesResponse({
+        invites: [await response.json()],
+      })[0];
+      if (!created) {
+        throw new Error('invalid invite response');
+      }
+      setIamInvites((previous) => [created, ...previous]);
+      setInviteEmail('');
+      setInvitePhone('');
+      setInviteRoleHint('member');
+      setInviteExpiresInHours('72');
+    } catch (e) {
+      setIamError(e instanceof Error ? e.message : 'create invite failed');
+    } finally {
+      setInviteCreateBusy(false);
+    }
+  }
+
+  async function copyInviteLink(link: string) {
+    if (typeof navigator === 'undefined' || !navigator.clipboard) {
+      setInviteLinkCopied('clipboard_unavailable');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(link);
+      setInviteLinkCopied(link);
+    } catch {
+      setInviteLinkCopied('clipboard_failed');
     }
   }
 
@@ -1398,6 +1524,9 @@ function App({
             </Paper>
 
             <Stack spacing={1}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                {t('iamGroups')}
+              </Typography>
               {iamGroups.map((group) => (
                 <Paper key={group.id} variant="outlined" sx={{ p: 1 }}>
                   <Typography variant="subtitle2">{group.name}</Typography>
@@ -1431,6 +1560,111 @@ function App({
                 </Paper>
               ))}
               {iamGroups.length === 0 && !iamLoading ? (
+                <Typography color="text.secondary">{t('noEntries')}</Typography>
+              ) : null}
+            </Stack>
+
+            <Stack spacing={1}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                {t('iamMemberships')}
+              </Typography>
+              {iamMemberships.map((membership) => (
+                <Paper key={membership.id} variant="outlined" sx={{ p: 1 }}>
+                  <Typography variant="subtitle2">{membership.userLabel || membership.userID}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {membership.id}
+                  </Typography>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    sx={{ mt: 1 }}
+                    label={t('membershipGroups')}
+                    value={membershipGroupDrafts[membership.id] ?? ''}
+                    onChange={(event) =>
+                      setMembershipGroupDrafts((previous) => ({
+                        ...previous,
+                        [membership.id]: event.target.value,
+                      }))
+                    }
+                  />
+                  <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => void saveMembershipGroups(membership)}
+                    >
+                      {t('saveMembershipGroups')}
+                    </Button>
+                  </Stack>
+                </Paper>
+              ))}
+              {iamMemberships.length === 0 && !iamLoading ? (
+                <Typography color="text.secondary">{t('noEntries')}</Typography>
+              ) : null}
+            </Stack>
+
+            <Stack spacing={1}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                {t('iamInvites')}
+              </Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                <TextField
+                  size="small"
+                  label={t('inviteEmail')}
+                  value={inviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                />
+                <TextField
+                  size="small"
+                  label={t('invitePhone')}
+                  value={invitePhone}
+                  onChange={(event) => setInvitePhone(event.target.value)}
+                />
+                <TextField
+                  size="small"
+                  label={t('inviteRoleHint')}
+                  value={inviteRoleHint}
+                  onChange={(event) => setInviteRoleHint(event.target.value)}
+                />
+                <TextField
+                  size="small"
+                  type="number"
+                  label={t('inviteExpiresInHours')}
+                  value={inviteExpiresInHours}
+                  onChange={(event) => setInviteExpiresInHours(event.target.value)}
+                />
+                <Button
+                  variant="contained"
+                  onClick={() => void createInvite()}
+                  disabled={inviteCreateBusy}
+                >
+                  {t('createInvite')}
+                </Button>
+              </Stack>
+              {inviteLinkCopied ? (
+                <Typography variant="caption" color="text.secondary">
+                  {t('inviteCopied', { value: inviteLinkCopied })}
+                </Typography>
+              ) : null}
+              {iamInvites.map((invite) => (
+                <Paper key={invite.id} variant="outlined" sx={{ p: 1 }}>
+                  <Typography variant="subtitle2">
+                    {invite.inviteeEmail || invite.inviteePhone || invite.id}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {invite.status} | {invite.expiresAt}
+                  </Typography>
+                  <Stack direction="row" spacing={1} sx={{ mt: 1 }} alignItems="center">
+                    <Typography variant="body2" sx={{ wordBreak: 'break-all', flex: 1 }}>
+                      {invite.inviteLink}
+                    </Typography>
+                    <Button size="small" variant="outlined" onClick={() => void copyInviteLink(invite.inviteLink)}>
+                      {t('copyInviteLink')}
+                    </Button>
+                  </Stack>
+                </Paper>
+              ))}
+              {iamInvites.length === 0 && !iamLoading ? (
                 <Typography color="text.secondary">{t('noEntries')}</Typography>
               ) : null}
             </Stack>

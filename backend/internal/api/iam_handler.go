@@ -28,9 +28,19 @@ type iamGroup struct {
 var (
 	iamGroupsMu sync.RWMutex
 	iamGroups   = map[string]iamGroup{}
+	iamMembershipsMu sync.RWMutex
+	iamMemberships   = map[string]iamMembership{}
 	invitesMu   sync.RWMutex
 	invites     = map[string]iamInvite{}
 )
+
+type iamMembership struct {
+	ID        string   `json:"id"`
+	TenantID  string   `json:"tenant_id"`
+	UserID    string   `json:"user_id"`
+	UserLabel string   `json:"user_label"`
+	GroupIDs  []string `json:"group_ids"`
+}
 
 func NewIAMHandler() *IAMHandler {
 	return &IAMHandler{notifier: notification.NewEmailStubProvider()}
@@ -133,11 +143,34 @@ func (h *IAMHandler) GroupByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *IAMHandler) ReplaceMembershipGroups(w http.ResponseWriter, r *http.Request) {
+func (h *IAMHandler) Memberships(w http.ResponseWriter, r *http.Request) {
 	session, ok := mustSession(r, w)
 	if !ok {
 		return
 	}
+	switch r.Method {
+	case http.MethodGet:
+		h.listMemberships(w, session)
+	default:
+		methodNotAllowed(w, http.MethodGet)
+	}
+}
+
+func (h *IAMHandler) MembershipByID(w http.ResponseWriter, r *http.Request) {
+	session, ok := mustSession(r, w)
+	if !ok {
+		return
+	}
+	trimmed := strings.TrimPrefix(r.URL.Path, "/api/iam/memberships/")
+	if trimmed == "" {
+		writeJSONError(w, http.StatusBadRequest, "membership_id_required")
+		return
+	}
+	if !strings.HasSuffix(trimmed, "/groups") {
+		methodNotAllowed(w, http.MethodPut)
+		return
+	}
+	membershipID := strings.TrimSuffix(trimmed, "/groups")
 	if r.Method != http.MethodPut {
 		methodNotAllowed(w, http.MethodPut)
 		return
@@ -146,7 +179,7 @@ func (h *IAMHandler) ReplaceMembershipGroups(w http.ResponseWriter, r *http.Requ
 		writeJSONError(w, http.StatusForbidden, "permission_denied")
 		return
 	}
-	_ = writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+	h.replaceMembershipGroups(w, r, session, membershipID)
 }
 
 func (h *IAMHandler) Invites(w http.ResponseWriter, r *http.Request) {
@@ -179,6 +212,30 @@ func (h *IAMHandler) listGroups(w http.ResponseWriter, session authSession) {
 		}
 	}
 	_ = writeJSON(w, http.StatusOK, map[string]any{"groups": out})
+}
+
+func (h *IAMHandler) listMemberships(w http.ResponseWriter, session authSession) {
+	iamMembershipsMu.Lock()
+	defer iamMembershipsMu.Unlock()
+
+	out := make([]iamMembership, 0)
+	for _, membership := range iamMemberships {
+		if membership.TenantID == session.ActiveTenantID {
+			out = append(out, membership)
+		}
+	}
+	if len(out) == 0 {
+		seed := iamMembership{
+			ID:        "mbr-" + session.User.ID + "-" + session.ActiveTenantID,
+			TenantID:  session.ActiveTenantID,
+			UserID:    session.User.ID,
+			UserLabel: session.User.Username,
+			GroupIDs:  []string{},
+		}
+		iamMemberships[seed.ID] = seed
+		out = append(out, seed)
+	}
+	_ = writeJSON(w, http.StatusOK, map[string]any{"memberships": out})
 }
 
 func (h *IAMHandler) createGroup(w http.ResponseWriter, r *http.Request, session authSession) {
@@ -306,6 +363,44 @@ func (h *IAMHandler) replaceGroupPermissions(
 		Result:     "allowed",
 	})
 	_ = writeJSON(w, http.StatusOK, group)
+}
+
+func (h *IAMHandler) replaceMembershipGroups(
+	w http.ResponseWriter,
+	r *http.Request,
+	session authSession,
+	membershipID string,
+) {
+	var req struct {
+		GroupIDs []string `json:"group_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	iamMembershipsMu.Lock()
+	defer iamMembershipsMu.Unlock()
+	membership, ok := iamMemberships[membershipID]
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "membership_not_found")
+		return
+	}
+	if membership.TenantID != session.ActiveTenantID {
+		writeJSONError(w, http.StatusNotFound, "membership_not_found")
+		return
+	}
+	membership.GroupIDs = append([]string{}, req.GroupIDs...)
+	iamMemberships[membershipID] = membership
+	_ = defaultAuditWriter.Write(audit.Event{
+		TenantID:   session.ActiveTenantID,
+		ActorID:    session.User.ID,
+		Action:     "iam.membership.groups.replace",
+		TargetType: "membership",
+		TargetID:   membership.ID,
+		Result:     "allowed",
+	})
+	_ = writeJSON(w, http.StatusOK, membership)
 }
 
 func mustSession(r *http.Request, w http.ResponseWriter) (authSession, bool) {

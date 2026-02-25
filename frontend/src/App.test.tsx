@@ -676,7 +676,7 @@ describe('App', () => {
     expect(window.localStorage.getItem('kubedeck.auth.token')).toBeNull();
   });
 
-  it('loads iam groups and permissions in access control dialog', async () => {
+  it('loads iam groups, memberships, invites and permissions in access control dialog', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
@@ -744,6 +744,42 @@ describe('App', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
+      if (url.endsWith('/api/iam/memberships')) {
+        return new Response(
+          JSON.stringify({
+            memberships: [
+              {
+                id: 'mbr-u1-tenant-dev',
+                tenant_id: 'tenant-dev',
+                user_id: 'u-1',
+                user_label: 'admin',
+                group_ids: ['grp-admin'],
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/iam/invites')) {
+        return new Response(
+          JSON.stringify({
+            invites: [
+              {
+                id: 'inv-1',
+                tenant_id: 'tenant-dev',
+                tenant_code: 'dev',
+                invitee_email: 'user@example.com',
+                role_hint: 'member',
+                token: 'token-1',
+                invite_link: '/accept-invite?token=token-1',
+                expires_at: '2026-02-26T00:00:00Z',
+                status: 'pending',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
       return new Response('not found', { status: 404 });
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -764,5 +800,8 @@ describe('App', () => {
     expect(await screen.findByRole('dialog', { name: 'Access Control' })).toBeTruthy();
     expect(await screen.findByText('admins')).toBeTruthy();
     expect(await screen.findByText('iam:read (platform)')).toBeTruthy();
+    expect(await screen.findByText('Memberships')).toBeTruthy();
+    expect(await screen.findByText('Invites')).toBeTruthy();
+    expect(await screen.findByText('user@example.com')).toBeTruthy();
   });
 });
