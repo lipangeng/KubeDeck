@@ -242,6 +242,25 @@ function parseInviteToken(route: string): string {
   return params.get('token')?.trim() ?? '';
 }
 
+function parseOAuthCallbackQuery(): { code: string; state: string } {
+  if (typeof window === 'undefined') {
+    return { code: '', state: '' };
+  }
+  const params = new URLSearchParams(window.location.search);
+  return {
+    code: params.get('code')?.trim() ?? '',
+    state: params.get('state')?.trim() ?? '',
+  };
+}
+
+function clearOAuthCallbackQuery(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  const next = `${window.location.pathname}${window.location.hash}`;
+  window.history.replaceState({}, '', next);
+}
+
 function menuIcon(group: string, targetType: 'page' | 'resource'): ReactNode {
   const normalizedGroup = group.trim().toUpperCase();
   if (normalizedGroup === 'WORKLOAD') {
@@ -792,16 +811,16 @@ function App({
     }
   }
 
-  async function submitOAuthDemoLogin() {
+  async function submitOAuthLogin() {
     setAuthBusy(true);
     setAuthError(null);
     try {
       const oauth = await oauthURL();
-      const payload = await oauthCallback('oauth-admin', loginTenantCode, oauth.state);
-      applyAuthPayload(payload);
-      setAuthDialogOpen(false);
+      if (typeof window !== 'undefined') {
+        window.location.assign(oauth.auth_url);
+      }
     } catch (e) {
-      setAuthError(e instanceof Error ? e.message : 'oauth callback failed');
+      setAuthError(e instanceof Error ? e.message : 'oauth url failed');
     } finally {
       setAuthBusy(false);
     }
@@ -818,6 +837,43 @@ function App({
     setAuthTenants(payload.tenants);
     setActiveTenantID(payload.active_tenant_id);
   }
+
+  useEffect(() => {
+    if (authToken) {
+      return;
+    }
+    const { code, state } = parseOAuthCallbackQuery();
+    if (code === '' || state === '') {
+      return;
+    }
+    let active = true;
+    async function completeOAuthLogin() {
+      setAuthBusy(true);
+      setAuthError(null);
+      try {
+        const payload = await oauthCallback(code, loginTenantCode, state);
+        if (!active) {
+          return;
+        }
+        applyAuthPayload(payload);
+        setAuthDialogOpen(false);
+        clearOAuthCallbackQuery();
+      } catch (e) {
+        if (!active) {
+          return;
+        }
+        setAuthError(e instanceof Error ? e.message : 'oauth callback failed');
+      } finally {
+        if (active) {
+          setAuthBusy(false);
+        }
+      }
+    }
+    void completeOAuthLogin();
+    return () => {
+      active = false;
+    };
+  }, [authToken, loginTenantCode]);
 
   async function logout() {
     if (authToken) {
@@ -2436,8 +2492,8 @@ function App({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAuthDialogOpen(false)}>{t('close')}</Button>
-          <Button variant="outlined" onClick={() => void submitOAuthDemoLogin()} disabled={authBusy}>
-            {t('oauthDemoLogin')}
+          <Button variant="outlined" onClick={() => void submitOAuthLogin()} disabled={authBusy}>
+            {t('oauthLogin')}
           </Button>
           <Button variant="contained" onClick={() => void submitLogin()} disabled={authBusy}>
             {t('login')}

@@ -33,6 +33,10 @@ Optional:
 4. Backend verifies `state` and exchanges `code`.
 5. Backend verifies `id_token` and creates KubeDeck session token.
 
+Frontend behavior:
+- Clicking OAuth login requests `/api/auth/oauth/url` and redirects to returned `auth_url`.
+- After IdP redirects back with `?code=...&state=...`, frontend auto-completes callback and clears query parameters.
+
 ## Security Notes
 
 - `state` is one-time and expires in 10 minutes.
