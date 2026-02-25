@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MenuItem } from '../sdk/types';
-import { groupMenusBySource } from './menuGrouping';
+import { groupMenusByGroup } from './menuGrouping';
 
 function menu(partial: Partial<MenuItem>): MenuItem {
   return {
@@ -15,16 +15,22 @@ function menu(partial: Partial<MenuItem>): MenuItem {
   };
 }
 
-describe('groupMenusBySource', () => {
-  it('groups menus by source and keeps ordering', () => {
-    const grouped = groupMenusBySource([
-      menu({ id: 'dyn', source: 'dynamic', order: 30 }),
-      menu({ id: 'sys', source: 'system', order: 10 }),
-      menu({ id: 'usr', source: 'user', order: 20 }),
+describe('groupMenusByGroup', () => {
+  it('groups merged menus by group name and keeps item order', () => {
+    const grouped = groupMenusByGroup([
+      menu({ id: 'pod', group: 'WORKLOAD', source: 'system', order: 10 }),
+      menu({ id: 'deploy', group: 'WORKLOAD', source: 'user', order: 20 }),
+      menu({ id: 'fav', group: 'FAVORITES', source: 'user', order: 30 }),
     ]);
 
-    expect(grouped.system.map((item) => item.id)).toEqual(['sys']);
-    expect(grouped.user.map((item) => item.id)).toEqual(['usr']);
-    expect(grouped.dynamic.map((item) => item.id)).toEqual(['dyn']);
+    expect(grouped).toHaveLength(2);
+    expect(grouped[0].name).toBe('WORKLOAD');
+    expect(grouped[0].items.map((item) => item.id)).toEqual(['pod', 'deploy']);
+    expect(grouped[1].name).toBe('FAVORITES');
+  });
+
+  it('falls back to General when menu group is empty', () => {
+    const grouped = groupMenusByGroup([menu({ id: 'misc', group: '  ' })]);
+    expect(grouped[0].name).toBe('General');
   });
 });

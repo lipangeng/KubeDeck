@@ -79,7 +79,7 @@ describe('App', () => {
             menus: [
               {
                 id: 'dev-workloads',
-                group: 'system',
+                group: 'WORKLOAD',
                 title: 'Dev Workloads',
                 targetType: 'page',
                 targetRef: '/workloads',
@@ -99,7 +99,7 @@ describe('App', () => {
           menus: [
             {
               id: 'workloads',
-              group: 'system',
+              group: 'WORKLOAD',
               title: 'Workloads',
               targetType: 'page',
               targetRef: '/workloads',
@@ -109,22 +109,12 @@ describe('App', () => {
             },
             {
               id: 'favorites',
-              group: 'user',
+              group: 'FAVORITES',
               title: 'Favorites',
               targetType: 'page',
               targetRef: '/favorites',
               source: 'user',
               order: 20,
-              visible: true,
-            },
-            {
-              id: 'crd-dynamic',
-              group: 'dynamic',
-              title: 'Custom Resources',
-              targetType: 'resource',
-              targetRef: '/resources/custom',
-              source: 'dynamic',
-              order: 30,
               visible: true,
             },
           ],
@@ -146,9 +136,8 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'KubeDeck' })).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Primary Sidebar' })).toBeTruthy();
     expect(screen.getByLabelText('Theme')).toBeTruthy();
-    expect(screen.getByText('System Menus')).toBeTruthy();
-    expect(screen.getByText('User Menus')).toBeTruthy();
-    expect(screen.getByText('Dynamic Menus')).toBeTruthy();
+    expect(screen.getByText('Configured Menus')).toBeTruthy();
+    expect(screen.getByText('Resource Catalog (for menu config)')).toBeTruthy();
     expect(screen.getByText('API target (test: http://127.0.0.1:8080)')).toBeTruthy();
     expect(await screen.findByText('Runtime: ok')).toBeTruthy();
     expect(await screen.findByText('Health: ok')).toBeTruthy();
@@ -164,7 +153,10 @@ describe('App', () => {
 
     expect(await screen.findByText('Workloads')).toBeTruthy();
     expect(await screen.findByText('Favorites')).toBeTruthy();
-    expect(await screen.findByText('Custom Resources')).toBeTruthy();
+    expect(await screen.findByText('WORKLOAD')).toBeTruthy();
+    expect(await screen.findByText('FAVORITES')).toBeTruthy();
+    expect(await screen.findByText('APPS')).toBeTruthy();
+    expect(await screen.findByText('CORE')).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Cluster'), {
       target: { value: 'dev' },
@@ -222,7 +214,7 @@ describe('App', () => {
           menus: [
             {
               id: 'workloads',
-              group: 'system',
+              group: 'WORKLOAD',
               title: 'Workloads',
               targetType: 'page',
               targetRef: '/workloads',

@@ -21,7 +21,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { composeMenus } from './core/menuComposer';
-import { groupMenusBySource } from './core/menuGrouping';
+import { groupMenusByGroup } from './core/menuGrouping';
 import {
   parseApplyResponse,
   parseClustersResponse,
@@ -88,7 +88,12 @@ function countYamlDocuments(yaml: string): number {
     .filter((doc) => doc.length > 0).length;
 }
 
-function MenuSection({
+function normalizeResourceGroupName(name: string): string {
+  const trimmed = name.trim();
+  return trimmed === '' ? 'core' : trimmed;
+}
+
+function MenuGroupSection({
   title,
   items,
 }: {
@@ -117,6 +122,32 @@ function MenuSection({
   );
 }
 
+function ResourceCatalogSection({
+  groupName,
+  items,
+}: {
+  groupName: string;
+  items: RegistryResourceType[];
+}) {
+  return (
+    <Box>
+      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
+        {groupName}
+      </Typography>
+      <List dense sx={{ pt: 0 }}>
+        {items.map((resource) => (
+          <ListItem key={resource.id} disablePadding>
+            <ListItemText
+              primary={resource.kind}
+              secondary={`${resource.namespaced ? 'Namespaced' : 'Cluster'} · ${resource.source}`}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  );
+}
+
 function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const apiTargetHint = resolveApiTargetHint();
   const [activeCluster, setActiveCluster] = useState('default');
@@ -140,13 +171,26 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const [readyError, setReadyError] = useState<string | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
 
-  const groupedMenus = useMemo(() => {
+  const configuredMenus = useMemo(() => {
     const systemMenus = menus.filter((menu) => menu.source === 'system');
     const userMenus = menus.filter((menu) => menu.source === 'user');
-    const dynamicMenus = menus.filter((menu) => menu.source === 'dynamic');
-    const merged = composeMenus(systemMenus, userMenus, dynamicMenus);
-    return groupMenusBySource(merged);
+    return composeMenus(systemMenus, userMenus, []);
   }, [menus]);
+  const groupedMenus = useMemo(() => groupMenusByGroup(configuredMenus), [configuredMenus]);
+  const resourceCatalogGroups = useMemo(() => {
+    const grouped = new Map<string, RegistryResourceType[]>();
+    for (const resource of resourceTypes) {
+      const groupName = normalizeResourceGroupName(resource.group).toUpperCase();
+      if (!grouped.has(groupName)) {
+        grouped.set(groupName, []);
+      }
+      grouped.get(groupName)?.push(resource);
+    }
+    return Array.from(grouped.entries()).map(([groupName, items]) => ({
+      groupName,
+      items,
+    }));
+  }, [resourceTypes]);
 
   useEffect(() => {
     setCreateNamespace(
@@ -316,7 +360,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const resourceTypeCount = resourceTypes.length;
   const namespacedResourceCount = resourceTypes.filter((item) => item.namespaced).length;
   const clusterScopedResourceCount = resourceTypeCount - namespacedResourceCount;
-  const dynamicMenuCount = groupedMenus.dynamic.length;
+  const dynamicMenuCount = resourceCatalogGroups.length;
   const yamlDocumentCount = countYamlDocuments(yamlInput);
   const runtimeStatus = resolveRuntimeStatus(healthStatus, readyStatus);
   const checkedAtLabel = lastCheckedAt
@@ -454,9 +498,31 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             {error ? (
               <Typography color="error">Failed to load menus: {error}</Typography>
             ) : null}
-            <MenuSection title="System Menus" items={groupedMenus.system} />
-            <MenuSection title="User Menus" items={groupedMenus.user} />
-            <MenuSection title="Dynamic Menus" items={groupedMenus.dynamic} />
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              Configured Menus
+            </Typography>
+            {groupedMenus.length === 0 ? (
+              <Typography color="text.secondary">No configured menus.</Typography>
+            ) : (
+              groupedMenus.map((group) => (
+                <MenuGroupSection key={group.name} title={group.name} items={group.items} />
+              ))
+            )}
+
+            <Divider />
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              Resource Catalog (for menu config)
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Built-in resources + discovered CRDs from current cluster.
+            </Typography>
+            {resourceCatalogGroups.map((group) => (
+              <ResourceCatalogSection
+                key={group.groupName}
+                groupName={group.groupName}
+                items={group.items}
+              />
+            ))}
           </Stack>
         </Paper>
 
@@ -517,7 +583,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             </Paper>
             <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider', borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary">
-                Dynamic CRD Menus
+                Resource Catalog Groups
               </Typography>
               <Typography variant="h4" sx={{ fontWeight: 700 }}>
                 {dynamicMenuCount}
