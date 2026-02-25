@@ -152,7 +152,8 @@ describe('App', () => {
     expect(screen.getByText('API target (test: http://127.0.0.1:8080)')).toBeTruthy();
     expect(await screen.findByText('healthz: ok')).toBeTruthy();
     expect(await screen.findByText('readyz: ok')).toBeTruthy();
-    expect(await screen.findByText('Registry resource types: 2')).toBeTruthy();
+    expect(await screen.findByText('Registry Resource Types')).toBeTruthy();
+    expect(screen.getByTestId('registry-resource-type-count').textContent).toBe('2');
     expect(await screen.findByText(/Last checked:/)).toBeTruthy();
     expect(await screen.findByText('Failure summary: none')).toBeTruthy();
 
@@ -169,7 +170,9 @@ describe('App', () => {
 
     expect(onThemePreferenceChange).toHaveBeenCalledWith('dark');
     expect(await screen.findByText('Dev Workloads')).toBeTruthy();
-    expect(await screen.findByText('Registry resource types: 1')).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByTestId('registry-resource-type-count').textContent).toBe('1');
+    });
     await waitFor(() => {
       const calledUrls = fetchMock.mock.calls.map(([input]) => String(input));
       expect(calledUrls.some((url) => url.includes('cluster=default'))).toBe(true);
