@@ -13,6 +13,7 @@ import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
+import { ListPageShell } from './components/page-shell/ResourcePageShell';
 import { composeMenus } from './core/menuComposer';
 import { groupMenusBySource } from './core/menuGrouping';
 import type { MenuItem, MenuSource } from './sdk/types';
@@ -283,29 +284,35 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
         </Paper>
 
         <Stack spacing={2}>
-          <Paper aria-label="Runtime Status" variant="outlined" sx={{ p: 2 }}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 1.5 }}>
-              <Chip size="small" label={`healthz: ${healthStatus}`} />
-              <Chip size="small" label={`readyz: ${readyStatus}`} />
-            </Stack>
-            <Typography variant="body2" sx={{ mb: 0.5 }}>
-              API target ({apiTargetHint})
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 0.5 }}>
-              Last checked: {lastCheckedAt ?? 'never'}
-            </Typography>
-            <Typography variant="body2">
-              Failure summary:{' '}
-              {healthError || readyError
-                ? [
-                    healthError ? `healthz: ${healthError}` : null,
-                    readyError ? `readyz: ${readyError}` : null,
-                  ]
-                    .filter(Boolean)
-                    .join('; ')
-                : 'none'}
-            </Typography>
-          </Paper>
+          <Box aria-label="Runtime Status">
+            <ListPageShell
+              title="Runtime Status"
+              toolbar={
+                <Stack direction="row" spacing={1}>
+                  <Chip size="small" label={`healthz: ${healthStatus}`} />
+                  <Chip size="small" label={`readyz: ${readyStatus}`} />
+                </Stack>
+              }
+            >
+              <Typography variant="body2" sx={{ mb: 0.5 }}>
+                API target ({apiTargetHint})
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 0.5 }}>
+                Last checked: {lastCheckedAt ?? 'never'}
+              </Typography>
+              <Typography variant="body2">
+                Failure summary:{' '}
+                {healthError || readyError
+                  ? [
+                      healthError ? `healthz: ${healthError}` : null,
+                      readyError ? `readyz: ${readyError}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join('; ')
+                  : 'none'}
+              </Typography>
+            </ListPageShell>
+          </Box>
         </Stack>
       </Box>
     </Box>
