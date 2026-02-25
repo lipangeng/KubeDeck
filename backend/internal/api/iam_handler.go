@@ -118,7 +118,7 @@ func (h *IAMHandler) Groups(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		h.listGroups(w, session)
 	case http.MethodPost:
-		if !hasIAMWrite(session.User.Roles) {
+		if !sessionCanIAMWrite(session) {
 			writeJSONError(w, http.StatusForbidden, "permission_denied")
 			return
 		}
@@ -146,7 +146,7 @@ func (h *IAMHandler) GroupByID(w http.ResponseWriter, r *http.Request) {
 			methodNotAllowed(w, http.MethodPut)
 			return
 		}
-		if !hasIAMWrite(session.User.Roles) {
+		if !sessionCanIAMWrite(session) {
 			writeJSONError(w, http.StatusForbidden, "permission_denied")
 			return
 		}
@@ -156,13 +156,13 @@ func (h *IAMHandler) GroupByID(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodPatch:
-		if !hasIAMWrite(session.User.Roles) {
+		if !sessionCanIAMWrite(session) {
 			writeJSONError(w, http.StatusForbidden, "permission_denied")
 			return
 		}
 		h.patchGroup(w, r, session, trimmed)
 	case http.MethodDelete:
-		if !hasIAMWrite(session.User.Roles) {
+		if !sessionCanIAMWrite(session) {
 			writeJSONError(w, http.StatusForbidden, "permission_denied")
 			return
 		}
@@ -204,7 +204,7 @@ func (h *IAMHandler) MembershipByID(w http.ResponseWriter, r *http.Request) {
 			methodNotAllowed(w, http.MethodPut)
 			return
 		}
-		if !hasIAMWrite(session.User.Roles) {
+		if !sessionCanIAMWrite(session) {
 			writeJSONError(w, http.StatusForbidden, "permission_denied")
 			return
 		}
@@ -215,7 +215,7 @@ func (h *IAMHandler) MembershipByID(w http.ResponseWriter, r *http.Request) {
 			methodNotAllowed(w, http.MethodPut)
 			return
 		}
-		if !hasIAMWrite(session.User.Roles) {
+		if !sessionCanIAMWrite(session) {
 			writeJSONError(w, http.StatusForbidden, "permission_denied")
 			return
 		}
@@ -235,7 +235,7 @@ func (h *IAMHandler) Invites(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		h.listInvites(w, session)
 	case http.MethodPost:
-		if !hasIAMWrite(session.User.Roles) {
+		if !sessionCanIAMWrite(session) {
 			writeJSONError(w, http.StatusForbidden, "permission_denied")
 			return
 		}
@@ -259,7 +259,7 @@ func (h *IAMHandler) InviteByID(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w, http.MethodDelete)
 		return
 	}
-	if !hasIAMWrite(session.User.Roles) {
+	if !sessionCanIAMWrite(session) {
 		writeJSONError(w, http.StatusForbidden, "permission_denied")
 		return
 	}
@@ -321,13 +321,13 @@ func (h *IAMHandler) TenantMembers(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		h.listTenantMembers(w, session, tenantID)
 	case http.MethodPost:
-		if !hasIAMWrite(session.User.Roles) {
+		if !sessionCanIAMWrite(session) {
 			writeJSONError(w, http.StatusForbidden, "permission_denied")
 			return
 		}
 		h.createTenantMember(w, r, session, tenantID)
 	case http.MethodDelete:
-		if !hasIAMWrite(session.User.Roles) {
+		if !sessionCanIAMWrite(session) {
 			writeJSONError(w, http.StatusForbidden, "permission_denied")
 			return
 		}
@@ -1007,8 +1007,8 @@ func mustSession(r *http.Request, w http.ResponseWriter) (authSession, bool) {
 	return session, true
 }
 
-func hasIAMWrite(roles []string) bool {
-	return rolesHavePermission(roles, "iam:write")
+func sessionCanIAMWrite(session authSession) bool {
+	return sessionHasAnyPermission(session, []string{"iam:write"})
 }
 
 func (h *IAMHandler) listInvites(w http.ResponseWriter, session authSession) {

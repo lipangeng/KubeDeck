@@ -368,13 +368,9 @@ func defaultMembershipsForUser(userID string) ([]tenantInfo, []auth.TenantMember
 	now := time.Now().UTC()
 	tenants := []tenantInfo{
 		{ID: "tenant-dev", Code: "dev", Name: "Development"},
-		{ID: "tenant-staging", Code: "staging", Name: "Staging"},
-		{ID: "tenant-prod", Code: "prod", Name: "Production"},
 	}
 	memberships := []auth.TenantMembership{
 		{TenantID: "tenant-dev", UserID: userID, EffectiveFrom: now.Add(-24 * time.Hour)},
-		{TenantID: "tenant-staging", UserID: userID, EffectiveFrom: now.Add(-24 * time.Hour)},
-		{TenantID: "tenant-prod", UserID: userID, EffectiveFrom: now.Add(-24 * time.Hour)},
 	}
 	return tenants, memberships
 }

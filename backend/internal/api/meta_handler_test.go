@@ -164,9 +164,15 @@ func TestResourceApplyEndpoint(t *testing.T) {
 	}
 	var loginBody struct {
 		Token string `json:"token"`
+		User  struct {
+			ID string `json:"id"`
+		} `json:"user"`
 	}
 	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
 		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+	if loginBody.User.ID == "" {
+		t.Fatalf("expected login user id")
 	}
 	if loginBody.Token == "" {
 		t.Fatalf("expected token in login response")
@@ -273,9 +279,15 @@ func TestResourceApplyEndpointRejectsViewer(t *testing.T) {
 	}
 	var loginBody struct {
 		Token string `json:"token"`
+		User  struct {
+			ID string `json:"id"`
+		} `json:"user"`
 	}
 	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
 		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+	if loginBody.User.ID == "" {
+		t.Fatalf("expected login user id")
 	}
 	if loginBody.Token == "" {
 		t.Fatalf("expected token in login response")
@@ -377,9 +389,15 @@ func TestRoutePolicyRequiresPermissionForAuditEvents(t *testing.T) {
 	}
 	var loginBody struct {
 		Token string `json:"token"`
+		User  struct {
+			ID string `json:"id"`
+		} `json:"user"`
 	}
 	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
 		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+	if loginBody.User.ID == "" {
+		t.Fatalf("expected login user id")
 	}
 	if loginBody.Token == "" {
 		t.Fatalf("expected token in login response")
@@ -414,9 +432,15 @@ func TestRoutePolicyAllowsAuditReadViaMembershipGroupPermission(t *testing.T) {
 	}
 	var loginBody struct {
 		Token string `json:"token"`
+		User  struct {
+			ID string `json:"id"`
+		} `json:"user"`
 	}
 	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
 		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+	if loginBody.User.ID == "" {
+		t.Fatalf("expected login user id")
 	}
 
 	iamGroupsMu.Lock()
@@ -428,10 +452,11 @@ func TestRoutePolicyAllowsAuditReadViaMembershipGroupPermission(t *testing.T) {
 	}
 	iamGroupsMu.Unlock()
 	iamMembershipsMu.Lock()
-	iamMemberships["mbr-local-test-user-tenant-dev"] = iamMembership{
-		ID:            "mbr-local-test-user-tenant-dev",
+	membershipID := "mbr-" + loginBody.User.ID + "-tenant-dev"
+	iamMemberships[membershipID] = iamMembership{
+		ID:            membershipID,
 		TenantID:      "tenant-dev",
-		UserID:        "local-test-user",
+		UserID:        loginBody.User.ID,
 		UserLabel:     "viewer",
 		GroupIDs:      []string{"grp-audit"},
 		EffectiveFrom: time.Now().UTC().Add(-1 * time.Hour),
@@ -507,7 +532,7 @@ func TestAuthLoginMeSwitchLogoutFlow(t *testing.T) {
 	resetAuditWriter()
 	router := NewRouter()
 
-	loginPayload := []byte(`{"username":"alice","password":"pw","tenant_code":"staging"}`)
+	loginPayload := []byte(`{"username":"alice","password":"pw","tenant_code":"dev"}`)
 	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
 	loginResp := httptest.NewRecorder()
 	router.ServeHTTP(loginResp, loginReq)
@@ -525,8 +550,8 @@ func TestAuthLoginMeSwitchLogoutFlow(t *testing.T) {
 	if loginBody.Token == "" {
 		t.Fatalf("expected token in login response")
 	}
-	if loginBody.ActiveTenantID != "tenant-staging" {
-		t.Fatalf("expected active tenant tenant-staging, got %q", loginBody.ActiveTenantID)
+	if loginBody.ActiveTenantID != "tenant-dev" {
+		t.Fatalf("expected active tenant tenant-dev, got %q", loginBody.ActiveTenantID)
 	}
 
 	meReq := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
@@ -537,22 +562,22 @@ func TestAuthLoginMeSwitchLogoutFlow(t *testing.T) {
 		t.Fatalf("expected me status 200, got %d body=%s", meResp.Code, meResp.Body.String())
 	}
 
-	switchPayload := []byte(`{"tenant_code":"prod"}`)
+	switchPayload := []byte(`{"tenant_code":"staging"}`)
 	switchReq := httptest.NewRequest(http.MethodPost, "/api/auth/switch-tenant", bytes.NewReader(switchPayload))
 	switchReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
 	switchResp := httptest.NewRecorder()
 	router.ServeHTTP(switchResp, switchReq)
-	if switchResp.Code != http.StatusOK {
-		t.Fatalf("expected switch status 200, got %d body=%s", switchResp.Code, switchResp.Body.String())
+	if switchResp.Code != http.StatusForbidden {
+		t.Fatalf("expected switch status 403, got %d body=%s", switchResp.Code, switchResp.Body.String())
 	}
 	var switchBody struct {
-		ActiveTenantID string `json:"active_tenant_id"`
+		Error string `json:"error"`
 	}
 	if err := json.Unmarshal(switchResp.Body.Bytes(), &switchBody); err != nil {
 		t.Fatalf("unmarshal switch response: %v", err)
 	}
-	if switchBody.ActiveTenantID != "tenant-prod" {
-		t.Fatalf("expected switched tenant tenant-prod, got %q", switchBody.ActiveTenantID)
+	if switchBody.Error != "tenant_not_found" {
+		t.Fatalf("expected tenant_not_found, got %q", switchBody.Error)
 	}
 
 	logoutReq := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
@@ -617,7 +642,7 @@ func TestOAuthCallbackFlow(t *testing.T) {
 		t.Fatalf("expected oauth url response json, got %v", err)
 	}
 
-	payload := []byte(`{"code":"oauth-admin","tenant_code":"staging","state":"` + oauthURLBody.State + `"}`)
+	payload := []byte(`{"code":"oauth-admin","tenant_code":"dev","state":"` + oauthURLBody.State + `"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/callback", bytes.NewReader(payload))
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -638,8 +663,8 @@ func TestOAuthCallbackFlow(t *testing.T) {
 	if body.Token == "" {
 		t.Fatalf("expected token in oauth callback response")
 	}
-	if body.ActiveTenantID != "tenant-staging" {
-		t.Fatalf("expected tenant-staging, got %q", body.ActiveTenantID)
+	if body.ActiveTenantID != "tenant-dev" {
+		t.Fatalf("expected tenant-dev, got %q", body.ActiveTenantID)
 	}
 	if body.User.Username != "oauth-admin" {
 		t.Fatalf("expected oauth-admin user, got %q", body.User.Username)
@@ -2170,7 +2195,7 @@ func TestAuditEventsEndpointSupportsFilters(t *testing.T) {
 		t.Fatalf("unmarshal login: %v", err)
 	}
 
-	switchPayload := []byte(`{"tenant_code":"staging"}`)
+	switchPayload := []byte(`{"tenant_code":"dev"}`)
 	switchReq := httptest.NewRequest(http.MethodPost, "/api/auth/switch-tenant", bytes.NewReader(switchPayload))
 	switchReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
 	switchResp := httptest.NewRecorder()

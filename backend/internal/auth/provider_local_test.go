@@ -65,3 +65,32 @@ func TestLocalProviderCanBeExplicitlyEnabledInProductionWithEnvCredential(t *tes
 		t.Fatalf("expected explicit production local provider login success, got err=%v", err)
 	}
 }
+
+func TestLocalProviderGeneratesStableUserIDFromUsername(t *testing.T) {
+	t.Setenv("KUBEDECK_LOCAL_AUTH_ENABLED", "1")
+	t.Setenv("KUBEDECK_LOCAL_AUTH_USERNAME", "")
+	t.Setenv("KUBEDECK_LOCAL_AUTH_PASSWORD", "SharedPass#1")
+
+	provider := NewLocalProvider()
+	first, err := provider.Authenticate("viewer", "SharedPass#1")
+	if err != nil {
+		t.Fatalf("expected first authenticate success, got err=%v", err)
+	}
+	second, err := provider.Authenticate("VIEWER", "SharedPass#1")
+	if err != nil {
+		t.Fatalf("expected second authenticate success, got err=%v", err)
+	}
+	third, err := provider.Authenticate("admin", "SharedPass#1")
+	if err != nil {
+		t.Fatalf("expected third authenticate success, got err=%v", err)
+	}
+	if first.ID == "" {
+		t.Fatalf("expected non-empty user id")
+	}
+	if first.ID != second.ID {
+		t.Fatalf("expected stable id for same normalized username, got %q != %q", first.ID, second.ID)
+	}
+	if first.ID == third.ID {
+		t.Fatalf("expected different ids for different usernames, got %q", first.ID)
+	}
+}

@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"strings"
@@ -66,12 +68,21 @@ func (p *LocalProvider) Authenticate(username, password string) (User, error) {
 	}
 
 	return User{
-		ID:                "local-test-user",
+		ID:                stableLocalUserID(username),
 		Username:          username,
 		Roles:             roles,
 		AllowedClusters:   []string{"*"},
 		AllowedNamespaces: []string{"*"},
 	}, nil
+}
+
+func stableLocalUserID(username string) string {
+	normalized := strings.ToLower(strings.TrimSpace(username))
+	if normalized == "" {
+		normalized = "unknown"
+	}
+	sum := sha256.Sum256([]byte("kubedeck-local:" + normalized))
+	return "local-" + hex.EncodeToString(sum[:8])
 }
 
 func isProductionEnv() bool {
