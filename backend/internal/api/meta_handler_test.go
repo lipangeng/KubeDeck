@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +21,12 @@ type registryResponse struct {
 		PreferredVersion string `json:"preferredVersion"`
 		Source           string `json:"source"`
 	} `json:"resourceTypes"`
+}
+
+func resetAuthSessions() {
+	authSessionsMu.Lock()
+	authSessions = map[string]authSession{}
+	authSessionsMu.Unlock()
 }
 
 type menusResponse struct {
@@ -245,5 +252,87 @@ func TestRegistryMethodNotAllowed(t *testing.T) {
 
 	if _, ok := body["error"]; !ok {
 		t.Fatalf("expected response to contain error key, body=%s", resp.Body.String())
+	}
+}
+
+func TestAuthLoginMeSwitchLogoutFlow(t *testing.T) {
+	resetAuthSessions()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"alice","password":"pw","tenant_code":"staging"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status 200, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+
+	var loginBody struct {
+		Token          string `json:"token"`
+		ActiveTenantID string `json:"active_tenant_id"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login response: %v", err)
+	}
+	if loginBody.Token == "" {
+		t.Fatalf("expected token in login response")
+	}
+	if loginBody.ActiveTenantID != "tenant-staging" {
+		t.Fatalf("expected active tenant tenant-staging, got %q", loginBody.ActiveTenantID)
+	}
+
+	meReq := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	meReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	meResp := httptest.NewRecorder()
+	router.ServeHTTP(meResp, meReq)
+	if meResp.Code != http.StatusOK {
+		t.Fatalf("expected me status 200, got %d body=%s", meResp.Code, meResp.Body.String())
+	}
+
+	switchPayload := []byte(`{"tenant_code":"prod"}`)
+	switchReq := httptest.NewRequest(http.MethodPost, "/api/auth/switch-tenant", bytes.NewReader(switchPayload))
+	switchReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	switchResp := httptest.NewRecorder()
+	router.ServeHTTP(switchResp, switchReq)
+	if switchResp.Code != http.StatusOK {
+		t.Fatalf("expected switch status 200, got %d body=%s", switchResp.Code, switchResp.Body.String())
+	}
+	var switchBody struct {
+		ActiveTenantID string `json:"active_tenant_id"`
+	}
+	if err := json.Unmarshal(switchResp.Body.Bytes(), &switchBody); err != nil {
+		t.Fatalf("unmarshal switch response: %v", err)
+	}
+	if switchBody.ActiveTenantID != "tenant-prod" {
+		t.Fatalf("expected switched tenant tenant-prod, got %q", switchBody.ActiveTenantID)
+	}
+
+	logoutReq := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	logoutReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	logoutResp := httptest.NewRecorder()
+	router.ServeHTTP(logoutResp, logoutReq)
+	if logoutResp.Code != http.StatusOK {
+		t.Fatalf("expected logout status 200, got %d", logoutResp.Code)
+	}
+
+	meAfterLogoutReq := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	meAfterLogoutReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	meAfterLogoutResp := httptest.NewRecorder()
+	router.ServeHTTP(meAfterLogoutResp, meAfterLogoutReq)
+	if meAfterLogoutResp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected me-after-logout status 401, got %d", meAfterLogoutResp.Code)
+	}
+}
+
+func TestAuthLoginTenantCodeDeniedWhenUnknown(t *testing.T) {
+	resetAuthSessions()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"alice","password":"pw","tenant_code":"unknown"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusForbidden {
+		t.Fatalf("expected login status 403, got %d body=%s", loginResp.Code, loginResp.Body.String())
 	}
 }
