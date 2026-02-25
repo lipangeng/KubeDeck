@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
 )
 
@@ -65,40 +67,42 @@ type IAMPersistence interface {
 	Close() error
 }
 
-type noopIAMPersistence struct{}
-
-func (noopIAMPersistence) Load() (IAMStateSnapshot, error)                { return IAMStateSnapshot{}, nil }
-func (noopIAMPersistence) ReplaceGroups([]IAMGroupRecord) error           { return nil }
-func (noopIAMPersistence) ReplaceMemberships([]IAMMembershipRecord) error { return nil }
-func (noopIAMPersistence) ReplaceInvites([]IAMInviteRecord) error         { return nil }
-func (noopIAMPersistence) ReplaceSessions([]AuthSessionRecord) error      { return nil }
-func (noopIAMPersistence) Close() error                                   { return nil }
-
 func NewIAMPersistence(driver string, dsn string) (IAMPersistence, error) {
 	driver = strings.ToLower(strings.TrimSpace(driver))
-	if driver == "" || driver == "sqlite" {
-		return newSQLiteIAMPersistence(dsn)
+	switch driver {
+	case "", "sqlite":
+		return newSQLIAMPersistence("sqlite", dsn)
+	case "mysql":
+		return newSQLIAMPersistence("mysql", dsn)
+	case "postgres":
+		return newSQLIAMPersistence("pgx", dsn)
+	default:
+		return nil, fmt.Errorf("unsupported iam persistence driver %q", driver)
 	}
-	if driver == "mysql" || driver == "postgres" {
-		return noopIAMPersistence{}, nil
-	}
-	return nil, fmt.Errorf("unsupported iam persistence driver %q", driver)
 }
 
-type sqliteIAMPersistence struct {
-	db *sql.DB
+type sqlIAMPersistence struct {
+	db      *sql.DB
+	dialect string
 }
 
-func newSQLiteIAMPersistence(dsn string) (IAMPersistence, error) {
+func newSQLIAMPersistence(driver string, dsn string) (IAMPersistence, error) {
 	dsn = strings.TrimSpace(dsn)
 	if dsn == "" {
-		dsn = "kubedeck.sqlite"
+		switch driver {
+		case "sqlite":
+			dsn = "kubedeck.sqlite"
+		case "mysql":
+			dsn = "root:root@tcp(127.0.0.1:3306)/kubedeck?parseTime=true"
+		case "pgx":
+			dsn = "postgres://postgres:postgres@127.0.0.1:5432/kubedeck"
+		}
 	}
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open(driver, dsn)
 	if err != nil {
 		return nil, err
 	}
-	p := &sqliteIAMPersistence{db: db}
+	p := &sqlIAMPersistence{db: db, dialect: driver}
 	if err := p.ensureSchema(); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -106,46 +110,46 @@ func newSQLiteIAMPersistence(dsn string) (IAMPersistence, error) {
 	return p, nil
 }
 
-func (p *sqliteIAMPersistence) Close() error {
+func (p *sqlIAMPersistence) Close() error {
 	return p.db.Close()
 }
 
-func (p *sqliteIAMPersistence) ensureSchema() error {
+func (p *sqlIAMPersistence) ensureSchema() error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS iam_groups (
-			id TEXT PRIMARY KEY,
-			tenant_id TEXT NOT NULL,
-			name TEXT NOT NULL,
+			id VARCHAR(255) PRIMARY KEY,
+			tenant_id VARCHAR(255) NOT NULL,
+			name VARCHAR(255) NOT NULL,
 			description TEXT NOT NULL,
 			permissions_json TEXT NOT NULL
 		);`,
 		`CREATE TABLE IF NOT EXISTS iam_memberships (
-			id TEXT PRIMARY KEY,
-			tenant_id TEXT NOT NULL,
-			user_id TEXT NOT NULL,
-			user_label TEXT NOT NULL,
+			id VARCHAR(255) PRIMARY KEY,
+			tenant_id VARCHAR(255) NOT NULL,
+			user_id VARCHAR(255) NOT NULL,
+			user_label VARCHAR(255) NOT NULL,
 			group_ids_json TEXT NOT NULL,
-			effective_from TEXT NOT NULL,
-			effective_until TEXT
+			effective_from VARCHAR(64) NOT NULL,
+			effective_until VARCHAR(64)
 		);`,
 		`CREATE TABLE IF NOT EXISTS iam_invites (
-			token TEXT PRIMARY KEY,
-			id TEXT NOT NULL,
-			tenant_id TEXT NOT NULL,
-			tenant_code TEXT NOT NULL,
-			invitee_email TEXT NOT NULL,
-			invitee_phone TEXT NOT NULL,
-			role_hint TEXT NOT NULL,
+			token VARCHAR(255) PRIMARY KEY,
+			id VARCHAR(255) NOT NULL,
+			tenant_id VARCHAR(255) NOT NULL,
+			tenant_code VARCHAR(255) NOT NULL,
+			invitee_email VARCHAR(255) NOT NULL,
+			invitee_phone VARCHAR(255) NOT NULL,
+			role_hint VARCHAR(255) NOT NULL,
 			invite_link TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			expires_at TEXT NOT NULL,
-			status TEXT NOT NULL
+			created_at VARCHAR(64) NOT NULL,
+			expires_at VARCHAR(64) NOT NULL,
+			status VARCHAR(64) NOT NULL
 		);`,
 		`CREATE TABLE IF NOT EXISTS auth_sessions (
-			token TEXT PRIMARY KEY,
+			token VARCHAR(255) PRIMARY KEY,
 			user_json TEXT NOT NULL,
 			available_json TEXT NOT NULL,
-			active_tenant_id TEXT NOT NULL
+			active_tenant_id VARCHAR(255) NOT NULL
 		);`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_iam_groups_tenant_name ON iam_groups(tenant_id, name);`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_iam_memberships_tenant_user ON iam_memberships(tenant_id, user_id);`,
@@ -158,7 +162,7 @@ func (p *sqliteIAMPersistence) ensureSchema() error {
 	return nil
 }
 
-func (p *sqliteIAMPersistence) Load() (IAMStateSnapshot, error) {
+func (p *sqlIAMPersistence) Load() (IAMStateSnapshot, error) {
 	out := IAMStateSnapshot{}
 
 	groupRows, err := p.db.Query(`SELECT id, tenant_id, name, description, permissions_json FROM iam_groups`)
@@ -281,7 +285,7 @@ func (p *sqliteIAMPersistence) Load() (IAMStateSnapshot, error) {
 	return out, nil
 }
 
-func (p *sqliteIAMPersistence) ReplaceGroups(records []IAMGroupRecord) error {
+func (p *sqlIAMPersistence) ReplaceGroups(records []IAMGroupRecord) error {
 	tx, err := p.db.Begin()
 	if err != nil {
 		return err
@@ -290,9 +294,10 @@ func (p *sqliteIAMPersistence) ReplaceGroups(records []IAMGroupRecord) error {
 		_ = tx.Rollback()
 		return err
 	}
+	query := insertQuery(p.dialect, "iam_groups", []string{"id", "tenant_id", "name", "description", "permissions_json"})
 	for _, record := range records {
 		permissionsJSON, _ := json.Marshal(record.Permissions)
-		if _, err := tx.Exec(`INSERT INTO iam_groups(id, tenant_id, name, description, permissions_json) VALUES(?, ?, ?, ?, ?)`, record.ID, record.TenantID, record.Name, record.Description, string(permissionsJSON)); err != nil {
+		if _, err := tx.Exec(query, record.ID, record.TenantID, record.Name, record.Description, string(permissionsJSON)); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
@@ -300,7 +305,7 @@ func (p *sqliteIAMPersistence) ReplaceGroups(records []IAMGroupRecord) error {
 	return tx.Commit()
 }
 
-func (p *sqliteIAMPersistence) ReplaceMemberships(records []IAMMembershipRecord) error {
+func (p *sqlIAMPersistence) ReplaceMemberships(records []IAMMembershipRecord) error {
 	tx, err := p.db.Begin()
 	if err != nil {
 		return err
@@ -309,13 +314,14 @@ func (p *sqliteIAMPersistence) ReplaceMemberships(records []IAMMembershipRecord)
 		_ = tx.Rollback()
 		return err
 	}
+	query := insertQuery(p.dialect, "iam_memberships", []string{"id", "tenant_id", "user_id", "user_label", "group_ids_json", "effective_from", "effective_until"})
 	for _, record := range records {
 		groupIDsJSON, _ := json.Marshal(record.GroupIDs)
 		effectiveUntil := ""
 		if record.EffectiveUntil != nil {
 			effectiveUntil = record.EffectiveUntil.UTC().Format(time.RFC3339)
 		}
-		if _, err := tx.Exec(`INSERT INTO iam_memberships(id, tenant_id, user_id, user_label, group_ids_json, effective_from, effective_until) VALUES(?, ?, ?, ?, ?, ?, ?)`, record.ID, record.TenantID, record.UserID, record.UserLabel, string(groupIDsJSON), record.EffectiveFrom.UTC().Format(time.RFC3339), effectiveUntil); err != nil {
+		if _, err := tx.Exec(query, record.ID, record.TenantID, record.UserID, record.UserLabel, string(groupIDsJSON), record.EffectiveFrom.UTC().Format(time.RFC3339), effectiveUntil); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
@@ -323,7 +329,7 @@ func (p *sqliteIAMPersistence) ReplaceMemberships(records []IAMMembershipRecord)
 	return tx.Commit()
 }
 
-func (p *sqliteIAMPersistence) ReplaceInvites(records []IAMInviteRecord) error {
+func (p *sqlIAMPersistence) ReplaceInvites(records []IAMInviteRecord) error {
 	tx, err := p.db.Begin()
 	if err != nil {
 		return err
@@ -332,8 +338,9 @@ func (p *sqliteIAMPersistence) ReplaceInvites(records []IAMInviteRecord) error {
 		_ = tx.Rollback()
 		return err
 	}
+	query := insertQuery(p.dialect, "iam_invites", []string{"token", "id", "tenant_id", "tenant_code", "invitee_email", "invitee_phone", "role_hint", "invite_link", "created_at", "expires_at", "status"})
 	for _, record := range records {
-		if _, err := tx.Exec(`INSERT INTO iam_invites(token, id, tenant_id, tenant_code, invitee_email, invitee_phone, role_hint, invite_link, created_at, expires_at, status) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, record.Token, record.ID, record.TenantID, record.TenantCode, record.InviteeEmail, record.InviteePhone, record.RoleHint, record.InviteLink, record.CreatedAt.UTC().Format(time.RFC3339), record.ExpiresAt.UTC().Format(time.RFC3339), record.Status); err != nil {
+		if _, err := tx.Exec(query, record.Token, record.ID, record.TenantID, record.TenantCode, record.InviteeEmail, record.InviteePhone, record.RoleHint, record.InviteLink, record.CreatedAt.UTC().Format(time.RFC3339), record.ExpiresAt.UTC().Format(time.RFC3339), record.Status); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
@@ -341,7 +348,7 @@ func (p *sqliteIAMPersistence) ReplaceInvites(records []IAMInviteRecord) error {
 	return tx.Commit()
 }
 
-func (p *sqliteIAMPersistence) ReplaceSessions(records []AuthSessionRecord) error {
+func (p *sqlIAMPersistence) ReplaceSessions(records []AuthSessionRecord) error {
 	tx, err := p.db.Begin()
 	if err != nil {
 		return err
@@ -350,11 +357,25 @@ func (p *sqliteIAMPersistence) ReplaceSessions(records []AuthSessionRecord) erro
 		_ = tx.Rollback()
 		return err
 	}
+	query := insertQuery(p.dialect, "auth_sessions", []string{"token", "user_json", "available_json", "active_tenant_id"})
 	for _, record := range records {
-		if _, err := tx.Exec(`INSERT INTO auth_sessions(token, user_json, available_json, active_tenant_id) VALUES(?, ?, ?, ?)`, record.Token, record.UserJSON, record.AvailableJSON, record.ActiveTenantID); err != nil {
+		if _, err := tx.Exec(query, record.Token, record.UserJSON, record.AvailableJSON, record.ActiveTenantID); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
 	}
 	return tx.Commit()
+}
+
+func insertQuery(dialect string, table string, columns []string) string {
+	columnList := strings.Join(columns, ", ")
+	placeholders := make([]string, 0, len(columns))
+	for idx := range columns {
+		if dialect == "pgx" {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", idx+1))
+		} else {
+			placeholders = append(placeholders, "?")
+		}
+	}
+	return fmt.Sprintf("INSERT INTO %s(%s) VALUES(%s)", table, columnList, strings.Join(placeholders, ", "))
 }
