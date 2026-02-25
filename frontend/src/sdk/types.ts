@@ -32,6 +32,10 @@ export interface RegistryResponse {
   resourceTypes: RegistryResourceType[];
 }
 
+export interface ClustersResponse {
+  clusters: string[];
+}
+
 export interface PageContribution {
   pageId: string;
   route: string;

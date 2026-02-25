@@ -13,10 +13,13 @@ import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
-import { ListPageShell } from './components/page-shell/ResourcePageShell';
 import { composeMenus } from './core/menuComposer';
 import { groupMenusBySource } from './core/menuGrouping';
-import { parseMenusResponse } from './sdk/metaApi';
+import {
+  parseClustersResponse,
+  parseMenusResponse,
+  parseRegistryResponse,
+} from './sdk/metaApi';
 import type { MenuItem } from './sdk/types';
 import type { ThemePreference } from './themeMode';
 
@@ -47,6 +50,16 @@ function resolveApiTargetHint(): string {
 
 function resolveProbePath(path: '/healthz' | '/readyz'): string {
   return `/api${path}`;
+}
+
+function statusColor(status: ProbeStatus): 'success' | 'warning' | 'error' {
+  if (status === 'ok') {
+    return 'success';
+  }
+  if (status === 'checking') {
+    return 'warning';
+  }
+  return 'error';
 }
 
 function MenuSection({
@@ -81,7 +94,9 @@ function MenuSection({
 function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const apiTargetHint = resolveApiTargetHint();
   const [activeCluster, setActiveCluster] = useState('default');
+  const [clusters, setClusters] = useState<string[]>(['default']);
   const [menus, setMenus] = useState<MenuItem[]>([]);
+  const [resourceTypeCount, setResourceTypeCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<ProbeStatus>('checking');
@@ -101,20 +116,56 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
   useEffect(() => {
     let active = true;
 
-    async function loadMenus() {
+    async function loadClusters() {
+      try {
+        const response = await fetch('/api/meta/clusters');
+        if (!response.ok) {
+          throw new Error(`clusters request failed: ${response.status}`);
+        }
+        const payload = parseClustersResponse(await response.json());
+        if (active && payload.clusters.length > 0) {
+          setClusters(payload.clusters);
+          if (!payload.clusters.includes(activeCluster)) {
+            setActiveCluster(payload.clusters[0]);
+          }
+        }
+      } catch {
+        if (active) {
+          setClusters(['default']);
+        }
+      }
+    }
+
+    loadClusters();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadClusterMetadata() {
       setLoading(true);
       setError(null);
+      setMenus([]);
+      setResourceTypeCount(0);
       try {
-        const response = await fetch(
-          `/api/meta/menus?cluster=${encodeURIComponent(activeCluster)}`,
-        );
-        if (!response.ok) {
-          throw new Error(`menus request failed: ${response.status}`);
+        const [menusResponse, registryResponse] = await Promise.all([
+          fetch(`/api/meta/menus?cluster=${encodeURIComponent(activeCluster)}`),
+          fetch(`/api/meta/registry?cluster=${encodeURIComponent(activeCluster)}`),
+        ]);
+        if (!menusResponse.ok) {
+          throw new Error(`menus request failed: ${menusResponse.status}`);
         }
-
-        const payload = parseMenusResponse(await response.json());
+        if (!registryResponse.ok) {
+          throw new Error(`registry request failed: ${registryResponse.status}`);
+        }
+        const menusPayload = parseMenusResponse(await menusResponse.json());
+        const registryPayload = parseRegistryResponse(await registryResponse.json());
         if (active) {
-          setMenus(payload.menus);
+          setMenus(menusPayload.menus);
+          setResourceTypeCount(registryPayload.resourceTypes.length);
         }
       } catch (e) {
         if (active) {
@@ -128,7 +179,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
       }
     }
 
-    loadMenus();
+    loadClusterMetadata();
 
     return () => {
       active = false;
@@ -184,13 +235,76 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
     };
   }, []);
 
+  const failureSummary =
+    healthError || readyError
+      ? [
+          healthError ? `healthz: ${healthError}` : null,
+          readyError ? `readyz: ${readyError}` : null,
+        ]
+          .filter(Boolean)
+          .join('; ')
+      : 'none';
+
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      <AppBar position="static" color="transparent" elevation={0}>
-        <Toolbar sx={{ borderBottom: 1, borderColor: 'divider', gap: 2 }}>
-          <Typography variant="h5" component="h1" sx={{ fontWeight: 700, flexGrow: 1 }}>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        background:
+          'radial-gradient(1400px 500px at 10% -10%, rgba(25,118,210,0.18), transparent 65%), radial-gradient(1200px 460px at 95% -20%, rgba(56,142,60,0.14), transparent 60%)',
+        bgcolor: 'background.default',
+      }}
+    >
+      <AppBar
+        position="sticky"
+        color="transparent"
+        elevation={0}
+        sx={{
+          backdropFilter: 'blur(10px)',
+          borderBottom: 1,
+          borderColor: 'divider',
+          backgroundColor: 'rgba(255,255,255,0.72)',
+        }}
+      >
+        <Toolbar sx={{ gap: 1.5, minHeight: 72 }}>
+          <Typography variant="h5" component="h1" sx={{ fontWeight: 800, pr: 1.5 }}>
             KubeDeck
           </Typography>
+
+          <Paper
+            variant="outlined"
+            sx={{
+              px: 1.2,
+              py: 0.9,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              flexWrap: 'wrap',
+              borderRadius: 2,
+              bgcolor: 'background.paper',
+            }}
+          >
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+              Runtime
+            </Typography>
+            <Chip
+              size="small"
+              color={statusColor(healthStatus)}
+              variant="filled"
+              label={`healthz: ${healthStatus}`}
+            />
+            <Chip
+              size="small"
+              color={statusColor(readyStatus)}
+              variant="filled"
+              label={`readyz: ${readyStatus}`}
+            />
+            <Typography variant="caption" color="text.secondary">
+              Last checked: {lastCheckedAt ?? 'never'}
+            </Typography>
+          </Paper>
+
+          <Box sx={{ flexGrow: 1 }} />
+
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel htmlFor="theme-select">Theme</InputLabel>
             <Select
@@ -213,7 +327,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '300px minmax(0, 1fr)' },
+          gridTemplateColumns: { xs: '1fr', md: '320px minmax(0, 1fr)' },
           gap: 2,
           p: 2,
         }}
@@ -221,11 +335,16 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
         <Paper
           component="nav"
           aria-label="Primary Sidebar"
-          variant="outlined"
-          sx={{ p: 2, minHeight: { md: 'calc(100vh - 110px)' } }}
+          elevation={2}
+          sx={{
+            p: 2,
+            minHeight: { md: 'calc(100vh - 120px)' },
+            border: 1,
+            borderColor: 'divider',
+          }}
         >
           <Stack spacing={2}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               Navigation
             </Typography>
             <FormControl size="small" fullWidth>
@@ -237,10 +356,11 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                 label="Cluster"
                 inputProps={{ id: 'cluster-select' }}
               >
-                <option value="default">default</option>
-                <option value="dev">dev</option>
-                <option value="staging">staging</option>
-                <option value="prod">prod</option>
+                {clusters.map((clusterId) => (
+                  <option key={clusterId} value={clusterId}>
+                    {clusterId}
+                  </option>
+                ))}
               </Select>
             </FormControl>
 
@@ -257,35 +377,59 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
         </Paper>
 
         <Stack spacing={2}>
-          <Box aria-label="Runtime Status">
-            <ListPageShell
-              title="Runtime Status"
-              toolbar={
-                <Stack direction="row" spacing={1}>
-                  <Chip size="small" label={`healthz: ${healthStatus}`} />
-                  <Chip size="small" label={`readyz: ${readyStatus}`} />
-                </Stack>
-              }
-            >
-              <Typography variant="body2" sx={{ mb: 0.5 }}>
-                API target ({apiTargetHint})
+          <Paper elevation={3} sx={{ p: 2.2, border: 1, borderColor: 'divider' }}>
+            <Typography variant="overline" color="primary.main" sx={{ letterSpacing: 1.1 }}>
+              Control Plane
+            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.8 }}>
+              Cluster {activeCluster} Overview
+            </Typography>
+            <Typography color="text.secondary">
+              API target ({apiTargetHint})
+            </Typography>
+          </Paper>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' },
+              gap: 1.5,
+            }}
+          >
+            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary">
+                Registry Resource Types
               </Typography>
-              <Typography variant="body2" sx={{ mb: 0.5 }}>
-                Last checked: {lastCheckedAt ?? 'never'}
+              <Typography variant="h4" sx={{ fontWeight: 700 }} data-testid="registry-resource-type-count">
+                {resourceTypeCount}
               </Typography>
-              <Typography variant="body2">
-                Failure summary:{' '}
-                {healthError || readyError
-                  ? [
-                      healthError ? `healthz: ${healthError}` : null,
-                      readyError ? `readyz: ${readyError}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join('; ')
-                  : 'none'}
+            </Paper>
+            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary">
+                Health Endpoint
               </Typography>
-            </ListPageShell>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                {healthStatus}
+              </Typography>
+            </Paper>
+            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary">
+                Readiness Endpoint
+              </Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                {readyStatus}
+              </Typography>
+            </Paper>
           </Box>
+
+          <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.4 }}>
+              Failure summary
+            </Typography>
+            <Typography variant="body2" color={failureSummary === 'none' ? 'text.secondary' : 'error'}>
+              Failure summary: {failureSummary}
+            </Typography>
+          </Paper>
         </Stack>
       </Box>
     </Box>
