@@ -10,6 +10,7 @@ interface MenusResponse {
 }
 
 function App() {
+  const [activeCluster, setActiveCluster] = useState('default');
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,8 +19,12 @@ function App() {
     let active = true;
 
     async function loadMenus() {
+      setLoading(true);
+      setError(null);
       try {
-        const response = await fetch('/api/meta/menus?cluster=default');
+        const response = await fetch(
+          `/api/meta/menus?cluster=${encodeURIComponent(activeCluster)}`,
+        );
         if (!response.ok) {
           throw new Error(`menus request failed: ${response.status}`);
         }
@@ -44,11 +49,23 @@ function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [activeCluster]);
 
   return (
     <main>
       <h1>KubeDeck</h1>
+      <label>
+        Cluster
+        <select
+          value={activeCluster}
+          onChange={(event) => setActiveCluster(event.target.value)}
+        >
+          <option value="default">default</option>
+          <option value="dev">dev</option>
+          <option value="staging">staging</option>
+          <option value="prod">prod</option>
+        </select>
+      </label>
       {loading ? <p>Loading menus...</p> : null}
       {error ? <p>Failed to load menus: {error}</p> : null}
       <ul aria-label="Menu Items">
