@@ -99,6 +99,38 @@ func TestResourceApplyEndpoint(t *testing.T) {
 	}
 }
 
+func TestHealthzEndpoint(t *testing.T) {
+	router := NewRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/healthz", nil)
+	resp := httptest.NewRecorder()
+
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, resp.Code)
+	}
+	if resp.Body.String() != "ok" {
+		t.Fatalf("expected body ok, got %q", resp.Body.String())
+	}
+}
+
+func TestReadyzEndpoint(t *testing.T) {
+	router := NewRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/readyz", nil)
+	resp := httptest.NewRecorder()
+
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, resp.Code)
+	}
+	if resp.Body.String() != "ok" {
+		t.Fatalf("expected body ok, got %q", resp.Body.String())
+	}
+}
+
 func TestRegistryMethodNotAllowed(t *testing.T) {
 	router := NewRouter()
 
