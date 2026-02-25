@@ -11,6 +11,7 @@ func NewRouter() http.Handler {
 
 	mux.HandleFunc("/api/meta/registry", meta.Registry)
 	mux.HandleFunc("/api/meta/clusters", meta.Clusters)
+	mux.HandleFunc("/api/meta/menus", meta.Menus)
 	mux.HandleFunc("/api/resources/apply", resources.Apply)
 
 	return mux
