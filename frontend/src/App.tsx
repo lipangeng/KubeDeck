@@ -36,6 +36,14 @@ import { composeMenus } from './core/menuComposer';
 import { groupMenusByGroup } from './core/menuGrouping';
 import { translate, type Locale } from './i18n';
 import {
+  clearAuthToken,
+  login,
+  me,
+  readAuthToken,
+  writeAuthToken,
+  type AuthTenant,
+} from './sdk/authApi';
+import {
   parseApplyResponse,
   parseClustersResponse,
   parseMenusResponse,
@@ -55,6 +63,11 @@ interface AppProps {
   onLocaleChange: (next: Locale) => void;
   themePreference: ThemePreference;
   onThemePreferenceChange: (next: ThemePreference) => void;
+}
+
+interface AuthUserState {
+  id: string;
+  username: string;
 }
 
 function resolveApiTarget(): string {
@@ -257,6 +270,16 @@ function App({
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
     () => readStoredExpandedGroups(),
   );
+  const [authToken, setAuthToken] = useState<string | null>(() => readAuthToken());
+  const [authUser, setAuthUser] = useState<AuthUserState | null>(null);
+  const [authTenants, setAuthTenants] = useState<AuthTenant[]>([]);
+  const [activeTenantID, setActiveTenantID] = useState<string>('');
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [loginUsername, setLoginUsername] = useState('admin');
+  const [loginPassword, setLoginPassword] = useState('admin');
+  const [loginTenantCode, setLoginTenantCode] = useState('dev');
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   function applyMenuOverride(menu: MenuItem): MenuItem {
     const override = menuOverrides[menu.id];
@@ -453,7 +476,7 @@ function App({
         `/api/resources/apply?cluster=${encodeURIComponent(activeCluster)}&defaultNs=${encodeURIComponent(createNamespace)}`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/yaml' },
+          headers: buildHeaders({ 'Content-Type': 'application/yaml' }),
           body: yamlInput,
         },
       );
@@ -475,7 +498,9 @@ function App({
 
     async function loadClusters() {
       try {
-        const response = await fetch('/api/meta/clusters');
+        const response = await fetch('/api/meta/clusters', {
+          headers: buildHeaders(),
+        });
         if (!response.ok) {
           throw new Error(`clusters request failed: ${response.status}`);
         }
@@ -509,8 +534,12 @@ function App({
       setResourceTypes([]);
       try {
         const [menusResponse, registryResponse] = await Promise.all([
-          fetch(`/api/meta/menus?cluster=${encodeURIComponent(activeCluster)}`),
-          fetch(`/api/meta/registry?cluster=${encodeURIComponent(activeCluster)}`),
+          fetch(`/api/meta/menus?cluster=${encodeURIComponent(activeCluster)}`, {
+            headers: buildHeaders(),
+          }),
+          fetch(`/api/meta/registry?cluster=${encodeURIComponent(activeCluster)}`, {
+            headers: buildHeaders(),
+          }),
         ]);
         if (!menusResponse.ok) {
           throw new Error(`menus request failed: ${menusResponse.status}`);
@@ -592,6 +621,98 @@ function App({
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    if (!authToken) {
+      setAuthUser(null);
+      setAuthTenants([]);
+      setActiveTenantID('');
+      return () => {
+        active = false;
+      };
+    }
+    const token = authToken;
+    async function refreshSession() {
+      try {
+        const payload = await me(token);
+        if (!active) {
+          return;
+        }
+        setAuthUser({
+          id: payload.user.id,
+          username: payload.user.username,
+        });
+        setAuthTenants(payload.tenants);
+        setActiveTenantID(payload.active_tenant_id);
+        setAuthError(null);
+      } catch (e) {
+        if (!active) {
+          return;
+        }
+        setAuthUser(null);
+        setAuthTenants([]);
+        setActiveTenantID('');
+        clearAuthToken();
+        setAuthToken(null);
+        setAuthError(e instanceof Error ? e.message : 'auth me failed');
+      }
+    }
+    void refreshSession();
+    return () => {
+      active = false;
+    };
+  }, [authToken]);
+
+  function buildHeaders(base?: HeadersInit): HeadersInit {
+    if (!authToken) {
+      return base ?? {};
+    }
+    return {
+      ...(base ?? {}),
+      Authorization: `Bearer ${authToken}`,
+    };
+  }
+
+  async function submitLogin() {
+    setAuthBusy(true);
+    setAuthError(null);
+    try {
+      const payload = await login(loginUsername, loginPassword, loginTenantCode);
+      writeAuthToken(payload.token);
+      setAuthToken(payload.token);
+      setAuthUser({
+        id: payload.user.id,
+        username: payload.user.username,
+      });
+      setAuthTenants(payload.tenants);
+      setActiveTenantID(payload.active_tenant_id);
+      setAuthDialogOpen(false);
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : 'auth login failed');
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function logout() {
+    if (authToken) {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: buildHeaders(),
+        });
+      } catch {
+        // best effort logout
+      }
+    }
+    clearAuthToken();
+    setAuthToken(null);
+    setAuthUser(null);
+    setAuthTenants([]);
+    setActiveTenantID('');
+    setAuthError(null);
+  }
+
   const failureSummary =
     healthError || readyError
       ? [
@@ -610,6 +731,8 @@ function App({
   const checkedAtLabel = lastCheckedAt
     ? new Date(lastCheckedAt).toLocaleTimeString()
     : 'never';
+  const activeTenantLabel =
+    authTenants.find((tenant) => tenant.id === activeTenantID)?.code || activeTenantID || '-';
 
   return (
     <Box
@@ -706,6 +829,23 @@ function App({
           <Button variant="outlined" onClick={() => setManageMenusOpen(true)}>
             {t('manageMenus')}
           </Button>
+          {authUser ? (
+            <>
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`${authUser.username} @ ${activeTenantLabel}`}
+                sx={{ borderRadius: 999, bgcolor: 'background.paper' }}
+              />
+              <Button color="inherit" onClick={() => void logout()}>
+                {t('logout')}
+              </Button>
+            </>
+          ) : (
+            <Button variant="outlined" onClick={() => setAuthDialogOpen(true)}>
+              {t('login')}
+            </Button>
+          )}
           <Button variant="contained" onClick={() => setCreateDialogOpen(true)}>
             {t('createResources')}
           </Button>
@@ -989,6 +1129,48 @@ function App({
           </Paper>
         </Stack>
       </Box>
+
+      <Dialog
+        open={authDialogOpen}
+        onClose={() => setAuthDialogOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>{t('login')}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.2} sx={{ pt: 0.4 }}>
+            <TextField
+              label={t('username')}
+              value={loginUsername}
+              onChange={(event) => setLoginUsername(event.target.value)}
+              autoComplete="username"
+            />
+            <TextField
+              label={t('password')}
+              type="password"
+              value={loginPassword}
+              onChange={(event) => setLoginPassword(event.target.value)}
+              autoComplete="current-password"
+            />
+            <TextField
+              label={t('tenantCode')}
+              value={loginTenantCode}
+              onChange={(event) => setLoginTenantCode(event.target.value)}
+            />
+            {authError ? (
+              <Typography variant="body2" color="error">
+                {t('authError', { error: authError })}
+              </Typography>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAuthDialogOpen(false)}>{t('close')}</Button>
+          <Button variant="contained" onClick={() => void submitLogin()} disabled={authBusy}>
+            {t('login')}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={manageMenusOpen}
