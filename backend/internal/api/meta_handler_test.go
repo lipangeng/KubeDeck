@@ -680,6 +680,61 @@ func TestAuthAcceptInviteReloadsFromPersistenceWhenCacheMiss(t *testing.T) {
 	}
 }
 
+func TestIAMRevokeInviteReloadsFromPersistenceWhenCacheMiss(t *testing.T) {
+	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		resetIAMPersistenceForTest()
+	})
+	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
+	t.Setenv("KUBEDECK_SQLITE_DSN", filepath.Join(t.TempDir(), "revoke-invite-reload.sqlite"))
+
+	resetAuthSessions()
+	resetInvites()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+
+	createInviteReq := httptest.NewRequest(http.MethodPost, "/api/iam/invites", bytes.NewReader([]byte(`{"email":"user3@example.com","role_hint":"member","expires_in_hours":2}`)))
+	createInviteReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createInviteResp := httptest.NewRecorder()
+	router.ServeHTTP(createInviteResp, createInviteReq)
+	if createInviteResp.Code != http.StatusCreated {
+		t.Fatalf("expected create invite status %d, got %d body=%s", http.StatusCreated, createInviteResp.Code, createInviteResp.Body.String())
+	}
+	var inviteBody struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(createInviteResp.Body.Bytes(), &inviteBody); err != nil {
+		t.Fatalf("expected invite JSON body, got error: %v", err)
+	}
+	if inviteBody.ID == "" {
+		t.Fatalf("expected invite id")
+	}
+
+	resetInvites()
+
+	revokeReq := httptest.NewRequest(http.MethodDelete, "/api/iam/invites/"+inviteBody.ID, nil)
+	revokeReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	revokeResp := httptest.NewRecorder()
+	router.ServeHTTP(revokeResp, revokeReq)
+	if revokeResp.Code != http.StatusOK {
+		t.Fatalf("expected revoke invite status %d, got %d body=%s", http.StatusOK, revokeResp.Code, revokeResp.Body.String())
+	}
+}
+
 func TestIAMGroupPatchReloadFromPersistenceWhenCacheMiss(t *testing.T) {
 	resetIAMPersistenceForTest()
 	t.Cleanup(func() {
