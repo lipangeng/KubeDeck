@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
@@ -469,5 +469,100 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.queryByText('Workloads')).toBeNull();
     });
+  });
+
+  it('logs in and switches tenant in header', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
+        return new Response('ok', { status: 200 });
+      }
+      if (url.endsWith('/api/meta/clusters')) {
+        return new Response(
+          JSON.stringify({
+            clusters: ['default'],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/meta/registry?cluster=default')) {
+        return new Response(
+          JSON.stringify({
+            cluster: 'default',
+            resourceTypes: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/meta/menus?cluster=default')) {
+        return new Response(
+          JSON.stringify({
+            cluster: 'default',
+            menus: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/auth/login')) {
+        return new Response(
+          JSON.stringify({
+            token: 'token-abc',
+            user: { id: 'u-1', username: 'admin' },
+            tenants: [
+              { id: 'tenant-dev', code: 'dev', name: 'Development' },
+              { id: 'tenant-staging', code: 'staging', name: 'Staging' },
+            ],
+            active_tenant_id: 'tenant-dev',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(
+          JSON.stringify({
+            user: { id: 'u-1', username: 'admin', activeTenantID: 'tenant-dev' },
+            tenants: [
+              { id: 'tenant-dev', code: 'dev', name: 'Development' },
+              { id: 'tenant-staging', code: 'staging', name: 'Staging' },
+            ],
+            active_tenant_id: 'tenant-dev',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/auth/switch-tenant')) {
+        expect(init?.method).toBe('POST');
+        expect(String(init?.body)).toContain('"tenant_code":"staging"');
+        return new Response(
+          JSON.stringify({
+            active_tenant_id: 'tenant-staging',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response('not found', { status: 404 });
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        locale="en"
+        onLocaleChange={vi.fn()}
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Login' }));
+    const loginDialog = await screen.findByRole('dialog', { name: 'Login' });
+    const submitButton = within(loginDialog).getByRole('button', { name: 'Login' });
+    fireEvent.click(submitButton);
+
+    expect(await screen.findByText('admin')).toBeTruthy();
+    fireEvent.change(await screen.findByLabelText('Tenant'), {
+      target: { value: 'staging' },
+    });
+    expect(await screen.findByDisplayValue('staging')).toBeTruthy();
   });
 });

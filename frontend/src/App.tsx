@@ -40,6 +40,7 @@ import {
   login,
   me,
   readAuthToken,
+  switchTenant,
   writeAuthToken,
   type AuthTenant,
 } from './sdk/authApi';
@@ -280,6 +281,7 @@ function App({
   const [loginTenantCode, setLoginTenantCode] = useState('dev');
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [tenantBusy, setTenantBusy] = useState(false);
 
   function applyMenuOverride(menu: MenuItem): MenuItem {
     const override = menuOverrides[menu.id];
@@ -713,6 +715,22 @@ function App({
     setAuthError(null);
   }
 
+  async function onTenantCodeChange(nextTenantCode: string) {
+    if (!authToken || !authUser) {
+      return;
+    }
+    setTenantBusy(true);
+    setAuthError(null);
+    try {
+      const payload = await switchTenant(authToken, nextTenantCode);
+      setActiveTenantID(payload.active_tenant_id);
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : 'switch tenant failed');
+    } finally {
+      setTenantBusy(false);
+    }
+  }
+
   const failureSummary =
     healthError || readyError
       ? [
@@ -731,8 +749,8 @@ function App({
   const checkedAtLabel = lastCheckedAt
     ? new Date(lastCheckedAt).toLocaleTimeString()
     : 'never';
-  const activeTenantLabel =
-    authTenants.find((tenant) => tenant.id === activeTenantID)?.code || activeTenantID || '-';
+  const activeTenantCode =
+    authTenants.find((tenant) => tenant.id === activeTenantID)?.code || authTenants[0]?.code || '';
 
   return (
     <Box
@@ -831,12 +849,24 @@ function App({
           </Button>
           {authUser ? (
             <>
-              <Chip
-                size="small"
-                variant="outlined"
-                label={`${authUser.username} @ ${activeTenantLabel}`}
-                sx={{ borderRadius: 999, bgcolor: 'background.paper' }}
-              />
+              <Chip size="small" variant="outlined" label={authUser.username} sx={{ borderRadius: 999, bgcolor: 'background.paper' }} />
+              <FormControl size="small" sx={{ minWidth: 130 }}>
+                <InputLabel htmlFor="tenant-select">{t('tenant')}</InputLabel>
+                <Select
+                  native
+                  value={activeTenantCode}
+                  disabled={tenantBusy}
+                  onChange={(event) => void onTenantCodeChange(event.target.value)}
+                  label={t('tenant')}
+                  inputProps={{ id: 'tenant-select' }}
+                >
+                  {authTenants.map((tenant) => (
+                    <option key={tenant.id} value={tenant.code}>
+                      {tenant.code}
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
               <Button color="inherit" onClick={() => void logout()}>
                 {t('logout')}
               </Button>

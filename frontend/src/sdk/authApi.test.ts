@@ -5,6 +5,7 @@ import {
   login,
   me,
   readAuthToken,
+  switchTenant,
   writeAuthToken,
 } from './authApi';
 
@@ -67,5 +68,26 @@ describe('authApi', () => {
     expect(fetchMock).toHaveBeenCalled();
     const init = (fetchMock.mock.calls[0] as unknown[])[1] as RequestInit;
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer token-abc');
+  });
+
+  it('switches tenant by tenant_code', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          active_tenant_id: 'tenant-staging',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const payload = await switchTenant('token-abc', 'staging');
+
+    expect(payload.active_tenant_id).toBe('tenant-staging');
+    expect(fetchMock).toHaveBeenCalled();
+    const init = (fetchMock.mock.calls[0] as unknown[])[1] as RequestInit;
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer token-abc');
+    expect(String(init.body)).toContain('"tenant_code":"staging"');
   });
 });

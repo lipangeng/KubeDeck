@@ -84,6 +84,32 @@ export async function me(token: string): Promise<AuthMeResponse> {
   return parseAuthMeResponse(payload);
 }
 
+export async function switchTenant(
+  token: string,
+  tenantCode: string,
+): Promise<{ active_tenant_id: string }> {
+  const response = await fetch('/api/auth/switch-tenant', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      tenant_code: tenantCode,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`auth switch tenant failed: ${response.status}`);
+  }
+  const payload = await response.json();
+  if (!isObject(payload) || typeof payload.active_tenant_id !== 'string') {
+    throw new Error('invalid switch tenant response');
+  }
+  return {
+    active_tenant_id: payload.active_tenant_id,
+  };
+}
+
 function parseAuthLoginResponse(value: unknown): AuthLoginResponse {
   if (!isObject(value) || typeof value.token !== 'string' || !isObject(value.user)) {
     throw new Error('invalid auth login response');
