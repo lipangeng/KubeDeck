@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 describe('App', () => {
-  it('renders shell layout, runtime checks, and reloads menus when cluster changes', async () => {
+  it('renders shell layout, theme control, runtime checks, and reloads menus when cluster changes', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
@@ -34,12 +34,19 @@ describe('App', () => {
       );
     });
 
+    const onThemePreferenceChange = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<App />);
+    render(
+      <App
+        themePreference="system"
+        onThemePreferenceChange={onThemePreferenceChange}
+      />,
+    );
 
     expect(screen.getByRole('heading', { level: 1, name: 'KubeDeck' })).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Primary Sidebar' })).toBeTruthy();
+    expect(screen.getByLabelText('Theme')).toBeTruthy();
     expect(screen.getByText('API target (test: http://127.0.0.1:8080)')).toBeTruthy();
     expect(await screen.findByText('healthz: ok')).toBeTruthy();
     expect(await screen.findByText('readyz: ok')).toBeTruthy();
@@ -49,8 +56,14 @@ describe('App', () => {
     expect(await screen.findByText('Workloads')).toBeTruthy();
     expect(await screen.findByText('Custom Resources')).toBeTruthy();
 
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'dev' } });
+    fireEvent.change(screen.getByLabelText('Cluster'), {
+      target: { value: 'dev' },
+    });
+    fireEvent.change(screen.getByLabelText('Theme'), {
+      target: { value: 'dark' },
+    });
 
+    expect(onThemePreferenceChange).toHaveBeenCalledWith('dark');
     expect(await screen.findByText('Dev Workloads')).toBeTruthy();
     await waitFor(() => {
       const calledUrls = fetchMock.mock.calls.map(([input]) => String(input));
@@ -80,7 +93,12 @@ describe('App', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<App />);
+    render(
+      <App
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
 
     expect(await screen.findByText('healthz: ok')).toBeTruthy();
     expect(await screen.findByText('readyz: error')).toBeTruthy();
