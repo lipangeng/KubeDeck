@@ -56,11 +56,14 @@ import {
   parseInvitesResponse,
   parseMembershipsResponse,
   parsePermissionsResponse,
+  parseTenantMembersResponse,
+  parseTenantsResponse,
   parseUsersResponse,
   type IAMGroup,
   type IAMInvite,
   type IAMMembership,
   type IAMPermission,
+  type IAMTenant,
   type IAMUser,
 } from './sdk/iamApi';
 import {
@@ -323,6 +326,12 @@ function App({
   const [iamMemberships, setIamMemberships] = useState<IAMMembership[]>([]);
   const [iamInvites, setIamInvites] = useState<IAMInvite[]>([]);
   const [iamUsers, setIamUsers] = useState<IAMUser[]>([]);
+  const [iamTenants, setIamTenants] = useState<IAMTenant[]>([]);
+  const [selectedTenantForMembers, setSelectedTenantForMembers] = useState<string>('');
+  const [tenantMembers, setTenantMembers] = useState<IAMMembership[]>([]);
+  const [newTenantMemberUserID, setNewTenantMemberUserID] = useState('');
+  const [newTenantMemberUserLabel, setNewTenantMemberUserLabel] = useState('');
+  const [newTenantMemberEffectiveFrom, setNewTenantMemberEffectiveFrom] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDescription, setNewGroupDescription] = useState('');
   const [groupPermissionDrafts, setGroupPermissionDrafts] = useState<Record<string, string>>({});
@@ -843,17 +852,21 @@ function App({
       setIamMemberships([]);
       setIamInvites([]);
       setIamUsers([]);
+      setIamTenants([]);
+      setTenantMembers([]);
+      setSelectedTenantForMembers('');
       return;
     }
     setIamLoading(true);
     setIamError(null);
     try {
-      const [permissionsResponse, groupsResponse, membershipsResponse, invitesResponse, usersResponse] = await Promise.all([
+      const [permissionsResponse, groupsResponse, membershipsResponse, invitesResponse, usersResponse, tenantsResponse] = await Promise.all([
         apiFetch('/api/iam/permissions'),
         apiFetch('/api/iam/groups'),
         apiFetch('/api/iam/memberships'),
         apiFetch('/api/iam/invites'),
         apiFetch('/api/iam/users'),
+        apiFetch('/api/iam/tenants'),
       ]);
       if (!permissionsResponse.ok) {
         throw new Error(`permissions request failed: ${permissionsResponse.status}`);
@@ -870,16 +883,33 @@ function App({
       if (!usersResponse.ok) {
         throw new Error(`users request failed: ${usersResponse.status}`);
       }
+      if (!tenantsResponse.ok) {
+        throw new Error(`tenants request failed: ${tenantsResponse.status}`);
+      }
       const permissions = parsePermissionsResponse(await permissionsResponse.json());
       const groups = parseGroupsResponse(await groupsResponse.json());
       const memberships = parseMembershipsResponse(await membershipsResponse.json());
       const invites = parseInvitesResponse(await invitesResponse.json());
       const users = parseUsersResponse(await usersResponse.json());
+      const tenants = parseTenantsResponse(await tenantsResponse.json());
       setIamPermissions(permissions);
       setIamGroups(groups);
       setIamMemberships(memberships);
       setIamInvites(invites);
       setIamUsers(users);
+      setIamTenants(tenants);
+      const defaultTenantID = selectedTenantForMembers !== '' ? selectedTenantForMembers : (tenants[0]?.id ?? '');
+      setSelectedTenantForMembers(defaultTenantID);
+      if (defaultTenantID !== '') {
+        const tenantMembersResponse = await apiFetch(`/api/iam/tenants/${encodeURIComponent(defaultTenantID)}/members`);
+        if (tenantMembersResponse.ok) {
+          setTenantMembers(parseTenantMembersResponse(await tenantMembersResponse.json()));
+        } else {
+          setTenantMembers([]);
+        }
+      } else {
+        setTenantMembers([]);
+      }
       setGroupPermissionDrafts(
         groups.reduce<Record<string, string>>((acc, group) => {
           acc[group.id] = group.permissions.join(', ');
@@ -1255,6 +1285,80 @@ function App({
       setAuditError(e instanceof Error ? e.message : 'load audit failed');
     } finally {
       setAuditLoading(false);
+    }
+  }
+
+  async function loadTenantMembers(tenantID: string) {
+    setSelectedTenantForMembers(tenantID);
+    if (tenantID.trim() === '') {
+      setTenantMembers([]);
+      return;
+    }
+    try {
+      const response = await apiFetch(`/api/iam/tenants/${encodeURIComponent(tenantID)}/members`);
+      if (!response.ok) {
+        throw new Error(`tenant members request failed: ${response.status}`);
+      }
+      setTenantMembers(parseTenantMembersResponse(await response.json()));
+    } catch (e) {
+      setIamError(e instanceof Error ? e.message : 'load tenant members failed');
+      setTenantMembers([]);
+    }
+  }
+
+  async function createTenantMember() {
+    if (!authUser || selectedTenantForMembers.trim() === '') {
+      setIamError('tenant_required');
+      return;
+    }
+    if (newTenantMemberUserID.trim() === '') {
+      setIamError('user_id_required');
+      return;
+    }
+    setIamError(null);
+    try {
+      const response = await apiFetch(`/api/iam/tenants/${encodeURIComponent(selectedTenantForMembers)}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: newTenantMemberUserID.trim(),
+          user_label: newTenantMemberUserLabel.trim(),
+          effective_from:
+            newTenantMemberEffectiveFrom.trim() === ''
+              ? new Date().toISOString()
+              : newTenantMemberEffectiveFrom.trim(),
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`create tenant member failed: ${response.status}`);
+      }
+      setNewTenantMemberUserID('');
+      setNewTenantMemberUserLabel('');
+      setNewTenantMemberEffectiveFrom('');
+      await loadTenantMembers(selectedTenantForMembers);
+    } catch (e) {
+      setIamError(e instanceof Error ? e.message : 'create tenant member failed');
+    }
+  }
+
+  async function deleteTenantMember(member: IAMMembership) {
+    if (!authUser || selectedTenantForMembers.trim() === '') {
+      return;
+    }
+    setIamError(null);
+    try {
+      const response = await apiFetch(
+        `/api/iam/tenants/${encodeURIComponent(selectedTenantForMembers)}/members?membership_id=${encodeURIComponent(member.id)}`,
+        {
+          method: 'DELETE',
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`delete tenant member failed: ${response.status}`);
+      }
+      setTenantMembers((previous) => previous.filter((item) => item.id !== member.id));
+    } catch (e) {
+      setIamError(e instanceof Error ? e.message : 'delete tenant member failed');
     }
   }
 
@@ -1890,6 +1994,80 @@ function App({
                 </Paper>
               ))}
               {iamUsers.length === 0 && !iamLoading ? (
+                <Typography color="text.secondary">{t('noEntries')}</Typography>
+              ) : null}
+            </Stack>
+
+            <Stack spacing={1}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                {t('iamTenantMembers')}
+              </Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <InputLabel htmlFor="tenant-members-select">{t('tenant')}</InputLabel>
+                  <Select
+                    native
+                    label={t('tenant')}
+                    value={selectedTenantForMembers}
+                    onChange={(event) => void loadTenantMembers(event.target.value)}
+                    inputProps={{ id: 'tenant-members-select' }}
+                  >
+                    <option value=""></option>
+                    {iamTenants.map((tenant) => (
+                      <option key={tenant.id} value={tenant.id}>
+                        {tenant.code} ({tenant.name})
+                      </option>
+                    ))}
+                  </Select>
+                </FormControl>
+                <TextField
+                  size="small"
+                  label={t('userId')}
+                  value={newTenantMemberUserID}
+                  onChange={(event) => setNewTenantMemberUserID(event.target.value)}
+                />
+                <TextField
+                  size="small"
+                  label={t('username')}
+                  value={newTenantMemberUserLabel}
+                  onChange={(event) => setNewTenantMemberUserLabel(event.target.value)}
+                />
+                <TextField
+                  size="small"
+                  label={t('membershipEffectiveFrom')}
+                  value={newTenantMemberEffectiveFrom}
+                  onChange={(event) => setNewTenantMemberEffectiveFrom(event.target.value)}
+                  placeholder="2026-02-25T00:00:00Z"
+                />
+                <Button
+                  variant="contained"
+                  disabled={!authCanWrite || selectedTenantForMembers.trim() === ''}
+                  onClick={() => void createTenantMember()}
+                >
+                  {t('addTenantMember')}
+                </Button>
+              </Stack>
+              {tenantMembers.map((member) => (
+                <Paper key={member.id} variant="outlined" sx={{ p: 1 }}>
+                  <Typography variant="subtitle2">{member.userLabel || member.userID}</Typography>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    {member.id} | {member.effectiveFrom}
+                    {member.effectiveUntil ? ` ~ ${member.effectiveUntil}` : ''}
+                  </Typography>
+                  <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1 }}>
+                    <Button
+                      size="small"
+                      color="error"
+                      variant="outlined"
+                      disabled={!authCanWrite}
+                      onClick={() => void deleteTenantMember(member)}
+                    >
+                      {t('removeTenantMember')}
+                    </Button>
+                  </Stack>
+                </Paper>
+              ))}
+              {tenantMembers.length === 0 && !iamLoading ? (
                 <Typography color="text.secondary">{t('noEntries')}</Typography>
               ) : null}
             </Stack>

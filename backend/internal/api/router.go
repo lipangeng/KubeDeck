@@ -24,6 +24,8 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/api/iam/groups", iam.Groups)
 	mux.HandleFunc("/api/iam/groups/", iam.GroupByID)
 	mux.HandleFunc("/api/iam/users", iam.Users)
+	mux.HandleFunc("/api/iam/tenants", iam.Tenants)
+	mux.HandleFunc("/api/iam/tenants/", iam.TenantMembers)
 	mux.HandleFunc("/api/iam/memberships", iam.Memberships)
 	mux.HandleFunc("/api/iam/memberships/", iam.MembershipByID)
 	mux.HandleFunc("/api/iam/invites", iam.Invites)

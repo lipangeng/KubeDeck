@@ -49,6 +49,12 @@ export interface IAMUser {
   effectiveUntil: string;
 }
 
+export interface IAMTenant {
+  id: string;
+  code: string;
+  name: string;
+}
+
 export function parsePermissionsResponse(value: unknown): IAMPermission[] {
   if (!isObject(value) || !Array.isArray(value.permissions)) {
     throw new Error('invalid iam permissions response');
@@ -132,4 +138,22 @@ export function parseUsersResponse(value: unknown): IAMUser[] {
     effectiveFrom: String(item.effective_from ?? ''),
     effectiveUntil: String(item.effective_until ?? ''),
   }));
+}
+
+export function parseTenantsResponse(value: unknown): IAMTenant[] {
+  if (!isObject(value) || !Array.isArray(value.tenants)) {
+    throw new Error('invalid iam tenants response');
+  }
+  return value.tenants.filter((item) => isObject(item)).map((item) => ({
+    id: String(item.id ?? ''),
+    code: String(item.code ?? ''),
+    name: String(item.name ?? ''),
+  }));
+}
+
+export function parseTenantMembersResponse(value: unknown): IAMMembership[] {
+  if (!isObject(value) || !Array.isArray(value.members)) {
+    throw new Error('invalid tenant members response');
+  }
+  return parseMembershipsResponse({ memberships: value.members });
 }

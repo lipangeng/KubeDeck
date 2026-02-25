@@ -778,6 +778,32 @@ describe('App', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
+      if (url.endsWith('/api/iam/tenants')) {
+        return new Response(
+          JSON.stringify({
+            tenants: [{ id: 'tenant-dev', code: 'dev', name: 'Development' }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/iam/tenants/tenant-dev/members') && !url.includes('membership_id=')) {
+        return new Response(
+          JSON.stringify({
+            members: [
+              {
+                id: 'mbr-u1-tenant-dev',
+                tenant_id: 'tenant-dev',
+                user_id: 'u-1',
+                user_label: 'admin',
+                group_ids: [],
+                effective_from: '2026-02-25T00:00:00Z',
+                effective_until: '',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
       if (url.endsWith('/api/iam/invites')) {
         return new Response(
           JSON.stringify({
@@ -835,11 +861,162 @@ describe('App', () => {
     expect(await screen.findByDisplayValue('admins')).toBeTruthy();
     expect(await screen.findByText('iam:read (platform)')).toBeTruthy();
     expect(await screen.findByText('Users')).toBeTruthy();
+    expect(await screen.findByText('Tenant Members')).toBeTruthy();
     expect(await screen.findByText('Memberships')).toBeTruthy();
     expect(await screen.findByText('Invites')).toBeTruthy();
     expect(await screen.findByText('user@example.com')).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Revoke' }));
     expect(await screen.findByText(/revoked/)).toBeTruthy();
+  });
+
+  it('creates tenant member from tenant members section', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
+        return new Response('ok', { status: 200 });
+      }
+      if (url.endsWith('/api/meta/clusters')) {
+        return new Response(JSON.stringify({ clusters: ['default'] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/api/meta/registry?cluster=default')) {
+        return new Response(JSON.stringify({ cluster: 'default', resourceTypes: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/api/meta/menus?cluster=default')) {
+        return new Response(JSON.stringify({ cluster: 'default', menus: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/auth/login')) {
+        return new Response(
+          JSON.stringify({
+            token: 'token-abc',
+            user: { id: 'u-1', username: 'admin', roles: ['admin'] },
+            tenants: [{ id: 'tenant-dev', code: 'dev', name: 'Development' }],
+            active_tenant_id: 'tenant-dev',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(
+          JSON.stringify({
+            user: { id: 'u-1', username: 'admin', activeTenantID: 'tenant-dev', roles: ['admin'] },
+            tenants: [{ id: 'tenant-dev', code: 'dev', name: 'Development' }],
+            active_tenant_id: 'tenant-dev',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/iam/permissions')) {
+        return new Response(JSON.stringify({ permissions: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/iam/groups')) {
+        return new Response(JSON.stringify({ groups: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/iam/memberships')) {
+        return new Response(JSON.stringify({ memberships: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/iam/invites')) {
+        return new Response(JSON.stringify({ invites: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/iam/users')) {
+        return new Response(JSON.stringify({ users: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/iam/tenants')) {
+        return new Response(
+          JSON.stringify({
+            tenants: [{ id: 'tenant-dev', code: 'dev', name: 'Development' }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/iam/tenants/tenant-dev/members') && init?.method === 'POST') {
+        return new Response(
+          JSON.stringify({
+            id: 'mbr-u2-tenant-dev',
+            tenant_id: 'tenant-dev',
+            user_id: 'u-2',
+            user_label: 'new-user',
+            group_ids: [],
+            effective_from: '2026-02-25T00:00:00Z',
+            effective_until: '',
+          }),
+          { status: 201, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/iam/tenants/tenant-dev/members') && (!init?.method || init.method === 'GET')) {
+        return new Response(
+          JSON.stringify({
+            members: [
+              {
+                id: 'mbr-u2-tenant-dev',
+                tenant_id: 'tenant-dev',
+                user_id: 'u-2',
+                user_label: 'new-user',
+                group_ids: [],
+                effective_from: '2026-02-25T00:00:00Z',
+                effective_until: '',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response('not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        locale="en"
+        onLocaleChange={vi.fn()}
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Login' }));
+    fireEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Login' })).getByRole('button', {
+        name: 'Login',
+      }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Access Control' }));
+    const accessDialog = await screen.findByRole('dialog', { name: 'Access Control' });
+
+    fireEvent.change(await within(accessDialog).findByLabelText('Tenant'), {
+      target: { value: 'tenant-dev' },
+    });
+    fireEvent.change(within(accessDialog).getByLabelText('User ID'), { target: { value: 'u-2' } });
+    fireEvent.change(within(accessDialog).getByLabelText('Username'), { target: { value: 'new-user' } });
+    fireEvent.change(within(accessDialog).getByLabelText('Effective From (RFC3339)'), {
+      target: { value: '2026-02-25T00:00:00Z' },
+    });
+    fireEvent.click(within(accessDialog).getByRole('button', { name: 'Add Member' }));
+
+    expect(await within(accessDialog).findByText('new-user')).toBeTruthy();
   });
 
   it('loads audit events with filters in audit dialog', async () => {
@@ -1028,6 +1205,20 @@ describe('App', () => {
           headers: { 'Content-Type': 'application/json' },
         });
       }
+      if (url.endsWith('/api/iam/tenants')) {
+        return new Response(
+          JSON.stringify({
+            tenants: [{ id: 'tenant-dev', code: 'dev', name: 'Development' }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/iam/tenants/tenant-dev/members') && (!init?.method || init.method === 'GET')) {
+        return new Response(JSON.stringify({ members: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       if (url.endsWith('/api/iam/groups/grp-admin') && init?.method === 'PATCH') {
         return new Response(
           JSON.stringify({
@@ -1178,6 +1369,20 @@ describe('App', () => {
       }
       if (url.endsWith('/api/iam/users')) {
         return new Response(JSON.stringify({ users: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/iam/tenants')) {
+        return new Response(
+          JSON.stringify({
+            tenants: [{ id: 'tenant-dev', code: 'dev', name: 'Development' }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/iam/tenants/tenant-dev/members')) {
+        return new Response(JSON.stringify({ members: [] }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });

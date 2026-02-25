@@ -5,6 +5,8 @@ import {
   parseInvitesResponse,
   parseMembershipsResponse,
   parsePermissionsResponse,
+  parseTenantMembersResponse,
+  parseTenantsResponse,
   parseUsersResponse,
 } from './iamApi';
 
@@ -104,5 +106,31 @@ describe('iamApi', () => {
     });
     expect(users).toHaveLength(1);
     expect(users[0]?.roles).toEqual(['admin']);
+  });
+
+  it('parses tenants response', () => {
+    const tenants = parseTenantsResponse({
+      tenants: [{ id: 'tenant-dev', code: 'dev', name: 'Development' }],
+    });
+    expect(tenants).toHaveLength(1);
+    expect(tenants[0]?.code).toBe('dev');
+  });
+
+  it('parses tenant members response', () => {
+    const members = parseTenantMembersResponse({
+      members: [
+        {
+          id: 'm1',
+          tenant_id: 'tenant-dev',
+          user_id: 'u1',
+          user_label: 'alice',
+          group_ids: [],
+          effective_from: '2026-02-25T00:00:00Z',
+          effective_until: '',
+        },
+      ],
+    });
+    expect(members).toHaveLength(1);
+    expect(members[0]?.tenantID).toBe('tenant-dev');
   });
 });

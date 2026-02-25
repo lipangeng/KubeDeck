@@ -27,12 +27,12 @@ type iamGroup struct {
 }
 
 var (
-	iamGroupsMu sync.RWMutex
-	iamGroups   = map[string]iamGroup{}
+	iamGroupsMu      sync.RWMutex
+	iamGroups        = map[string]iamGroup{}
 	iamMembershipsMu sync.RWMutex
 	iamMemberships   = map[string]iamMembership{}
-	invitesMu   sync.RWMutex
-	invites     = map[string]iamInvite{}
+	invitesMu        sync.RWMutex
+	invites          = map[string]iamInvite{}
 )
 
 type iamMembership struct {
@@ -53,6 +53,12 @@ type iamUser struct {
 	MembershipID   string     `json:"membership_id"`
 	EffectiveFrom  time.Time  `json:"effective_from"`
 	EffectiveUntil *time.Time `json:"effective_until,omitempty"`
+}
+
+type iamTenant struct {
+	ID   string `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
 }
 
 func NewIAMHandler() *IAMHandler {
@@ -88,8 +94,14 @@ func (h *IAMHandler) Permissions(w http.ResponseWriter, r *http.Request) {
 			{"code": "iam:write", "scope": "platform"},
 			{"code": "tenant:read", "scope": "platform"},
 			{"code": "tenant:write", "scope": "platform"},
+			{"code": "audit:read", "scope": "platform"},
+			{"code": "menu:read", "scope": "platform"},
+			{"code": "menu:write", "scope": "platform"},
 			{"code": "resource:read", "scope": "cluster"},
 			{"code": "resource:write", "scope": "cluster"},
+			{"code": "resource:apply", "scope": "cluster"},
+			{"code": "resource:delete", "scope": "cluster"},
+			{"code": "cluster:switch", "scope": "platform"},
 		},
 	})
 }
@@ -260,6 +272,62 @@ func (h *IAMHandler) Users(w http.ResponseWriter, r *http.Request) {
 	h.listUsers(w, session)
 }
 
+func (h *IAMHandler) Tenants(w http.ResponseWriter, r *http.Request) {
+	session, ok := mustSession(r, w)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+	tenants := make([]iamTenant, 0, len(session.Available))
+	for _, tenant := range session.Available {
+		tenants = append(tenants, iamTenant{
+			ID:   tenant.ID,
+			Code: tenant.Code,
+			Name: tenant.Name,
+		})
+	}
+	_ = writeJSON(w, http.StatusOK, map[string]any{"tenants": tenants})
+}
+
+func (h *IAMHandler) TenantMembers(w http.ResponseWriter, r *http.Request) {
+	session, ok := mustSession(r, w)
+	if !ok {
+		return
+	}
+	trimmed := strings.TrimPrefix(r.URL.Path, "/api/iam/tenants/")
+	if !strings.HasSuffix(trimmed, "/members") {
+		methodNotAllowed(w, http.MethodGet+", "+http.MethodPost+", "+http.MethodDelete)
+		return
+	}
+	tenantID := strings.TrimSuffix(trimmed, "/members")
+	tenantID = strings.TrimSuffix(tenantID, "/")
+	if tenantID == "" {
+		writeJSONError(w, http.StatusBadRequest, "tenant_id_required")
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		h.listTenantMembers(w, session, tenantID)
+	case http.MethodPost:
+		if !hasIAMWrite(session.User.Roles) {
+			writeJSONError(w, http.StatusForbidden, "permission_denied")
+			return
+		}
+		h.createTenantMember(w, r, session, tenantID)
+	case http.MethodDelete:
+		if !hasIAMWrite(session.User.Roles) {
+			writeJSONError(w, http.StatusForbidden, "permission_denied")
+			return
+		}
+		h.deleteTenantMember(w, r, session, tenantID)
+	default:
+		methodNotAllowed(w, http.MethodGet+", "+http.MethodPost+", "+http.MethodDelete)
+	}
+}
+
 func (h *IAMHandler) listGroups(w http.ResponseWriter, session authSession) {
 	iamGroupsMu.RLock()
 	defer iamGroupsMu.RUnlock()
@@ -339,6 +407,145 @@ func (h *IAMHandler) listUsers(w http.ResponseWriter, session authSession) {
 	}
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{"users": users})
+}
+
+func (h *IAMHandler) listTenantMembers(
+	w http.ResponseWriter,
+	session authSession,
+	tenantID string,
+) {
+	if !tenantVisibleToSession(session, tenantID) {
+		writeJSONError(w, http.StatusNotFound, "tenant_not_found")
+		return
+	}
+	iamMembershipsMu.Lock()
+	defer iamMembershipsMu.Unlock()
+	out := make([]iamMembership, 0)
+	for _, membership := range iamMemberships {
+		if membership.TenantID == tenantID {
+			out = append(out, membership)
+		}
+	}
+	_ = writeJSON(w, http.StatusOK, map[string]any{"members": out})
+}
+
+func (h *IAMHandler) createTenantMember(
+	w http.ResponseWriter,
+	r *http.Request,
+	session authSession,
+	tenantID string,
+) {
+	if !tenantVisibleToSession(session, tenantID) {
+		writeJSONError(w, http.StatusNotFound, "tenant_not_found")
+		return
+	}
+	var req struct {
+		UserID         string `json:"user_id"`
+		UserLabel      string `json:"user_label"`
+		EffectiveFrom  string `json:"effective_from"`
+		EffectiveUntil string `json:"effective_until"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.UserID) == "" {
+		writeJSONError(w, http.StatusBadRequest, "user_id_required")
+		return
+	}
+	var effectiveFrom time.Time
+	if strings.TrimSpace(req.EffectiveFrom) == "" {
+		effectiveFrom = time.Now().UTC()
+	} else {
+		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(req.EffectiveFrom))
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid_effective_from")
+			return
+		}
+		effectiveFrom = parsed.UTC()
+	}
+	var effectiveUntilPtr *time.Time
+	if strings.TrimSpace(req.EffectiveUntil) != "" {
+		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(req.EffectiveUntil))
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid_effective_until")
+			return
+		}
+		if parsed.Before(effectiveFrom) {
+			writeJSONError(w, http.StatusBadRequest, "effective_until_before_from")
+			return
+		}
+		parsed = parsed.UTC()
+		effectiveUntilPtr = &parsed
+	}
+	userLabel := strings.TrimSpace(req.UserLabel)
+	if userLabel == "" {
+		userLabel = req.UserID
+	}
+	membership := iamMembership{
+		ID:             "mbr-" + strings.ToLower(strings.ReplaceAll(req.UserID, " ", "-")) + "-" + tenantID,
+		TenantID:       tenantID,
+		UserID:         req.UserID,
+		UserLabel:      userLabel,
+		GroupIDs:       []string{},
+		EffectiveFrom:  effectiveFrom,
+		EffectiveUntil: effectiveUntilPtr,
+	}
+	iamMembershipsMu.Lock()
+	iamMemberships[membership.ID] = membership
+	iamMembershipsMu.Unlock()
+	_ = defaultAuditWriter.Write(audit.Event{
+		TenantID:   tenantID,
+		ActorID:    session.User.ID,
+		Action:     "iam.tenant.member.create",
+		TargetType: "membership",
+		TargetID:   membership.ID,
+		Result:     "allowed",
+	})
+	_ = writeJSON(w, http.StatusCreated, membership)
+}
+
+func (h *IAMHandler) deleteTenantMember(
+	w http.ResponseWriter,
+	r *http.Request,
+	session authSession,
+	tenantID string,
+) {
+	if !tenantVisibleToSession(session, tenantID) {
+		writeJSONError(w, http.StatusNotFound, "tenant_not_found")
+		return
+	}
+	membershipID := strings.TrimSpace(r.URL.Query().Get("membership_id"))
+	if membershipID == "" {
+		writeJSONError(w, http.StatusBadRequest, "membership_id_required")
+		return
+	}
+	iamMembershipsMu.Lock()
+	defer iamMembershipsMu.Unlock()
+	membership, ok := iamMemberships[membershipID]
+	if !ok || membership.TenantID != tenantID {
+		writeJSONError(w, http.StatusNotFound, "membership_not_found")
+		return
+	}
+	delete(iamMemberships, membershipID)
+	_ = defaultAuditWriter.Write(audit.Event{
+		TenantID:   tenantID,
+		ActorID:    session.User.ID,
+		Action:     "iam.tenant.member.delete",
+		TargetType: "membership",
+		TargetID:   membershipID,
+		Result:     "allowed",
+	})
+	_ = writeJSON(w, http.StatusOK, map[string]any{"deleted": membershipID})
+}
+
+func tenantVisibleToSession(session authSession, tenantID string) bool {
+	for _, tenant := range session.Available {
+		if tenant.ID == tenantID {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *IAMHandler) createGroup(w http.ResponseWriter, r *http.Request, session authSession) {

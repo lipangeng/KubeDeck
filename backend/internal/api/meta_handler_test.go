@@ -775,6 +775,64 @@ func TestIAMUsersListFlow(t *testing.T) {
 	}
 }
 
+func TestIAMTenantsAndTenantMembersFlow(t *testing.T) {
+	resetAuthSessions()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	tenantsReq := httptest.NewRequest(http.MethodGet, "/api/iam/tenants", nil)
+	tenantsReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	tenantsResp := httptest.NewRecorder()
+	router.ServeHTTP(tenantsResp, tenantsReq)
+	if tenantsResp.Code != http.StatusOK {
+		t.Fatalf("expected tenants 200, got %d body=%s", tenantsResp.Code, tenantsResp.Body.String())
+	}
+
+	createMemberPayload := []byte(`{"user_id":"u-member-1","user_label":"member1","effective_from":"2026-02-25T00:00:00Z"}`)
+	createMemberReq := httptest.NewRequest(http.MethodPost, "/api/iam/tenants/tenant-dev/members", bytes.NewReader(createMemberPayload))
+	createMemberReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createMemberResp := httptest.NewRecorder()
+	router.ServeHTTP(createMemberResp, createMemberReq)
+	if createMemberResp.Code != http.StatusCreated {
+		t.Fatalf("expected create tenant member 201, got %d body=%s", createMemberResp.Code, createMemberResp.Body.String())
+	}
+	var created iamMembership
+	if err := json.Unmarshal(createMemberResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal created member: %v", err)
+	}
+
+	listMembersReq := httptest.NewRequest(http.MethodGet, "/api/iam/tenants/tenant-dev/members", nil)
+	listMembersReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	listMembersResp := httptest.NewRecorder()
+	router.ServeHTTP(listMembersResp, listMembersReq)
+	if listMembersResp.Code != http.StatusOK {
+		t.Fatalf("expected list tenant members 200, got %d body=%s", listMembersResp.Code, listMembersResp.Body.String())
+	}
+
+	deleteMemberReq := httptest.NewRequest(http.MethodDelete, "/api/iam/tenants/tenant-dev/members?membership_id="+created.ID, nil)
+	deleteMemberReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	deleteMemberResp := httptest.NewRecorder()
+	router.ServeHTTP(deleteMemberResp, deleteMemberReq)
+	if deleteMemberResp.Code != http.StatusOK {
+		t.Fatalf("expected delete tenant member 200, got %d body=%s", deleteMemberResp.Code, deleteMemberResp.Body.String())
+	}
+}
+
 func TestInviteCreateListAndAcceptFlow(t *testing.T) {
 	resetAuthSessions()
 	resetInvites()
