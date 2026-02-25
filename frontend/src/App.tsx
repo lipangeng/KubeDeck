@@ -305,6 +305,7 @@ function App({
   );
   const [authToken, setAuthToken] = useState<string | null>(() => readAuthToken());
   const [authUser, setAuthUser] = useState<AuthUserState | null>(null);
+  const [authRoles, setAuthRoles] = useState<string[]>([]);
   const [authTenants, setAuthTenants] = useState<AuthTenant[]>([]);
   const [activeTenantID, setActiveTenantID] = useState<string>('');
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
@@ -691,6 +692,7 @@ function App({
     let active = true;
     if (!authToken) {
       setAuthUser(null);
+      setAuthRoles([]);
       setAuthTenants([]);
       setActiveTenantID('');
       return () => {
@@ -708,6 +710,7 @@ function App({
           id: payload.user.id,
           username: payload.user.username,
         });
+        setAuthRoles(payload.user.roles);
         setAuthTenants(payload.tenants);
         setActiveTenantID(payload.active_tenant_id);
         setAuthError(null);
@@ -716,6 +719,7 @@ function App({
           return;
         }
         setAuthUser(null);
+        setAuthRoles([]);
         setAuthTenants([]);
         setActiveTenantID('');
         clearAuthToken();
@@ -743,6 +747,7 @@ function App({
     clearAuthToken();
     setAuthToken(null);
     setAuthUser(null);
+    setAuthRoles([]);
     setAuthTenants([]);
     setActiveTenantID('');
     setAuthError('unauthorized');
@@ -772,6 +777,7 @@ function App({
         id: payload.user.id,
         username: payload.user.username,
       });
+      setAuthRoles(payload.user.roles);
       setAuthTenants(payload.tenants);
       setActiveTenantID(payload.active_tenant_id);
       setAuthDialogOpen(false);
@@ -796,6 +802,7 @@ function App({
     clearAuthToken();
     setAuthToken(null);
     setAuthUser(null);
+    setAuthRoles([]);
     setAuthTenants([]);
     setActiveTenantID('');
     setAuthError(null);
@@ -1305,6 +1312,8 @@ function App({
     authTenants.find((tenant) => tenant.id === activeTenantID)?.code || authTenants[0]?.code || '';
   const inviteToken = parseInviteToken(currentRoute);
   const acceptInviteOpen = inviteToken !== '';
+  const authCanWrite =
+    authRoles.length === 0 || authRoles.includes('admin') || authRoles.includes('owner');
 
   useEffect(() => {
     if (!iamDialogOpen) {
@@ -1760,7 +1769,7 @@ function App({
                 value={newGroupDescription}
                 onChange={(event) => setNewGroupDescription(event.target.value)}
               />
-              <Button variant="contained" onClick={() => void createIAMGroup()}>
+              <Button variant="contained" onClick={() => void createIAMGroup()} disabled={!authCanWrite}>
                 {t('createGroup')}
               </Button>
               <Button onClick={() => void loadIAMData()}>{t('refresh')}</Button>
@@ -1835,6 +1844,7 @@ function App({
                       size="small"
                       variant="outlined"
                       onClick={() => void saveGroupProfile(group)}
+                      disabled={!authCanWrite}
                     >
                       {t('saveGroup')}
                     </Button>
@@ -1842,6 +1852,7 @@ function App({
                       size="small"
                       variant="outlined"
                       onClick={() => void saveGroupPermissions(group)}
+                      disabled={!authCanWrite}
                     >
                       {t('savePermissions')}
                     </Button>
@@ -1850,6 +1861,7 @@ function App({
                       color="error"
                       variant="outlined"
                       onClick={() => void deleteGroup(group)}
+                      disabled={!authCanWrite}
                     >
                       {t('deleteGroup')}
                     </Button>
@@ -1917,6 +1929,7 @@ function App({
                       size="small"
                       variant="outlined"
                       onClick={() => void saveMembershipGroups(membership)}
+                      disabled={!authCanWrite}
                     >
                       {t('saveMembershipGroups')}
                     </Button>
@@ -1953,6 +1966,7 @@ function App({
                       size="small"
                       variant="outlined"
                       onClick={() => void saveMembershipValidity(membership)}
+                      disabled={!authCanWrite}
                     >
                       {t('saveMembershipValidity')}
                     </Button>
@@ -1997,11 +2011,16 @@ function App({
                 <Button
                   variant="contained"
                   onClick={() => void createInvite()}
-                  disabled={inviteCreateBusy}
+                  disabled={inviteCreateBusy || !authCanWrite}
                 >
                   {t('createInvite')}
                 </Button>
               </Stack>
+              {!authCanWrite ? (
+                <Typography variant="caption" color="warning.main">
+                  {t('iamReadOnlyMode')}
+                </Typography>
+              ) : null}
               {inviteLinkCopied ? (
                 <Typography variant="caption" color="text.secondary">
                   {t('inviteCopied', { value: inviteLinkCopied })}
@@ -2027,7 +2046,7 @@ function App({
                       color="warning"
                       variant="outlined"
                       onClick={() => void revokeInvite(invite)}
-                      disabled={invite.status !== 'pending'}
+                      disabled={invite.status !== 'pending' || !authCanWrite}
                     >
                       {t('revokeInvite')}
                     </Button>

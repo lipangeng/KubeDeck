@@ -9,6 +9,7 @@ export interface AuthMeResponse {
     id: string;
     username: string;
     activeTenantID: string;
+    roles: string[];
   };
   tenants: AuthTenant[];
   active_tenant_id: string;
@@ -19,6 +20,7 @@ export interface AuthLoginResponse {
   user: {
     id: string;
     username: string;
+    roles: string[];
   };
   tenants: AuthTenant[];
   active_tenant_id: string;
@@ -149,6 +151,11 @@ function parseAuthLoginResponse(value: unknown): AuthLoginResponse {
     user: {
       id: String((value.user as Record<string, unknown>).id ?? ''),
       username: String((value.user as Record<string, unknown>).username ?? ''),
+      roles: Array.isArray((value.user as Record<string, unknown>).roles)
+        ? ((value.user as Record<string, unknown>).roles as unknown[])
+            .map((role) => String(role))
+            .filter((role) => role.trim() !== '')
+        : [],
     },
     tenants: parseTenants(value.tenants),
     active_tenant_id: String(value.active_tenant_id ?? ''),
@@ -166,6 +173,11 @@ function parseAuthMeResponse(value: unknown): AuthMeResponse {
       activeTenantID: String(
         (value.user as Record<string, unknown>).activeTenantID ?? value.active_tenant_id ?? '',
       ),
+      roles: Array.isArray((value.user as Record<string, unknown>).roles)
+        ? ((value.user as Record<string, unknown>).roles as unknown[])
+            .map((role) => String(role))
+            .filter((role) => role.trim() !== '')
+        : [],
     },
     tenants: parseTenants(value.tenants),
     active_tenant_id: String(value.active_tenant_id ?? ''),

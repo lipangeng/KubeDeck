@@ -92,7 +92,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{
 		"token":            token,
-		"user":             map[string]any{"id": user.ID, "username": user.Username},
+		"user":             map[string]any{"id": user.ID, "username": user.Username, "roles": user.Roles},
 		"tenants":          tenants,
 		"active_tenant_id": activeTenantID,
 	})
@@ -116,8 +116,9 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{
 		"user": map[string]any{
-			"id":         session.User.ID,
-			"username":   session.User.Username,
+			"id":            session.User.ID,
+			"username":      session.User.Username,
+			"roles":         session.User.Roles,
 			"activeTenantID": session.ActiveTenantID,
 		},
 		"tenants":          session.Available,
