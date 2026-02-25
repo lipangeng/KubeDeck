@@ -130,6 +130,56 @@ func (h *IAMHandler) Groups(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *IAMHandler) RebuildGroupIDs(w http.ResponseWriter, r *http.Request) {
+	session, ok := mustSession(r, w)
+	if !ok {
+		return
+	}
+	_ = reloadIAMStateFromPersistence()
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w, http.MethodPost)
+		return
+	}
+	if !sessionCanIAMWrite(session) {
+		writeJSONError(w, http.StatusForbidden, "permission_denied")
+		return
+	}
+
+	if err := rebuildGroupIDsForAllTenants(); err != nil {
+		if errors.Is(err, ErrGroupCanonicalNameConflict) {
+			_ = defaultAuditWriter.Write(audit.Event{
+				TenantID:   session.ActiveTenantID,
+				ActorID:    session.User.ID,
+				Action:     "iam.group.rebuild_ids",
+				TargetType: "group",
+				Result:     "denied",
+				Reason:     "canonical_name_conflict",
+			})
+			writeJSONError(w, http.StatusConflict, "group_name_conflict")
+			return
+		}
+		_ = defaultAuditWriter.Write(audit.Event{
+			TenantID:   session.ActiveTenantID,
+			ActorID:    session.User.ID,
+			Action:     "iam.group.rebuild_ids",
+			TargetType: "group",
+			Result:     "denied",
+			Reason:     "rebuild_failed",
+		})
+		writeJSONError(w, http.StatusInternalServerError, "rebuild_failed")
+		return
+	}
+
+	_ = defaultAuditWriter.Write(audit.Event{
+		TenantID:   session.ActiveTenantID,
+		ActorID:    session.User.ID,
+		Action:     "iam.group.rebuild_ids",
+		TargetType: "group",
+		Result:     "allowed",
+	})
+	_ = writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
 func (h *IAMHandler) GroupByID(w http.ResponseWriter, r *http.Request) {
 	session, ok := mustSession(r, w)
 	if !ok {

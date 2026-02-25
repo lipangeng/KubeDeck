@@ -1913,6 +1913,97 @@ func TestGroupIDRebuildRejectsCanonicalNameConflict(t *testing.T) {
 	}
 }
 
+func TestIAMRebuildGroupIDsEndpoint(t *testing.T) {
+	resetAuthSessions()
+	resetGroups()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	iamGroupsMu.Lock()
+	iamGroups["grp-admins"] = iamGroup{ID: "grp-admins", TenantID: "tenant-dev", Name: "Admins"}
+	iamGroups["grp-devops"] = iamGroup{ID: "grp-devops", TenantID: "tenant-dev", Name: "Dev Ops"}
+	iamGroupsMu.Unlock()
+	iamMembershipsMu.Lock()
+	iamMemberships["mbr-u1-tenant-dev"] = iamMembership{
+		ID:        "mbr-u1-tenant-dev",
+		TenantID:  "tenant-dev",
+		UserID:    "u-1",
+		UserLabel: "u1",
+		GroupIDs:  []string{"grp-admins", "grp-devops"},
+	}
+	iamMembershipsMu.Unlock()
+
+	rebuildReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups/rebuild-ids", nil)
+	rebuildReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	rebuildResp := httptest.NewRecorder()
+	router.ServeHTTP(rebuildResp, rebuildReq)
+	if rebuildResp.Code != http.StatusOK {
+		t.Fatalf("expected rebuild endpoint 200, got %d body=%s", rebuildResp.Code, rebuildResp.Body.String())
+	}
+
+	expectedAdminsID := groupIDForTenantName("tenant-dev", "Admins")
+	expectedDevopsID := groupIDForTenantName("tenant-dev", "Dev Ops")
+	iamMembershipsMu.RLock()
+	rebuiltMembership := iamMemberships["mbr-u1-tenant-dev"]
+	iamMembershipsMu.RUnlock()
+	if !contains(rebuiltMembership.GroupIDs, expectedAdminsID) || !contains(rebuiltMembership.GroupIDs, expectedDevopsID) {
+		t.Fatalf("expected membership refs rewritten via endpoint, got %v", rebuiltMembership.GroupIDs)
+	}
+}
+
+func TestIAMRebuildGroupIDsEndpointRejectsCanonicalConflict(t *testing.T) {
+	resetAuthSessions()
+	resetGroups()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	iamGroupsMu.Lock()
+	iamGroups["grp-a"] = iamGroup{ID: "grp-a", TenantID: "tenant-dev", Name: "Ops Team"}
+	iamGroups["grp-b"] = iamGroup{ID: "grp-b", TenantID: "tenant-dev", Name: "ops   team"}
+	iamGroupsMu.Unlock()
+
+	rebuildReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups/rebuild-ids", nil)
+	rebuildReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	rebuildResp := httptest.NewRecorder()
+	router.ServeHTTP(rebuildResp, rebuildReq)
+	if rebuildResp.Code != http.StatusConflict {
+		t.Fatalf("expected rebuild endpoint 409, got %d body=%s", rebuildResp.Code, rebuildResp.Body.String())
+	}
+	if !strings.Contains(rebuildResp.Body.String(), "group_name_conflict") {
+		t.Fatalf("expected group_name_conflict error, got %s", rebuildResp.Body.String())
+	}
+}
+
 func TestMembershipListAndReplaceGroupsFlow(t *testing.T) {
 	resetAuthSessions()
 	resetMemberships()

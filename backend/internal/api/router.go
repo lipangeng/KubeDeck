@@ -56,6 +56,16 @@ func NewRouter() http.Handler {
 			},
 		},
 		{
+			pattern: "/api/iam/groups/rebuild-ids",
+			handler: iam.RebuildGroupIDs,
+			policy: routePolicy{
+				requireSession: true,
+				methodPermissions: map[string][]string{
+					http.MethodPost: {"iam:write"},
+				},
+			},
+		},
+		{
 			pattern: "/api/iam/groups/",
 			handler: iam.GroupByID,
 			policy: routePolicy{
