@@ -36,6 +36,7 @@ var (
 )
 
 func NewAuthHandler() *AuthHandler {
+	ensureIAMPersistence()
 	return &AuthHandler{provider: auth.NewLocalProvider()}
 }
 
@@ -88,6 +89,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		ActiveTenantID: activeTenantID,
 	}
 	authSessionsMu.Unlock()
+	persistAuthSessions()
 	_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, TenantID: activeTenantID, Action: "auth.login", TargetType: "session", TargetID: token, Result: "allowed"})
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{
@@ -116,9 +118,9 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{
 		"user": map[string]any{
-			"id":            session.User.ID,
-			"username":      session.User.Username,
-			"roles":         session.User.Roles,
+			"id":             session.User.ID,
+			"username":       session.User.Username,
+			"roles":          session.User.Roles,
 			"activeTenantID": session.ActiveTenantID,
 		},
 		"tenants":          session.Available,
@@ -167,6 +169,7 @@ func (h *AuthHandler) SwitchTenant(w http.ResponseWriter, r *http.Request) {
 	authSessionsMu.Lock()
 	authSessions[token] = session
 	authSessionsMu.Unlock()
+	persistAuthSessions()
 	_ = defaultAuditWriter.Write(audit.Event{ActorID: session.User.ID, TenantID: nextTenantID, Action: "auth.switch_tenant", TargetType: "session", TargetID: token, Result: "allowed"})
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{
@@ -193,6 +196,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		authSessionsMu.Lock()
 		delete(authSessions, token)
 		authSessionsMu.Unlock()
+		persistAuthSessions()
 		_ = defaultAuditWriter.Write(audit.Event{ActorID: actorID, TenantID: tenantID, Action: "auth.logout", TargetType: "session", TargetID: token, Result: "allowed"})
 	}
 
@@ -237,6 +241,7 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		invite.Status = "expired"
 		invites[req.Token] = invite
 		invitesMu.Unlock()
+		persistIAMInvites()
 		_ = defaultAuditWriter.Write(audit.Event{TenantID: invite.TenantID, Action: "auth.accept_invite", TargetType: "invite", TargetID: invite.ID, Result: "denied", Reason: "invite_expired"})
 		writeJSONError(w, http.StatusGone, "invite_expired")
 		return
@@ -244,6 +249,7 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	invite.Status = "accepted"
 	invites[req.Token] = invite
 	invitesMu.Unlock()
+	persistIAMInvites()
 	_ = defaultAuditWriter.Write(audit.Event{TenantID: invite.TenantID, Action: "auth.accept_invite", TargetType: "invite", TargetID: invite.ID, Result: "allowed"})
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{
@@ -339,6 +345,7 @@ func currentValidSessionFromRequest(r *http.Request) (string, authSession, bool,
 		authSessionsMu.Lock()
 		delete(authSessions, token)
 		authSessionsMu.Unlock()
+		persistAuthSessions()
 		return "", authSession{}, false, "membership_expired"
 	}
 	return token, session, true, ""

@@ -62,6 +62,7 @@ type iamTenant struct {
 }
 
 func NewIAMHandler() *IAMHandler {
+	ensureIAMPersistence()
 	return &IAMHandler{notifier: notification.NewEmailStubProvider()}
 }
 
@@ -494,6 +495,7 @@ func (h *IAMHandler) createTenantMember(
 	iamMembershipsMu.Lock()
 	iamMemberships[membership.ID] = membership
 	iamMembershipsMu.Unlock()
+	persistIAMMemberships()
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   tenantID,
 		ActorID:    session.User.ID,
@@ -521,13 +523,15 @@ func (h *IAMHandler) deleteTenantMember(
 		return
 	}
 	iamMembershipsMu.Lock()
-	defer iamMembershipsMu.Unlock()
 	membership, ok := iamMemberships[membershipID]
 	if !ok || membership.TenantID != tenantID {
+		iamMembershipsMu.Unlock()
 		writeJSONError(w, http.StatusNotFound, "membership_not_found")
 		return
 	}
 	delete(iamMemberships, membershipID)
+	iamMembershipsMu.Unlock()
+	persistIAMMemberships()
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   tenantID,
 		ActorID:    session.User.ID,
@@ -571,6 +575,7 @@ func (h *IAMHandler) createGroup(w http.ResponseWriter, r *http.Request, session
 	iamGroupsMu.Lock()
 	iamGroups[id] = group
 	iamGroupsMu.Unlock()
+	persistIAMGroups()
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -598,9 +603,9 @@ func (h *IAMHandler) patchGroup(
 		return
 	}
 	iamGroupsMu.Lock()
-	defer iamGroupsMu.Unlock()
 	group, ok := iamGroups[groupID]
 	if !ok || group.TenantID != session.ActiveTenantID {
+		iamGroupsMu.Unlock()
 		writeJSONError(w, http.StatusNotFound, "group_not_found")
 		return
 	}
@@ -611,6 +616,8 @@ func (h *IAMHandler) patchGroup(
 		group.Description = *req.Description
 	}
 	iamGroups[groupID] = group
+	iamGroupsMu.Unlock()
+	persistIAMGroups()
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -624,13 +631,15 @@ func (h *IAMHandler) patchGroup(
 
 func (h *IAMHandler) deleteGroup(w http.ResponseWriter, session authSession, groupID string) {
 	iamGroupsMu.Lock()
-	defer iamGroupsMu.Unlock()
 	group, ok := iamGroups[groupID]
 	if !ok || group.TenantID != session.ActiveTenantID {
+		iamGroupsMu.Unlock()
 		writeJSONError(w, http.StatusNotFound, "group_not_found")
 		return
 	}
 	delete(iamGroups, groupID)
+	iamGroupsMu.Unlock()
+	persistIAMGroups()
 	// Keep memberships consistent after group deletion by dropping stale group refs.
 	iamMembershipsMu.Lock()
 	for id, membership := range iamMemberships {
@@ -652,6 +661,7 @@ func (h *IAMHandler) deleteGroup(w http.ResponseWriter, session authSession, gro
 		}
 	}
 	iamMembershipsMu.Unlock()
+	persistIAMMemberships()
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -677,14 +687,16 @@ func (h *IAMHandler) replaceGroupPermissions(
 		return
 	}
 	iamGroupsMu.Lock()
-	defer iamGroupsMu.Unlock()
 	group, ok := iamGroups[groupID]
 	if !ok || group.TenantID != session.ActiveTenantID {
+		iamGroupsMu.Unlock()
 		writeJSONError(w, http.StatusNotFound, "group_not_found")
 		return
 	}
 	group.Permissions = append([]string{}, req.Permissions...)
 	iamGroups[groupID] = group
+	iamGroupsMu.Unlock()
+	persistIAMGroups()
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -721,18 +733,21 @@ func (h *IAMHandler) replaceMembershipGroups(
 	iamGroupsMu.RUnlock()
 
 	iamMembershipsMu.Lock()
-	defer iamMembershipsMu.Unlock()
 	membership, ok := iamMemberships[membershipID]
 	if !ok {
+		iamMembershipsMu.Unlock()
 		writeJSONError(w, http.StatusNotFound, "membership_not_found")
 		return
 	}
 	if membership.TenantID != session.ActiveTenantID {
+		iamMembershipsMu.Unlock()
 		writeJSONError(w, http.StatusNotFound, "membership_not_found")
 		return
 	}
 	membership.GroupIDs = append([]string{}, req.GroupIDs...)
 	iamMemberships[membershipID] = membership
+	iamMembershipsMu.Unlock()
+	persistIAMMemberships()
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -779,15 +794,17 @@ func (h *IAMHandler) replaceMembershipValidity(
 	}
 
 	iamMembershipsMu.Lock()
-	defer iamMembershipsMu.Unlock()
 	membership, ok := iamMemberships[membershipID]
 	if !ok || membership.TenantID != session.ActiveTenantID {
+		iamMembershipsMu.Unlock()
 		writeJSONError(w, http.StatusNotFound, "membership_not_found")
 		return
 	}
 	membership.EffectiveFrom = effectiveFrom.UTC()
 	membership.EffectiveUntil = effectiveUntilPtr
 	iamMemberships[membershipID] = membership
+	iamMembershipsMu.Unlock()
+	persistIAMMemberships()
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -885,6 +902,7 @@ func (h *IAMHandler) createInvite(w http.ResponseWriter, r *http.Request, sessio
 	invitesMu.Lock()
 	invites[token] = invite
 	invitesMu.Unlock()
+	persistIAMInvites()
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -906,21 +924,24 @@ func (h *IAMHandler) createInvite(w http.ResponseWriter, r *http.Request, sessio
 
 func (h *IAMHandler) revokeInvite(w http.ResponseWriter, session authSession, inviteID string) {
 	invitesMu.Lock()
-	defer invitesMu.Unlock()
 	for token, invite := range invites {
 		if invite.ID != inviteID {
 			continue
 		}
 		if invite.TenantID != session.ActiveTenantID {
+			invitesMu.Unlock()
 			writeJSONError(w, http.StatusNotFound, "invite_not_found")
 			return
 		}
 		if invite.Status != "pending" {
+			invitesMu.Unlock()
 			writeJSONError(w, http.StatusConflict, "invite_not_pending")
 			return
 		}
 		invite.Status = "revoked"
 		invites[token] = invite
+		invitesMu.Unlock()
+		persistIAMInvites()
 		_ = defaultAuditWriter.Write(audit.Event{
 			TenantID:   session.ActiveTenantID,
 			ActorID:    session.User.ID,
@@ -932,6 +953,7 @@ func (h *IAMHandler) revokeInvite(w http.ResponseWriter, session authSession, in
 		_ = writeJSON(w, http.StatusOK, invite)
 		return
 	}
+	invitesMu.Unlock()
 	writeJSONError(w, http.StatusNotFound, "invite_not_found")
 }
 
