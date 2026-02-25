@@ -1,13 +1,14 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
 });
 
 describe('App', () => {
-  it('renders menus, runtime checks, and reloads menus when cluster changes', async () => {
+  it('renders shell layout, runtime checks, and reloads menus when cluster changes', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
@@ -37,17 +38,9 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(
-      screen.getByRole('heading', {
-        level: 1,
-        name: 'KubeDeck',
-      }),
-    ).toBeTruthy();
-    expect(
-      screen.getByText(
-        'API target (test: http://127.0.0.1:8080)',
-      ),
-    ).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: 'KubeDeck' })).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Primary Sidebar' })).toBeTruthy();
+    expect(screen.getByText('API target (test: http://127.0.0.1:8080)')).toBeTruthy();
     expect(await screen.findByText('healthz: ok')).toBeTruthy();
     expect(await screen.findByText('readyz: ok')).toBeTruthy();
     expect(await screen.findByText(/Last checked:/)).toBeTruthy();
@@ -61,9 +54,7 @@ describe('App', () => {
     expect(await screen.findByText('Dev Workloads')).toBeTruthy();
     await waitFor(() => {
       const calledUrls = fetchMock.mock.calls.map(([input]) => String(input));
-      expect(calledUrls.some((url) => url.includes('cluster=default'))).toBe(
-        true,
-      );
+      expect(calledUrls.some((url) => url.includes('cluster=default'))).toBe(true);
       expect(calledUrls.some((url) => url.includes('cluster=dev'))).toBe(true);
       expect(calledUrls.some((url) => url.endsWith('/api/healthz'))).toBe(true);
       expect(calledUrls.some((url) => url.endsWith('/api/readyz'))).toBe(true);
@@ -93,8 +84,6 @@ describe('App', () => {
 
     expect(await screen.findByText('healthz: ok')).toBeTruthy();
     expect(await screen.findByText('readyz: error')).toBeTruthy();
-    expect(
-      await screen.findByText('Failure summary: readyz: status 503'),
-    ).toBeTruthy();
+    expect(await screen.findByText('Failure summary: readyz: status 503')).toBeTruthy();
   });
 });

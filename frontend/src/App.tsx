@@ -1,12 +1,27 @@
 import { useEffect, useState } from 'react';
+import AppBar from '@mui/material/AppBar';
+import Box from '@mui/material/Box';
+import Chip from '@mui/material/Chip';
+import Divider from '@mui/material/Divider';
+import FormControl from '@mui/material/FormControl';
+import InputLabel from '@mui/material/InputLabel';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemText from '@mui/material/ListItemText';
+import MenuItem from '@mui/material/MenuItem';
+import Paper from '@mui/material/Paper';
+import Select from '@mui/material/Select';
+import Stack from '@mui/material/Stack';
+import Toolbar from '@mui/material/Toolbar';
+import Typography from '@mui/material/Typography';
 
-interface MenuItem {
+interface MenuEntry {
   id: string;
   title: string;
 }
 
 interface MenusResponse {
-  menus: MenuItem[];
+  menus: MenuEntry[];
 }
 
 type ProbeStatus = 'checking' | 'ok' | 'error';
@@ -36,7 +51,7 @@ function resolveProbePath(path: '/healthz' | '/readyz'): string {
 function App() {
   const apiTargetHint = resolveApiTargetHint();
   const [activeCluster, setActiveCluster] = useState('default');
-  const [menus, setMenus] = useState<MenuItem[]>([]);
+  const [menus, setMenus] = useState<MenuEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<ProbeStatus>('checking');
@@ -131,42 +146,93 @@ function App() {
   }, []);
 
   return (
-    <main>
-      <h1>KubeDeck</h1>
-      <p>API target ({apiTargetHint})</p>
-      <section aria-label="Runtime Status">
-        <p>healthz: {healthStatus}</p>
-        <p>readyz: {readyStatus}</p>
-        <p>Last checked: {lastCheckedAt ?? 'never'}</p>
-        <p>
-          Failure summary:{' '}
-          {healthError || readyError
-            ? [healthError ? `healthz: ${healthError}` : null, readyError ? `readyz: ${readyError}` : null]
-                .filter(Boolean)
-                .join('; ')
-            : 'none'}
-        </p>
-      </section>
-      <label>
-        Cluster
-        <select
-          value={activeCluster}
-          onChange={(event) => setActiveCluster(event.target.value)}
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      <AppBar position="static" color="transparent" elevation={0}>
+        <Toolbar sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>
+            KubeDeck
+          </Typography>
+        </Toolbar>
+      </AppBar>
+
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: '300px minmax(0, 1fr)' },
+          gap: 2,
+          p: 2,
+        }}
+      >
+        <Paper
+          component="nav"
+          aria-label="Primary Sidebar"
+          variant="outlined"
+          sx={{ p: 2, minHeight: { md: 'calc(100vh - 110px)' } }}
         >
-          <option value="default">default</option>
-          <option value="dev">dev</option>
-          <option value="staging">staging</option>
-          <option value="prod">prod</option>
-        </select>
-      </label>
-      {loading ? <p>Loading menus...</p> : null}
-      {error ? <p>Failed to load menus: {error}</p> : null}
-      <ul aria-label="Menu Items">
-        {menus.map((menu) => (
-          <li key={menu.id}>{menu.title}</li>
-        ))}
-      </ul>
-    </main>
+          <Stack spacing={2}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Navigation
+            </Typography>
+            <FormControl size="small" fullWidth>
+              <InputLabel htmlFor="cluster-select">Cluster</InputLabel>
+              <Select
+                native
+                value={activeCluster}
+                onChange={(event) => setActiveCluster(event.target.value)}
+                label="Cluster"
+                inputProps={{ id: 'cluster-select' }}
+              >
+                <option value="default">default</option>
+                <option value="dev">dev</option>
+                <option value="staging">staging</option>
+                <option value="prod">prod</option>
+              </Select>
+            </FormControl>
+
+            <Divider />
+
+            <Typography variant="subtitle2" color="text.secondary">
+              Menu Items
+            </Typography>
+            {loading ? <Typography>Loading menus...</Typography> : null}
+            {error ? <Typography color="error">Failed to load menus: {error}</Typography> : null}
+            <List aria-label="Menu Items" dense>
+              {menus.map((menu) => (
+                <ListItem key={menu.id} disablePadding>
+                  <ListItemText primary={menu.title} />
+                </ListItem>
+              ))}
+            </List>
+          </Stack>
+        </Paper>
+
+        <Stack spacing={2}>
+          <Paper aria-label="Runtime Status" variant="outlined" sx={{ p: 2 }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 1.5 }}>
+              <Chip size="small" label={`healthz: ${healthStatus}`} />
+              <Chip size="small" label={`readyz: ${readyStatus}`} />
+            </Stack>
+            <Typography variant="body2" sx={{ mb: 0.5 }}>
+              API target ({apiTargetHint})
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 0.5 }}>
+              Last checked: {lastCheckedAt ?? 'never'}
+            </Typography>
+            <Typography variant="body2">
+              Failure summary:{' '}
+              {healthError || readyError
+                ? [
+                    healthError ? `healthz: ${healthError}` : null,
+                    readyError ? `readyz: ${readyError}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join('; ')
+                : 'none'}
+            </Typography>
+          </Paper>
+        </Stack>
+      </Box>
+    </Box>
   );
 }
 
