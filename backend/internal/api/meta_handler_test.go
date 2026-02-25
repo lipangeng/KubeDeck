@@ -529,6 +529,7 @@ func containsGroupName(groups []iamGroup, name string) bool {
 
 func TestAuthLoginMeSwitchLogoutFlow(t *testing.T) {
 	resetAuthSessions()
+	resetMemberships()
 	resetAuditWriter()
 	router := NewRouter()
 
@@ -594,6 +595,43 @@ func TestAuthLoginMeSwitchLogoutFlow(t *testing.T) {
 	router.ServeHTTP(meAfterLogoutResp, meAfterLogoutReq)
 	if meAfterLogoutResp.Code != http.StatusUnauthorized {
 		t.Fatalf("expected me-after-logout status 401, got %d", meAfterLogoutResp.Code)
+	}
+}
+
+func TestAuthLoginDeniedWhenUserHasNoTenantMembership(t *testing.T) {
+	resetAuthSessions()
+	resetMemberships()
+	resetAuditWriter()
+	t.Setenv("KUBEDECK_ENV", "production")
+	t.Setenv("KUBEDECK_LOCAL_AUTH_ENABLED", "true")
+	t.Setenv("KUBEDECK_LOCAL_AUTH_PASSWORD", "pw")
+	router := NewRouter()
+
+	iamMembershipsMu.Lock()
+	iamMemberships["mbr-other-tenant-dev"] = iamMembership{
+		ID:            "mbr-other-tenant-dev",
+		TenantID:      "tenant-dev",
+		UserID:        "other-user",
+		UserLabel:     "other",
+		EffectiveFrom: time.Now().UTC().Add(-1 * time.Hour),
+	}
+	iamMembershipsMu.Unlock()
+
+	loginPayload := []byte(`{"username":"alice","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusForbidden {
+		t.Fatalf("expected login 403 without membership, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+	var body struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal login body: %v", err)
+	}
+	if body.Error != "tenant_not_found" {
+		t.Fatalf("expected tenant_not_found, got %q", body.Error)
 	}
 }
 

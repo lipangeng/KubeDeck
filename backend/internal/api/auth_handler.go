@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -332,7 +333,7 @@ func (h *AuthHandler) loginWithResolvedUser(
 	tenantID string,
 	auditAction string,
 ) {
-	tenants, memberships := defaultMembershipsForUser(user.ID)
+	tenants, memberships := resolveTenantsAndMembershipsForUser(user)
 	activeTenantID := resolveActiveTenant(tenantCode, tenantID, tenants)
 	if activeTenantID == "" {
 		_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, Action: auditAction, TargetType: "tenant", Result: "denied", Reason: "tenant_not_found"})
@@ -366,6 +367,88 @@ func (h *AuthHandler) loginWithResolvedUser(
 		"active_tenant_id": activeTenantID,
 		"expires_at":       expiresAt,
 	})
+}
+
+func resolveTenantsAndMembershipsForUser(user auth.User) ([]tenantInfo, []auth.TenantMembership) {
+	_ = reloadIAMStateFromPersistence()
+	now := time.Now().UTC()
+	load := func() ([]tenantInfo, []auth.TenantMembership) {
+		tenantMap := map[string]tenantInfo{}
+		memberships := make([]auth.TenantMembership, 0, 4)
+		iamMembershipsMu.RLock()
+		for _, membership := range iamMemberships {
+			if !strings.EqualFold(membership.UserID, user.ID) {
+				continue
+			}
+			member := auth.TenantMembership{
+				TenantID:       membership.TenantID,
+				UserID:         membership.UserID,
+				EffectiveFrom:  membership.EffectiveFrom,
+				EffectiveUntil: membership.EffectiveUntil,
+			}
+			if !member.IsActiveAt(now) {
+				continue
+			}
+			memberships = append(memberships, member)
+			tenantMap[membership.TenantID] = tenantInfoForID(membership.TenantID)
+		}
+		iamMembershipsMu.RUnlock()
+
+		tenantIDs := make([]string, 0, len(tenantMap))
+		for tenantID := range tenantMap {
+			tenantIDs = append(tenantIDs, tenantID)
+		}
+		sort.Strings(tenantIDs)
+		tenants := make([]tenantInfo, 0, len(tenantIDs))
+		for _, tenantID := range tenantIDs {
+			tenants = append(tenants, tenantMap[tenantID])
+		}
+		return tenants, memberships
+	}
+
+	tenants, memberships := load()
+	if len(tenants) > 0 {
+		return tenants, memberships
+	}
+	if !auth.IsProductionRuntime() && seedBootstrapMembership(user, now) {
+		return load()
+	}
+	return nil, nil
+}
+
+func tenantInfoForID(tenantID string) tenantInfo {
+	switch tenantID {
+	case "tenant-dev":
+		return tenantInfo{ID: "tenant-dev", Code: "dev", Name: "Development"}
+	default:
+		code := strings.TrimPrefix(strings.TrimSpace(tenantID), "tenant-")
+		if code == "" {
+			code = tenantID
+		}
+		return tenantInfo{ID: tenantID, Code: code, Name: tenantID}
+	}
+}
+
+func seedBootstrapMembership(user auth.User, now time.Time) bool {
+	iamMembershipsMu.Lock()
+	for _, existing := range iamMemberships {
+		if strings.EqualFold(existing.UserID, user.ID) {
+			iamMembershipsMu.Unlock()
+			return false
+		}
+	}
+	seed := iamMembership{
+		ID:            "mbr-" + user.ID + "-tenant-dev",
+		TenantID:      "tenant-dev",
+		UserID:        user.ID,
+		UserLabel:     user.Username,
+		GroupIDs:      []string{},
+		EffectiveFrom: now.Add(-24 * time.Hour),
+	}
+	iamMemberships[seed.ID] = seed
+	iamMembershipsMu.Unlock()
+	persistIAMMemberships()
+	return true
 }
 
 func defaultMembershipsForUser(userID string) ([]tenantInfo, []auth.TenantMembership) {
