@@ -14,7 +14,23 @@ var (
 	iamPersistenceOnce sync.Once
 	iamPersistenceRepo storage.IAMPersistence
 	iamPersistenceErr  error
+	iamPersistDriver   string
+	iamPersistDSN      string
+	iamPersistDisabled bool
 )
+
+type PersistenceConfig struct {
+	Driver   string
+	DSN      string
+	Disabled bool
+}
+
+func ConfigurePersistence(cfg PersistenceConfig) {
+	iamPersistDriver = strings.TrimSpace(cfg.Driver)
+	iamPersistDSN = strings.TrimSpace(cfg.DSN)
+	iamPersistDisabled = cfg.Disabled
+	resetIAMPersistenceForTest()
+}
 
 func resetIAMPersistenceForTest() {
 	if iamPersistenceRepo != nil {
@@ -30,8 +46,14 @@ func ensureIAMPersistence() {
 		if !iamPersistenceEnabled() {
 			return
 		}
-		driver := strings.TrimSpace(os.Getenv("KUBEDECK_DB_DRIVER"))
-		dsn := strings.TrimSpace(os.Getenv("KUBEDECK_SQLITE_DSN"))
+		driver := iamPersistDriver
+		if driver == "" {
+			driver = strings.TrimSpace(os.Getenv("KUBEDECK_DB_DRIVER"))
+		}
+		dsn := iamPersistDSN
+		if dsn == "" {
+			dsn = strings.TrimSpace(os.Getenv("KUBEDECK_SQLITE_DSN"))
+		}
 		repo, err := storage.NewIAMPersistence(driver, dsn)
 		if err != nil {
 			iamPersistenceErr = err
@@ -49,6 +71,9 @@ func ensureIAMPersistence() {
 }
 
 func iamPersistenceEnabled() bool {
+	if iamPersistDisabled {
+		return false
+	}
 	if strings.EqualFold(strings.TrimSpace(os.Getenv("KUBEDECK_IAM_PERSIST")), "0") {
 		return false
 	}
