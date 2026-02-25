@@ -43,6 +43,7 @@ Completed and merged:
 - Group-aware authorization (membership-group permission inheritance) and default tenant groups (`tenant-owner/admin/viewer`)
 - Versioned IAM schema migrations (`schema_migrations` + baseline migration runner)
 - OAuth MVP endpoints (`/api/auth/oauth/url`, `/api/auth/oauth/callback`) with provider stub wiring
+- Configurable notification provider for invites (stub/webhook via env)
 
 ## 4. Next Priority (Phase 1 continuation)
 
@@ -58,6 +59,7 @@ Completed and merged:
 - Implementation plan: `docs/plans/2026-02-25-kubedeck-microkernel-baseline-implementation.md`
 - Runtime persistence guide: `docs/runbooks/backend-persistence.md`
 - IAM migration strategy (mysql/postgres): `docs/runbooks/iam-migrations-mysql-postgres.md`
+- Notification provider guide: `docs/runbooks/notification-provider.md`
 
 ## 6. Execution Rule
 

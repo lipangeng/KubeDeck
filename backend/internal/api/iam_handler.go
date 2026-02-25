@@ -63,7 +63,7 @@ type iamTenant struct {
 
 func NewIAMHandler() *IAMHandler {
 	ensureIAMPersistence()
-	return &IAMHandler{notifier: notification.NewEmailStubProvider()}
+	return &IAMHandler{notifier: notification.NewProviderFromEnv()}
 }
 
 type iamInvite struct {
