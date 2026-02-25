@@ -34,6 +34,7 @@ export interface IAMInvite {
   roleHint: string;
   token: string;
   inviteLink: string;
+  createdAt: string;
   expiresAt: string;
   status: string;
 }
@@ -112,6 +113,7 @@ export function parseInvitesResponse(value: unknown): IAMInvite[] {
     roleHint: String(item.role_hint ?? ''),
     token: String(item.token ?? ''),
     inviteLink: String(item.invite_link ?? ''),
+    createdAt: String(item.created_at ?? ''),
     expiresAt: String(item.expires_at ?? ''),
     status: String(item.status ?? ''),
   }));

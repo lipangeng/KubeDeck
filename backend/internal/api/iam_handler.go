@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -67,6 +68,7 @@ type iamInvite struct {
 	RoleHint     string    `json:"role_hint,omitempty"`
 	Token        string    `json:"token"`
 	InviteLink   string    `json:"invite_link"`
+	CreatedAt    time.Time `json:"created_at"`
 	ExpiresAt    time.Time `json:"expires_at"`
 	Status       string    `json:"status"`
 }
@@ -621,6 +623,12 @@ func (h *IAMHandler) listInvites(w http.ResponseWriter, session authSession) {
 			out = append(out, invite)
 		}
 	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].ID > out[j].ID
+		}
+		return out[i].CreatedAt.After(out[j].CreatedAt)
+	})
 	_ = writeJSON(w, http.StatusOK, map[string]any{"invites": out})
 }
 
@@ -652,6 +660,7 @@ func (h *IAMHandler) createInvite(w http.ResponseWriter, r *http.Request, sessio
 			break
 		}
 	}
+	now := time.Now().UTC()
 	invite := iamInvite{
 		ID:           inviteID,
 		TenantID:     session.ActiveTenantID,
@@ -661,7 +670,8 @@ func (h *IAMHandler) createInvite(w http.ResponseWriter, r *http.Request, sessio
 		RoleHint:     req.RoleHint,
 		Token:        token,
 		InviteLink:   "#/accept-invite?token=" + token,
-		ExpiresAt:    time.Now().UTC().Add(time.Duration(expiresIn) * time.Hour),
+		CreatedAt:    now,
+		ExpiresAt:    now.Add(time.Duration(expiresIn) * time.Hour),
 		Status:       "pending",
 	}
 

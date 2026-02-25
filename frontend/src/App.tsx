@@ -2032,7 +2032,7 @@ function App({
                     {invite.inviteeEmail || invite.inviteePhone || invite.id}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {invite.status} | {invite.expiresAt}
+                    {invite.status} | {t('inviteCreatedAt', { value: invite.createdAt || '-' })} | {t('inviteExpiresAt', { value: invite.expiresAt || '-' })}
                   </Typography>
                   <Stack direction="row" spacing={1} sx={{ mt: 1 }} alignItems="center">
                     <Typography variant="body2" sx={{ wordBreak: 'break-all', flex: 1 }}>

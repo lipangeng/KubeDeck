@@ -888,6 +888,75 @@ func TestInviteRevokePendingFlow(t *testing.T) {
 	}
 }
 
+func TestInviteListOrderedByCreatedAtDesc(t *testing.T) {
+	resetAuthSessions()
+	resetInvites()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	createInvite := func(email string) iamInvite {
+		payload := []byte(`{"email":"` + email + `","role_hint":"member","expires_in_hours":2}`)
+		req := httptest.NewRequest(http.MethodPost, "/api/iam/invites", bytes.NewReader(payload))
+		req.Header.Set("Authorization", "Bearer "+loginBody.Token)
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
+		if resp.Code != http.StatusCreated {
+			t.Fatalf("expected create invite 201, got %d body=%s", resp.Code, resp.Body.String())
+		}
+		var invite iamInvite
+		if err := json.Unmarshal(resp.Body.Bytes(), &invite); err != nil {
+			t.Fatalf("unmarshal invite: %v", err)
+		}
+		return invite
+	}
+
+	first := createInvite("first@example.com")
+	second := createInvite("second@example.com")
+
+	invitesMu.Lock()
+	firstRecord := invites[first.Token]
+	secondRecord := invites[second.Token]
+	firstRecord.CreatedAt = time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	secondRecord.CreatedAt = time.Date(2026, 2, 2, 0, 0, 0, 0, time.UTC)
+	invites[first.Token] = firstRecord
+	invites[second.Token] = secondRecord
+	invitesMu.Unlock()
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/iam/invites", nil)
+	listReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	listResp := httptest.NewRecorder()
+	router.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected list invites 200, got %d body=%s", listResp.Code, listResp.Body.String())
+	}
+	var listBody struct {
+		Invites []iamInvite `json:"invites"`
+	}
+	if err := json.Unmarshal(listResp.Body.Bytes(), &listBody); err != nil {
+		t.Fatalf("unmarshal list invites: %v", err)
+	}
+	if len(listBody.Invites) < 2 {
+		t.Fatalf("expected at least 2 invites, got %d", len(listBody.Invites))
+	}
+	if listBody.Invites[0].ID != second.ID {
+		t.Fatalf("expected latest invite first, got %q then %q", listBody.Invites[0].ID, listBody.Invites[1].ID)
+	}
+}
+
 func TestInviteAcceptExpired(t *testing.T) {
 	resetAuthSessions()
 	resetInvites()

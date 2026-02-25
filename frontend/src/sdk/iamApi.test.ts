@@ -77,6 +77,7 @@ describe('iamApi', () => {
           role_hint: 'member',
           token: 'abc',
           invite_link: '#/accept-invite?token=abc',
+          created_at: '2026-02-24T00:00:00Z',
           expires_at: '2026-02-25T00:00:00Z',
           status: 'pending',
         },
@@ -84,6 +85,7 @@ describe('iamApi', () => {
     });
     expect(invites).toHaveLength(1);
     expect(invites[0]?.inviteLink).toContain('/accept-invite');
+    expect(invites[0]?.createdAt).toBe('2026-02-24T00:00:00Z');
   });
 
   it('parses users response', () => {
