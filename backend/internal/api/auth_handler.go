@@ -251,13 +251,112 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	invites[storageKey] = invite
 	invitesMu.Unlock()
 	persistIAMInvites()
+	acceptedMembership := upsertMembershipForAcceptedInvite(invite, req.Username)
 	_ = defaultAuditWriter.Write(audit.Event{TenantID: invite.TenantID, Action: "auth.accept_invite", TargetType: "invite", TargetID: invite.ID, Result: "allowed"})
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{
-		"status":    "accepted",
-		"tenant_id": invite.TenantID,
-		"username":  req.Username,
+		"status":     "accepted",
+		"tenant_id":  invite.TenantID,
+		"username":   req.Username,
+		"membership": acceptedMembership,
 	})
+}
+
+func upsertMembershipForAcceptedInvite(invite iamInvite, username string) iamMembership {
+	ensureDefaultTenantGroups(invite.TenantID)
+	userID := auth.LocalUserID(username)
+	groupIDs := inviteRoleGroupIDs(invite.TenantID, invite.RoleHint)
+	now := time.Now().UTC()
+	changed := false
+
+	iamMembershipsMu.Lock()
+	var selected *iamMembership
+	for id, membership := range iamMemberships {
+		if membership.TenantID != invite.TenantID || !strings.EqualFold(membership.UserID, userID) {
+			continue
+		}
+		existing := membership
+		selected = &existing
+		if strings.TrimSpace(existing.UserLabel) == "" || !strings.EqualFold(existing.UserLabel, username) {
+			existing.UserLabel = strings.TrimSpace(username)
+			changed = true
+		}
+		if existing.EffectiveFrom.IsZero() || now.Before(existing.EffectiveFrom) {
+			existing.EffectiveFrom = now.Add(-1 * time.Minute)
+			changed = true
+		}
+		if existing.EffectiveUntil != nil && !now.Before(*existing.EffectiveUntil) {
+			existing.EffectiveUntil = nil
+			changed = true
+		}
+		merged := mergeGroupIDs(existing.GroupIDs, groupIDs)
+		if len(merged) != len(existing.GroupIDs) {
+			existing.GroupIDs = merged
+			changed = true
+		}
+		iamMemberships[id] = existing
+		selected = &existing
+		break
+	}
+	if selected == nil {
+		created := iamMembership{
+			ID:            "mbr-" + userID + "-" + invite.TenantID,
+			TenantID:      invite.TenantID,
+			UserID:        userID,
+			UserLabel:     strings.TrimSpace(username),
+			GroupIDs:      append([]string{}, groupIDs...),
+			EffectiveFrom: now.Add(-1 * time.Minute),
+		}
+		iamMemberships[created.ID] = created
+		selected = &created
+		changed = true
+	}
+	iamMembershipsMu.Unlock()
+
+	if changed {
+		persistIAMMemberships()
+	}
+	return *selected
+}
+
+func inviteRoleGroupIDs(tenantID string, roleHint string) []string {
+	role := strings.ToLower(strings.TrimSpace(roleHint))
+	switch role {
+	case "owner":
+		return []string{"grp-" + tenantID + "-owner"}
+	case "admin":
+		return []string{"grp-" + tenantID + "-admin"}
+	default:
+		return []string{"grp-" + tenantID + "-viewer"}
+	}
+}
+
+func mergeGroupIDs(current []string, adds []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(current)+len(adds))
+	for _, id := range current {
+		key := strings.TrimSpace(id)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, key)
+	}
+	for _, id := range adds {
+		key := strings.TrimSpace(id)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, key)
+	}
+	return out
 }
 
 func (h *AuthHandler) OAuthURL(w http.ResponseWriter, r *http.Request) {

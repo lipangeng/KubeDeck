@@ -527,6 +527,15 @@ func containsGroupName(groups []iamGroup, name string) bool {
 	return false
 }
 
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), strings.TrimSpace(target)) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestAuthLoginMeSwitchLogoutFlow(t *testing.T) {
 	resetAuthSessions()
 	resetMemberships()
@@ -2040,6 +2049,115 @@ func TestInviteCreateListAndAcceptFlow(t *testing.T) {
 	router.ServeHTTP(acceptResp, acceptReq)
 	if acceptResp.Code != http.StatusOK {
 		t.Fatalf("expected accept invite 200, got %d body=%s", acceptResp.Code, acceptResp.Body.String())
+	}
+}
+
+func TestAcceptInviteCreatesMembershipWithRoleHintDefaultViewer(t *testing.T) {
+	resetAuthSessions()
+	resetInvites()
+	resetMemberships()
+	resetGroups()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	createInvitePayload := []byte(`{"email":"newmember@example.com","role_hint":"member","expires_in_hours":2}`)
+	createInviteReq := httptest.NewRequest(http.MethodPost, "/api/iam/invites", bytes.NewReader(createInvitePayload))
+	createInviteReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createInviteResp := httptest.NewRecorder()
+	router.ServeHTTP(createInviteResp, createInviteReq)
+	if createInviteResp.Code != http.StatusCreated {
+		t.Fatalf("expected create invite 201, got %d body=%s", createInviteResp.Code, createInviteResp.Body.String())
+	}
+	var inviteBody iamInvite
+	if err := json.Unmarshal(createInviteResp.Body.Bytes(), &inviteBody); err != nil {
+		t.Fatalf("unmarshal invite create: %v", err)
+	}
+
+	acceptPayload := []byte(`{"token":"` + inviteBody.Token + `","username":"new-member","password":"pw"}`)
+	acceptReq := httptest.NewRequest(http.MethodPost, "/api/auth/accept-invite", bytes.NewReader(acceptPayload))
+	acceptResp := httptest.NewRecorder()
+	router.ServeHTTP(acceptResp, acceptReq)
+	if acceptResp.Code != http.StatusOK {
+		t.Fatalf("expected accept invite 200, got %d body=%s", acceptResp.Code, acceptResp.Body.String())
+	}
+	var acceptBody struct {
+		Membership iamMembership `json:"membership"`
+	}
+	if err := json.Unmarshal(acceptResp.Body.Bytes(), &acceptBody); err != nil {
+		t.Fatalf("unmarshal accept response: %v", err)
+	}
+	if acceptBody.Membership.UserID != auth.LocalUserID("new-member") {
+		t.Fatalf("expected membership user id mapped from username, got %q", acceptBody.Membership.UserID)
+	}
+	if !contains(acceptBody.Membership.GroupIDs, "grp-tenant-dev-viewer") {
+		t.Fatalf("expected default viewer group from member role hint, got %v", acceptBody.Membership.GroupIDs)
+	}
+}
+
+func TestAcceptInviteMapsAdminRoleHintToTenantAdminGroup(t *testing.T) {
+	resetAuthSessions()
+	resetInvites()
+	resetMemberships()
+	resetGroups()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	createInvitePayload := []byte(`{"email":"admininvite@example.com","role_hint":"admin","expires_in_hours":2}`)
+	createInviteReq := httptest.NewRequest(http.MethodPost, "/api/iam/invites", bytes.NewReader(createInvitePayload))
+	createInviteReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createInviteResp := httptest.NewRecorder()
+	router.ServeHTTP(createInviteResp, createInviteReq)
+	if createInviteResp.Code != http.StatusCreated {
+		t.Fatalf("expected create invite 201, got %d body=%s", createInviteResp.Code, createInviteResp.Body.String())
+	}
+	var inviteBody iamInvite
+	if err := json.Unmarshal(createInviteResp.Body.Bytes(), &inviteBody); err != nil {
+		t.Fatalf("unmarshal invite create: %v", err)
+	}
+
+	acceptPayload := []byte(`{"token":"` + inviteBody.Token + `","username":"tenant-admin-user","password":"pw"}`)
+	acceptReq := httptest.NewRequest(http.MethodPost, "/api/auth/accept-invite", bytes.NewReader(acceptPayload))
+	acceptResp := httptest.NewRecorder()
+	router.ServeHTTP(acceptResp, acceptReq)
+	if acceptResp.Code != http.StatusOK {
+		t.Fatalf("expected accept invite 200, got %d body=%s", acceptResp.Code, acceptResp.Body.String())
+	}
+	var acceptBody struct {
+		Membership iamMembership `json:"membership"`
+	}
+	if err := json.Unmarshal(acceptResp.Body.Bytes(), &acceptBody); err != nil {
+		t.Fatalf("unmarshal accept response: %v", err)
+	}
+	if !contains(acceptBody.Membership.GroupIDs, "grp-tenant-dev-admin") {
+		t.Fatalf("expected tenant admin group from admin role hint, got %v", acceptBody.Membership.GroupIDs)
 	}
 }
 

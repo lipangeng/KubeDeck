@@ -68,7 +68,7 @@ func (p *LocalProvider) Authenticate(username, password string) (User, error) {
 	}
 
 	return User{
-		ID:                stableLocalUserID(username),
+		ID:                LocalUserID(username),
 		Username:          username,
 		Roles:             roles,
 		AllowedClusters:   []string{"*"},
@@ -76,7 +76,8 @@ func (p *LocalProvider) Authenticate(username, password string) (User, error) {
 	}, nil
 }
 
-func stableLocalUserID(username string) string {
+// LocalUserID returns a stable local-auth user id derived from username.
+func LocalUserID(username string) string {
 	normalized := strings.ToLower(strings.TrimSpace(username))
 	if normalized == "" {
 		normalized = "unknown"
