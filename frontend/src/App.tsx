@@ -325,6 +325,8 @@ function App({
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDescription, setNewGroupDescription] = useState('');
   const [groupPermissionDrafts, setGroupPermissionDrafts] = useState<Record<string, string>>({});
+  const [groupNameDrafts, setGroupNameDrafts] = useState<Record<string, string>>({});
+  const [groupDescriptionDrafts, setGroupDescriptionDrafts] = useState<Record<string, string>>({});
   const [membershipGroupDrafts, setMembershipGroupDrafts] = useState<Record<string, string>>({});
   const [membershipEffectiveFromDrafts, setMembershipEffectiveFromDrafts] = useState<
     Record<string, string>
@@ -877,6 +879,18 @@ function App({
           return acc;
         }, {}),
       );
+      setGroupNameDrafts(
+        groups.reduce<Record<string, string>>((acc, group) => {
+          acc[group.id] = group.name;
+          return acc;
+        }, {}),
+      );
+      setGroupDescriptionDrafts(
+        groups.reduce<Record<string, string>>((acc, group) => {
+          acc[group.id] = group.description;
+          return acc;
+        }, {}),
+      );
       setMembershipGroupDrafts(
         memberships.reduce<Record<string, string>>((acc, membership) => {
           acc[membership.id] = membership.groupIDs.join(', ');
@@ -930,6 +944,14 @@ function App({
         ...previous,
         [group.id]: group.permissions.join(', '),
       }));
+      setGroupNameDrafts((previous) => ({
+        ...previous,
+        [group.id]: group.name,
+      }));
+      setGroupDescriptionDrafts((previous) => ({
+        ...previous,
+        [group.id]: group.description,
+      }));
       setNewGroupName('');
       setNewGroupDescription('');
     } catch (e) {
@@ -961,6 +983,73 @@ function App({
       }));
     } catch (e) {
       setIamError(e instanceof Error ? e.message : 'save permissions failed');
+    }
+  }
+
+  async function saveGroupProfile(group: IAMGroup) {
+    if (!authUser) {
+      setIamError('auth_required');
+      return;
+    }
+    setIamError(null);
+    try {
+      const response = await apiFetch(`/api/iam/groups/${encodeURIComponent(group.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: groupNameDrafts[group.id] ?? group.name,
+          description: groupDescriptionDrafts[group.id] ?? group.description,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`save group profile failed: ${response.status}`);
+      }
+      const updated = parseGroup((await response.json()) as Record<string, unknown>);
+      setIamGroups((previous) => previous.map((item) => (item.id === updated.id ? updated : item)));
+      setGroupNameDrafts((previous) => ({
+        ...previous,
+        [updated.id]: updated.name,
+      }));
+      setGroupDescriptionDrafts((previous) => ({
+        ...previous,
+        [updated.id]: updated.description,
+      }));
+    } catch (e) {
+      setIamError(e instanceof Error ? e.message : 'save group profile failed');
+    }
+  }
+
+  async function deleteGroup(group: IAMGroup) {
+    if (!authUser) {
+      setIamError('auth_required');
+      return;
+    }
+    setIamError(null);
+    try {
+      const response = await apiFetch(`/api/iam/groups/${encodeURIComponent(group.id)}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error(`delete group failed: ${response.status}`);
+      }
+      setIamGroups((previous) => previous.filter((item) => item.id !== group.id));
+      setGroupPermissionDrafts((previous) => {
+        const next = { ...previous };
+        delete next[group.id];
+        return next;
+      });
+      setGroupNameDrafts((previous) => {
+        const next = { ...previous };
+        delete next[group.id];
+        return next;
+      });
+      setGroupDescriptionDrafts((previous) => {
+        const next = { ...previous };
+        delete next[group.id];
+        return next;
+      });
+    } catch (e) {
+      setIamError(e instanceof Error ? e.message : 'delete group failed');
     }
   }
 
@@ -1703,12 +1792,31 @@ function App({
               </Typography>
               {iamGroups.map((group) => (
                 <Paper key={group.id} variant="outlined" sx={{ p: 1 }}>
-                  <Typography variant="subtitle2">{group.name}</Typography>
-                  {group.description !== '' ? (
-                    <Typography variant="caption" color="text.secondary">
-                      {group.description}
-                    </Typography>
-                  ) : null}
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label={t('groupName')}
+                    value={groupNameDrafts[group.id] ?? group.name}
+                    onChange={(event) =>
+                      setGroupNameDrafts((previous) => ({
+                        ...previous,
+                        [group.id]: event.target.value,
+                      }))
+                    }
+                  />
+                  <TextField
+                    size="small"
+                    fullWidth
+                    sx={{ mt: 1 }}
+                    label={t('groupDescription')}
+                    value={groupDescriptionDrafts[group.id] ?? group.description}
+                    onChange={(event) =>
+                      setGroupDescriptionDrafts((previous) => ({
+                        ...previous,
+                        [group.id]: event.target.value,
+                      }))
+                    }
+                  />
                   <TextField
                     size="small"
                     fullWidth
@@ -1726,9 +1834,24 @@ function App({
                     <Button
                       size="small"
                       variant="outlined"
+                      onClick={() => void saveGroupProfile(group)}
+                    >
+                      {t('saveGroup')}
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
                       onClick={() => void saveGroupPermissions(group)}
                     >
                       {t('savePermissions')}
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      variant="outlined"
+                      onClick={() => void deleteGroup(group)}
+                    >
+                      {t('deleteGroup')}
                     </Button>
                   </Stack>
                 </Paper>

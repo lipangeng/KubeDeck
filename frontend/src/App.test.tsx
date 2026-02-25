@@ -832,7 +832,7 @@ describe('App', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Access Control' }));
 
     expect(await screen.findByRole('dialog', { name: 'Access Control' })).toBeTruthy();
-    expect(await screen.findByText('admins')).toBeTruthy();
+    expect(await screen.findByDisplayValue('admins')).toBeTruthy();
     expect(await screen.findByText('iam:read (platform)')).toBeTruthy();
     expect(await screen.findByText('Users')).toBeTruthy();
     expect(await screen.findByText('Memberships')).toBeTruthy();
@@ -940,6 +940,156 @@ describe('App', () => {
           url.includes('/api/audit/events?action=auth&result=allowed&limit=10'),
         ),
       ).toBe(true);
+    });
+  });
+
+  it('updates and deletes iam group in access control dialog', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
+        return new Response('ok', { status: 200 });
+      }
+      if (url.endsWith('/api/meta/clusters')) {
+        return new Response(JSON.stringify({ clusters: ['default'] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/api/meta/registry?cluster=default')) {
+        return new Response(JSON.stringify({ cluster: 'default', resourceTypes: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/api/meta/menus?cluster=default')) {
+        return new Response(JSON.stringify({ cluster: 'default', menus: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/auth/login')) {
+        return new Response(
+          JSON.stringify({
+            token: 'token-abc',
+            user: { id: 'u-1', username: 'admin' },
+            tenants: [{ id: 'tenant-dev', code: 'dev', name: 'Development' }],
+            active_tenant_id: 'tenant-dev',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(
+          JSON.stringify({
+            user: { id: 'u-1', username: 'admin', activeTenantID: 'tenant-dev' },
+            tenants: [{ id: 'tenant-dev', code: 'dev', name: 'Development' }],
+            active_tenant_id: 'tenant-dev',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/iam/permissions')) {
+        return new Response(JSON.stringify({ permissions: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/iam/groups')) {
+        return new Response(
+          JSON.stringify({
+            groups: [
+              {
+                id: 'grp-admin',
+                tenant_id: 'tenant-dev',
+                name: 'admins',
+                description: 'old description',
+                permissions: ['iam:read'],
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/iam/memberships')) {
+        return new Response(JSON.stringify({ memberships: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/iam/invites')) {
+        return new Response(JSON.stringify({ invites: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/iam/users')) {
+        return new Response(JSON.stringify({ users: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/iam/groups/grp-admin') && init?.method === 'PATCH') {
+        return new Response(
+          JSON.stringify({
+            id: 'grp-admin',
+            tenant_id: 'tenant-dev',
+            name: 'platform-admins',
+            description: 'new description',
+            permissions: ['iam:read'],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/iam/groups/grp-admin') && init?.method === 'DELETE') {
+        return new Response(JSON.stringify({ deleted: 'grp-admin' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/iam/groups/grp-admin/permissions')) {
+        return new Response(
+          JSON.stringify({
+            id: 'grp-admin',
+            tenant_id: 'tenant-dev',
+            name: 'admins',
+            permissions: ['iam:read'],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response('not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        locale="en"
+        onLocaleChange={vi.fn()}
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Login' }));
+    fireEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Login' })).getByRole('button', {
+        name: 'Login',
+      }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Access Control' }));
+
+    fireEvent.change(await screen.findByDisplayValue('admins'), {
+      target: { value: 'platform-admins' },
+    });
+    fireEvent.change(screen.getByDisplayValue('old description'), {
+      target: { value: 'new description' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Group' }));
+    expect(await screen.findByDisplayValue('platform-admins')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Group' }));
+    await waitFor(() => {
+      expect(screen.queryByDisplayValue('platform-admins')).toBeNull();
     });
   });
 });
