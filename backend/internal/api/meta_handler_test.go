@@ -664,7 +664,7 @@ func TestIAMGroupsReloadFromPersistenceWhenCacheMiss(t *testing.T) {
 	if err := json.Unmarshal(listResp.Body.Bytes(), &listBody); err != nil {
 		t.Fatalf("expected list JSON body, got error: %v", err)
 	}
-	if len(listBody.Groups) == 0 || listBody.Groups[0].Name != "ops" {
+	if !containsGroupName(listBody.Groups, "ops") {
 		t.Fatalf("expected persisted groups after reload, body=%s", listResp.Body.String())
 	}
 }

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -117,5 +118,32 @@ func TestSQLiteIAMPersistenceRoundTrip(t *testing.T) {
 	}
 	if len(snapshot.Sessions) != 1 || snapshot.Sessions[0].Token != "sess-1" {
 		t.Fatalf("unexpected sessions snapshot: %+v", snapshot.Sessions)
+	}
+}
+
+func TestSQLiteIAMPersistenceCreatesMigrationHistory(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "iam-migrations.sqlite")
+	repo, err := NewIAMPersistence("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("new persistence: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = repo.Close()
+	})
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite db: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&count); err != nil {
+		t.Fatalf("query migration history: %v", err)
+	}
+	if count == 0 {
+		t.Fatalf("expected at least one migration record, got %d", count)
 	}
 }
