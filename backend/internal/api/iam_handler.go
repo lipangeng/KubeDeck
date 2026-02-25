@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -812,6 +813,112 @@ func groupIDForTenantName(tenantID string, groupName string) string {
 func canonicalGroupName(name string) string {
 	parts := strings.Fields(strings.ToLower(strings.TrimSpace(name)))
 	return strings.Join(parts, " ")
+}
+
+var ErrGroupCanonicalNameConflict = errors.New("group canonical name conflict within tenant")
+
+func rebuildGroupIDsForAllTenants() error {
+	_ = reloadIAMStateFromPersistence()
+
+	iamGroupsMu.Lock()
+	iamMembershipsMu.Lock()
+
+	originalGroups := cloneIAMGroups(iamGroups)
+	originalMemberships := cloneIAMMemberships(iamMemberships)
+
+	newGroups := make(map[string]iamGroup, len(iamGroups))
+	oldToNew := make(map[string]string, len(iamGroups))
+	seenCanonical := make(map[string]string, len(iamGroups))
+	for oldID, group := range iamGroups {
+		canonical := canonicalGroupName(group.Name)
+		key := group.TenantID + "|" + canonical
+		if existingID, ok := seenCanonical[key]; ok && existingID != oldID {
+			iamGroups = originalGroups
+			iamMemberships = originalMemberships
+			iamMembershipsMu.Unlock()
+			iamGroupsMu.Unlock()
+			return ErrGroupCanonicalNameConflict
+		}
+		seenCanonical[key] = oldID
+
+		newID := groupIDForTenantName(group.TenantID, group.Name)
+		if existing, exists := newGroups[newID]; exists && (existing.TenantID != group.TenantID || canonicalGroupName(existing.Name) != canonical) {
+			iamGroups = originalGroups
+			iamMemberships = originalMemberships
+			iamMembershipsMu.Unlock()
+			iamGroupsMu.Unlock()
+			return ErrGroupCanonicalNameConflict
+		}
+		group.ID = newID
+		newGroups[newID] = group
+		oldToNew[oldID] = newID
+	}
+
+	newMemberships := make(map[string]iamMembership, len(iamMemberships))
+	for membershipID, membership := range iamMemberships {
+		rewritten := make([]string, 0, len(membership.GroupIDs))
+		seen := map[string]struct{}{}
+		for _, groupID := range membership.GroupIDs {
+			nextGroupID := groupID
+			if migratedID, ok := oldToNew[groupID]; ok {
+				nextGroupID = migratedID
+			}
+			if _, ok := newGroups[nextGroupID]; !ok {
+				continue
+			}
+			if _, ok := seen[nextGroupID]; ok {
+				continue
+			}
+			seen[nextGroupID] = struct{}{}
+			rewritten = append(rewritten, nextGroupID)
+		}
+		membership.GroupIDs = rewritten
+		newMemberships[membershipID] = membership
+	}
+
+	iamGroups = newGroups
+	iamMemberships = newMemberships
+	iamMembershipsMu.Unlock()
+	iamGroupsMu.Unlock()
+
+	persistIAMGroups()
+	persistIAMMemberships()
+	return nil
+}
+
+func cloneIAMGroups(source map[string]iamGroup) map[string]iamGroup {
+	out := make(map[string]iamGroup, len(source))
+	for id, group := range source {
+		out[id] = iamGroup{
+			ID:          group.ID,
+			TenantID:    group.TenantID,
+			Name:        group.Name,
+			Description: group.Description,
+			Permissions: append([]string{}, group.Permissions...),
+		}
+	}
+	return out
+}
+
+func cloneIAMMemberships(source map[string]iamMembership) map[string]iamMembership {
+	out := make(map[string]iamMembership, len(source))
+	for id, membership := range source {
+		var effectiveUntil *time.Time
+		if membership.EffectiveUntil != nil {
+			value := membership.EffectiveUntil.UTC()
+			effectiveUntil = &value
+		}
+		out[id] = iamMembership{
+			ID:             membership.ID,
+			TenantID:       membership.TenantID,
+			UserID:         membership.UserID,
+			UserLabel:      membership.UserLabel,
+			GroupIDs:       append([]string{}, membership.GroupIDs...),
+			EffectiveFrom:  membership.EffectiveFrom,
+			EffectiveUntil: effectiveUntil,
+		}
+	}
+	return out
 }
 
 func (h *IAMHandler) deleteGroup(w http.ResponseWriter, session authSession, groupID string) {

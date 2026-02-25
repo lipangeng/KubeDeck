@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -1818,6 +1819,97 @@ func TestIAMGroupPatchRejectsDuplicateNameInTenant(t *testing.T) {
 	router.ServeHTTP(patchResp, patchReq)
 	if patchResp.Code != http.StatusConflict {
 		t.Fatalf("expected patch conflict 409, got %d body=%s", patchResp.Code, patchResp.Body.String())
+	}
+}
+
+func TestGroupIDRebuildRewritesMembershipRefs(t *testing.T) {
+	resetGroups()
+	resetMemberships()
+	resetAuditWriter()
+
+	iamGroupsMu.Lock()
+	iamGroups["grp-admins"] = iamGroup{
+		ID:       "grp-admins",
+		TenantID: "tenant-dev",
+		Name:     "Admins",
+	}
+	iamGroups["grp-devops"] = iamGroup{
+		ID:       "grp-devops",
+		TenantID: "tenant-dev",
+		Name:     "Dev Ops",
+	}
+	iamGroupsMu.Unlock()
+
+	iamMembershipsMu.Lock()
+	iamMemberships["mbr-u1-tenant-dev"] = iamMembership{
+		ID:        "mbr-u1-tenant-dev",
+		TenantID:  "tenant-dev",
+		UserID:    "u-1",
+		UserLabel: "u1",
+		GroupIDs:  []string{"grp-admins", "grp-devops", "grp-missing"},
+	}
+	iamMembershipsMu.Unlock()
+
+	if err := rebuildGroupIDsForAllTenants(); err != nil {
+		t.Fatalf("rebuildGroupIDsForAllTenants should succeed, got %v", err)
+	}
+
+	expectedAdminsID := groupIDForTenantName("tenant-dev", "Admins")
+	expectedDevopsID := groupIDForTenantName("tenant-dev", "Dev Ops")
+
+	iamGroupsMu.RLock()
+	_, hasOldAdmins := iamGroups["grp-admins"]
+	_, hasOldDevops := iamGroups["grp-devops"]
+	_, hasNewAdmins := iamGroups[expectedAdminsID]
+	_, hasNewDevops := iamGroups[expectedDevopsID]
+	iamGroupsMu.RUnlock()
+	if hasOldAdmins || hasOldDevops {
+		t.Fatalf("expected old group ids removed after rebuild")
+	}
+	if !hasNewAdmins || !hasNewDevops {
+		t.Fatalf("expected new rebuilt group ids present")
+	}
+
+	iamMembershipsMu.RLock()
+	rebuiltMembership := iamMemberships["mbr-u1-tenant-dev"]
+	iamMembershipsMu.RUnlock()
+	if len(rebuiltMembership.GroupIDs) != 2 {
+		t.Fatalf("expected rewritten group ids filtered to existing groups, got %v", rebuiltMembership.GroupIDs)
+	}
+	if !contains(rebuiltMembership.GroupIDs, expectedAdminsID) || !contains(rebuiltMembership.GroupIDs, expectedDevopsID) {
+		t.Fatalf("expected membership group ids rewritten, got %v", rebuiltMembership.GroupIDs)
+	}
+}
+
+func TestGroupIDRebuildRejectsCanonicalNameConflict(t *testing.T) {
+	resetGroups()
+	resetMemberships()
+	resetAuditWriter()
+
+	iamGroupsMu.Lock()
+	iamGroups["grp-a"] = iamGroup{
+		ID:       "grp-a",
+		TenantID: "tenant-dev",
+		Name:     "Ops Team",
+	}
+	iamGroups["grp-b"] = iamGroup{
+		ID:       "grp-b",
+		TenantID: "tenant-dev",
+		Name:     "ops   team",
+	}
+	iamGroupsMu.Unlock()
+
+	err := rebuildGroupIDsForAllTenants()
+	if !errors.Is(err, ErrGroupCanonicalNameConflict) {
+		t.Fatalf("expected ErrGroupCanonicalNameConflict, got %v", err)
+	}
+
+	iamGroupsMu.RLock()
+	_, hasGroupA := iamGroups["grp-a"]
+	_, hasGroupB := iamGroups["grp-b"]
+	iamGroupsMu.RUnlock()
+	if !hasGroupA || !hasGroupB {
+		t.Fatalf("expected original group ids retained on rebuild conflict")
 	}
 }
 
