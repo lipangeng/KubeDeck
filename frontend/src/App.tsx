@@ -8,12 +8,12 @@ import InputLabel from '@mui/material/InputLabel';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
-import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
+import type { ThemePreference } from './themeMode';
 
 interface MenuEntry {
   id: string;
@@ -25,6 +25,11 @@ interface MenusResponse {
 }
 
 type ProbeStatus = 'checking' | 'ok' | 'error';
+
+interface AppProps {
+  themePreference: ThemePreference;
+  onThemePreferenceChange: (next: ThemePreference) => void;
+}
 
 function resolveApiTarget(): string {
   const configured = import.meta.env.VITE_BACKEND_TARGET as string | undefined;
@@ -48,7 +53,7 @@ function resolveProbePath(path: '/healthz' | '/readyz'): string {
   return `/api${path}`;
 }
 
-function App() {
+function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const apiTargetHint = resolveApiTargetHint();
   const [activeCluster, setActiveCluster] = useState('default');
   const [menus, setMenus] = useState<MenuEntry[]>([]);
@@ -148,10 +153,26 @@ function App() {
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <AppBar position="static" color="transparent" elevation={0}>
-        <Toolbar sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>
+        <Toolbar sx={{ borderBottom: 1, borderColor: 'divider', gap: 2 }}>
+          <Typography variant="h5" component="h1" sx={{ fontWeight: 700, flexGrow: 1 }}>
             KubeDeck
           </Typography>
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel htmlFor="theme-select">Theme</InputLabel>
+            <Select
+              native
+              value={themePreference}
+              onChange={(event) =>
+                onThemePreferenceChange(event.target.value as ThemePreference)
+              }
+              label="Theme"
+              inputProps={{ id: 'theme-select' }}
+            >
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </Select>
+          </FormControl>
         </Toolbar>
       </AppBar>
 
@@ -195,7 +216,9 @@ function App() {
               Menu Items
             </Typography>
             {loading ? <Typography>Loading menus...</Typography> : null}
-            {error ? <Typography color="error">Failed to load menus: {error}</Typography> : null}
+            {error ? (
+              <Typography color="error">Failed to load menus: {error}</Typography>
+            ) : null}
             <List aria-label="Menu Items" dense>
               {menus.map((menu) => (
                 <ListItem key={menu.id} disablePadding>
