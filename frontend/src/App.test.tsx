@@ -339,4 +339,68 @@ describe('App', () => {
     expect(await screen.findByText(/#1 ConfigMap cm-ok/)).toBeTruthy();
     expect(await screen.findByText(/#2 Service svc-fail/)).toBeTruthy();
   });
+
+  it('allows toggling menu favorites and persists in sidebar favorites section', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
+        return new Response('ok', { status: 200 });
+      }
+      if (url.endsWith('/api/meta/clusters')) {
+        return new Response(
+          JSON.stringify({
+            clusters: ['default'],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/meta/registry?cluster=default')) {
+        return new Response(
+          JSON.stringify({
+            cluster: 'default',
+            resourceTypes: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/meta/menus?cluster=default')) {
+        return new Response(
+          JSON.stringify({
+            cluster: 'default',
+            menus: [
+              {
+                id: 'workloads',
+                group: 'WORKLOAD',
+                title: 'Workloads',
+                targetType: 'page',
+                targetRef: '/workloads',
+                source: 'system',
+                order: 10,
+                visible: true,
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response('not found', { status: 404 });
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        locale="en"
+        onLocaleChange={vi.fn()}
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    const addFavoriteButton = await screen.findByRole('button', { name: 'Add to favorites' });
+    fireEvent.click(addFavoriteButton);
+
+    expect(await screen.findByRole('button', { name: 'Remove from favorites' })).toBeTruthy();
+    expect((await screen.findAllByText('Workloads')).length).toBeGreaterThan(0);
+  });
 });

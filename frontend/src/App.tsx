@@ -16,6 +16,7 @@ import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
+import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
 import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
@@ -25,6 +26,7 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
+import FavoriteRoundedIcon from '@mui/icons-material/FavoriteRounded';
 import FavoriteBorderRoundedIcon from '@mui/icons-material/FavoriteBorderRounded';
 import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
@@ -44,6 +46,7 @@ import type { ThemePreference } from './themeMode';
 
 type ProbeStatus = 'checking' | 'ok' | 'error';
 const MENU_GROUPS_STORAGE_KEY = 'kubedeck.menu.groups.expanded';
+const USER_FAVORITES_KEY = 'kubedeck.user.favorite.menu.ids';
 
 interface AppProps {
   locale: Locale;
@@ -113,6 +116,25 @@ function readStoredExpandedGroups(): Record<string, boolean> {
     return sanitized;
   } catch {
     return {};
+  }
+}
+
+function readStoredFavoriteMenuIDs(): string[] {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+  const raw = window.localStorage.getItem(USER_FAVORITES_KEY);
+  if (!raw) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((item): item is string => typeof item === 'string');
+  } catch {
+    return [];
   }
 }
 
@@ -189,6 +211,9 @@ function App({
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
   const [selectedMenuID, setSelectedMenuID] = useState<string>('');
   const [currentRoute, setCurrentRoute] = useState<string>(() => readHashRoute());
+  const [favoriteMenuIDs, setFavoriteMenuIDs] = useState<string[]>(() =>
+    readStoredFavoriteMenuIDs(),
+  );
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
     () => readStoredExpandedGroups(),
   );
@@ -198,13 +223,19 @@ function App({
     const userMenus = menus.filter((menu) => menu.source === 'user');
     return composeMenus(systemMenus, userMenus, []);
   }, [menus]);
+  const configuredMenuIDSet = useMemo(
+    () => new Set(configuredMenus.map((menu) => menu.id)),
+    [configuredMenus],
+  );
+  const isFixedFavorite = (menu: MenuItem): boolean =>
+    menu.source === 'user' || menu.group.trim().toUpperCase() === 'FAVORITES';
   const favoritesMenus = useMemo(
     () =>
       configuredMenus.filter(
         (menu) =>
-          menu.source === 'user' || menu.group.trim().toUpperCase() === 'FAVORITES',
+          isFixedFavorite(menu) || favoriteMenuIDs.includes(menu.id),
       ),
-    [configuredMenus],
+    [configuredMenus, favoriteMenuIDs],
   );
   const groupedMenus = useMemo(() => {
     const favoriteIDs = new Set(favoritesMenus.map((menu) => menu.id));
@@ -239,6 +270,12 @@ function App({
   }, [listFilterNamespace, lastUsedNamespace]);
 
   useEffect(() => {
+    setFavoriteMenuIDs((previous) =>
+      previous.filter((menuID) => configuredMenuIDSet.has(menuID)),
+    );
+  }, [configuredMenuIDSet]);
+
+  useEffect(() => {
     setExpandedGroups((previous) => {
       const next = { ...previous };
       let changed = false;
@@ -258,6 +295,13 @@ function App({
     }
     window.localStorage.setItem(MENU_GROUPS_STORAGE_KEY, JSON.stringify(expandedGroups));
   }, [expandedGroups]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(USER_FAVORITES_KEY, JSON.stringify(favoriteMenuIDs));
+  }, [favoriteMenuIDs]);
 
   useEffect(() => {
     if (menuIDs.length === 0) {
@@ -300,6 +344,17 @@ function App({
     if (typeof window !== 'undefined') {
       window.location.hash = nextRoute;
     }
+  }
+
+  function toggleFavoriteMenu(menu: MenuItem) {
+    if (isFixedFavorite(menu)) {
+      return;
+    }
+    setFavoriteMenuIDs((previous) =>
+      previous.includes(menu.id)
+        ? previous.filter((menuID) => menuID !== menu.id)
+        : [...previous, menu.id],
+    );
   }
 
   async function applyResources() {
@@ -621,6 +676,21 @@ function App({
                         {menuIcon(menu.group, menu.targetType)}
                       </ListItemIcon>
                       <ListItemText primary={menu.title} />
+                      <Tooltip title={isFixedFavorite(menu) ? t('fixedFavorite') : t('favoriteRemove')}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleFavoriteMenu(menu);
+                            }}
+                            disabled={isFixedFavorite(menu)}
+                            aria-label={isFixedFavorite(menu) ? t('fixedFavorite') : t('favoriteRemove')}
+                          >
+                            <FavoriteRoundedIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                     </ListItemButton>
                   </ListItem>
                 ))}
@@ -689,6 +759,32 @@ function App({
                               {menuIcon(item.group, item.targetType)}
                             </ListItemIcon>
                             <ListItemText primary={item.title} />
+                            <Tooltip
+                              title={
+                                favoriteMenuIDs.includes(item.id)
+                                  ? t('favoriteRemove')
+                                  : t('favoriteAdd')
+                              }
+                            >
+                              <IconButton
+                                size="small"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleFavoriteMenu(item);
+                                }}
+                                aria-label={
+                                  favoriteMenuIDs.includes(item.id)
+                                    ? t('favoriteRemove')
+                                    : t('favoriteAdd')
+                                }
+                              >
+                                {favoriteMenuIDs.includes(item.id) ? (
+                                  <FavoriteRoundedIcon fontSize="small" />
+                                ) : (
+                                  <FavoriteBorderRoundedIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </Tooltip>
                           </ListItemButton>
                         </ListItem>
                       ))}
