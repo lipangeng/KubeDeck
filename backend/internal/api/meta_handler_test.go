@@ -700,3 +700,58 @@ func TestAuditEventsEndpointIncludesAuthEvents(t *testing.T) {
 		t.Fatalf("expected non-empty audit events")
 	}
 }
+
+func TestAuditEventsEndpointSupportsFilters(t *testing.T) {
+	resetAuthSessions()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	switchPayload := []byte(`{"tenant_code":"staging"}`)
+	switchReq := httptest.NewRequest(http.MethodPost, "/api/auth/switch-tenant", bytes.NewReader(switchPayload))
+	switchReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	switchResp := httptest.NewRecorder()
+	router.ServeHTTP(switchResp, switchReq)
+	if switchResp.Code != http.StatusOK {
+		t.Fatalf("expected switch tenant 200, got %d", switchResp.Code)
+	}
+
+	eventsReq := httptest.NewRequest(http.MethodGet, "/api/audit/events?action=switch_tenant&result=allowed&limit=1", nil)
+	eventsReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	eventsResp := httptest.NewRecorder()
+	router.ServeHTTP(eventsResp, eventsReq)
+	if eventsResp.Code != http.StatusOK {
+		t.Fatalf("expected audit events 200, got %d body=%s", eventsResp.Code, eventsResp.Body.String())
+	}
+	var payload struct {
+		Events []struct {
+			Action string `json:"action"`
+			Result string `json:"result"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(eventsResp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal audit events: %v", err)
+	}
+	if len(payload.Events) != 1 {
+		t.Fatalf("expected exactly one event with limit=1, got %d", len(payload.Events))
+	}
+	if !strings.Contains(payload.Events[0].Action, "switch_tenant") {
+		t.Fatalf("expected switch_tenant action, got %q", payload.Events[0].Action)
+	}
+	if payload.Events[0].Result != "allowed" {
+		t.Fatalf("expected result allowed, got %q", payload.Events[0].Result)
+	}
+}

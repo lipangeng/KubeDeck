@@ -32,6 +32,7 @@ import FavoriteBorderRoundedIcon from '@mui/icons-material/FavoriteBorderRounded
 import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import WorkspacesOutlineIcon from '@mui/icons-material/WorkspacesOutline';
+import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import { composeMenus } from './core/menuComposer';
 import { groupMenusByGroup } from './core/menuGrouping';
 import { translate, type Locale } from './i18n';
@@ -45,6 +46,10 @@ import {
   writeAuthToken,
   type AuthTenant,
 } from './sdk/authApi';
+import {
+  parseAuditEventsResponse,
+  type AuditEvent,
+} from './sdk/auditApi';
 import {
   parseGroup,
   parseGroupsResponse,
@@ -330,6 +335,13 @@ function App({
   const [inviteExpiresInHours, setInviteExpiresInHours] = useState('72');
   const [inviteCreateBusy, setInviteCreateBusy] = useState(false);
   const [inviteLinkCopied, setInviteLinkCopied] = useState<string | null>(null);
+  const [auditDialogOpen, setAuditDialogOpen] = useState(false);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [auditActionFilter, setAuditActionFilter] = useState('');
+  const [auditResultFilter, setAuditResultFilter] = useState('');
+  const [auditLimit, setAuditLimit] = useState('50');
   const [inviteUsername, setInviteUsername] = useState('');
   const [invitePassword, setInvitePassword] = useState('');
   const [inviteBusy, setInviteBusy] = useState(false);
@@ -1080,6 +1092,54 @@ function App({
     }
   }
 
+  async function loadAuditData() {
+    if (!authUser) {
+      setAuditError('auth_required');
+      setAuditEvents([]);
+      return;
+    }
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const params = new URLSearchParams();
+      if (auditActionFilter.trim() !== '') {
+        params.set('action', auditActionFilter.trim());
+      }
+      if (auditResultFilter.trim() !== '') {
+        params.set('result', auditResultFilter.trim());
+      }
+      if (auditLimit.trim() !== '') {
+        params.set('limit', auditLimit.trim());
+      }
+      const query = params.toString();
+      const response = await apiFetch(`/api/audit/events${query ? `?${query}` : ''}`);
+      if (!response.ok) {
+        throw new Error(`audit request failed: ${response.status}`);
+      }
+      const events = parseAuditEventsResponse(await response.json());
+      setAuditEvents(events);
+    } catch (e) {
+      setAuditError(e instanceof Error ? e.message : 'load audit failed');
+    } finally {
+      setAuditLoading(false);
+    }
+  }
+
+  function membershipStatus(membership: IAMMembership): { label: string; color: 'success' | 'warning' | 'error' } {
+    const now = Date.now();
+    const until = membership.effectiveUntil ? Date.parse(membership.effectiveUntil) : Number.NaN;
+    if (!Number.isNaN(until)) {
+      if (until <= now) {
+        return { label: t('membershipExpired'), color: 'error' };
+      }
+      const diffHours = (until - now) / (1000 * 60 * 60);
+      if (diffHours <= 24 * 7) {
+        return { label: t('membershipExpiringSoon'), color: 'warning' };
+      }
+    }
+    return { label: t('membershipActive'), color: 'success' };
+  }
+
   async function submitAcceptInvite(inviteToken: string) {
     if (inviteToken === '') {
       return;
@@ -1126,6 +1186,13 @@ function App({
     }
     void loadIAMData();
   }, [iamDialogOpen, authUser?.id, activeTenantID]);
+
+  useEffect(() => {
+    if (!auditDialogOpen) {
+      return;
+    }
+    void loadAuditData();
+  }, [auditDialogOpen, authUser?.id, activeTenantID]);
 
   return (
     <Box
@@ -1224,6 +1291,13 @@ function App({
           </Button>
           <Button variant="outlined" onClick={() => setIamDialogOpen(true)}>
             {t('accessControl')}
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<HistoryRoundedIcon />}
+            onClick={() => setAuditDialogOpen(true)}
+          >
+            {t('auditEvents')}
           </Button>
           {authUser ? (
             <>
@@ -1633,7 +1707,14 @@ function App({
               </Typography>
               {iamMemberships.map((membership) => (
                 <Paper key={membership.id} variant="outlined" sx={{ p: 1 }}>
-                  <Typography variant="subtitle2">{membership.userLabel || membership.userID}</Typography>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="subtitle2">{membership.userLabel || membership.userID}</Typography>
+                    <Chip
+                      size="small"
+                      color={membershipStatus(membership).color}
+                      label={membershipStatus(membership).label}
+                    />
+                  </Stack>
                   <Typography variant="caption" color="text.secondary">
                     {membership.id}
                   </Typography>
@@ -1832,6 +1913,81 @@ function App({
           >
             {t('acceptInvite')}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={auditDialogOpen}
+        onClose={() => setAuditDialogOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>{t('auditEvents')}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.2}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <TextField
+                size="small"
+                label={t('auditFilterAction')}
+                value={auditActionFilter}
+                onChange={(event) => setAuditActionFilter(event.target.value)}
+              />
+              <TextField
+                size="small"
+                label={t('auditFilterResult')}
+                value={auditResultFilter}
+                onChange={(event) => setAuditResultFilter(event.target.value)}
+                placeholder={t('auditFilterResultPlaceholder')}
+              />
+              <TextField
+                size="small"
+                type="number"
+                label={t('auditFilterLimit')}
+                value={auditLimit}
+                onChange={(event) => setAuditLimit(event.target.value)}
+              />
+              <Button variant="contained" onClick={() => void loadAuditData()}>
+                {t('refresh')}
+              </Button>
+            </Stack>
+            {auditLoading ? <Typography>{t('loading')}</Typography> : null}
+            {auditError ? (
+              <Typography color="error">{t('auditLoadError', { error: auditError })}</Typography>
+            ) : null}
+            <Stack spacing={1}>
+              {auditEvents.map((event, index) => (
+                <Paper key={`${event.createdAt}-${event.action}-${index}`} variant="outlined" sx={{ p: 1 }}>
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1}
+                    alignItems={{ sm: 'center' }}
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {event.action}
+                    </Typography>
+                    <Chip size="small" label={event.result} color={event.result === 'allowed' ? 'success' : 'error'} />
+                    <Typography variant="caption" color="text.secondary">
+                      {event.createdAt}
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">
+                    {event.targetType}/{event.targetID} | actor: {event.actorID || '-'}
+                  </Typography>
+                  {event.reason ? (
+                    <Typography variant="caption" color="error">
+                      {event.reason}
+                    </Typography>
+                  ) : null}
+                </Paper>
+              ))}
+              {auditEvents.length === 0 && !auditLoading ? (
+                <Typography color="text.secondary">{t('noEntries')}</Typography>
+              ) : null}
+            </Stack>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAuditDialogOpen(false)}>{t('close')}</Button>
         </DialogActions>
       </Dialog>
 
