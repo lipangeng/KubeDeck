@@ -41,9 +41,11 @@ import {
   clearAuthToken,
   login,
   me,
+  oauthCallback,
   readAuthToken,
   switchTenant,
   writeAuthToken,
+  type AuthLoginResponse,
   type AuthTenant,
 } from './sdk/authApi';
 import {
@@ -780,21 +782,39 @@ function App({
     setAuthError(null);
     try {
       const payload = await login(loginUsername, loginPassword, loginTenantCode);
-      writeAuthToken(payload.token);
-      setAuthToken(payload.token);
-      setAuthUser({
-        id: payload.user.id,
-        username: payload.user.username,
-      });
-      setAuthRoles(payload.user.roles);
-      setAuthTenants(payload.tenants);
-      setActiveTenantID(payload.active_tenant_id);
+      applyAuthPayload(payload);
       setAuthDialogOpen(false);
     } catch (e) {
       setAuthError(e instanceof Error ? e.message : 'auth login failed');
     } finally {
       setAuthBusy(false);
     }
+  }
+
+  async function submitOAuthDemoLogin() {
+    setAuthBusy(true);
+    setAuthError(null);
+    try {
+      const payload = await oauthCallback('oauth-admin', loginTenantCode);
+      applyAuthPayload(payload);
+      setAuthDialogOpen(false);
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : 'oauth callback failed');
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  function applyAuthPayload(payload: AuthLoginResponse) {
+    writeAuthToken(payload.token);
+    setAuthToken(payload.token);
+    setAuthUser({
+      id: payload.user.id,
+      username: payload.user.username,
+    });
+    setAuthRoles(payload.user.roles);
+    setAuthTenants(payload.tenants);
+    setActiveTenantID(payload.active_tenant_id);
   }
 
   async function logout() {
@@ -2414,6 +2434,9 @@ function App({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAuthDialogOpen(false)}>{t('close')}</Button>
+          <Button variant="outlined" onClick={() => void submitOAuthDemoLogin()} disabled={authBusy}>
+            {t('oauthDemoLogin')}
+          </Button>
           <Button variant="contained" onClick={() => void submitLogin()} disabled={authBusy}>
             {t('login')}
           </Button>
