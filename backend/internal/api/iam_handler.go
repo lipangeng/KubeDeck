@@ -1,13 +1,20 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
+
+	"kubedeck/backend/internal/core/notification"
 )
 
-type IAMHandler struct{}
+type IAMHandler struct {
+	notifier notification.Provider
+}
 
 type iamGroup struct {
 	ID          string   `json:"id"`
@@ -20,10 +27,25 @@ type iamGroup struct {
 var (
 	iamGroupsMu sync.RWMutex
 	iamGroups   = map[string]iamGroup{}
+	invitesMu   sync.RWMutex
+	invites     = map[string]iamInvite{}
 )
 
 func NewIAMHandler() *IAMHandler {
-	return &IAMHandler{}
+	return &IAMHandler{notifier: notification.NewEmailStubProvider()}
+}
+
+type iamInvite struct {
+	ID           string    `json:"id"`
+	TenantID     string    `json:"tenant_id"`
+	TenantCode   string    `json:"tenant_code"`
+	InviteeEmail string    `json:"invitee_email,omitempty"`
+	InviteePhone string    `json:"invitee_phone,omitempty"`
+	RoleHint     string    `json:"role_hint,omitempty"`
+	Token        string    `json:"token"`
+	InviteLink   string    `json:"invite_link"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	Status       string    `json:"status"`
 }
 
 func (h *IAMHandler) Permissions(w http.ResponseWriter, r *http.Request) {
@@ -124,6 +146,25 @@ func (h *IAMHandler) ReplaceMembershipGroups(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	_ = writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (h *IAMHandler) Invites(w http.ResponseWriter, r *http.Request) {
+	session, ok := mustSession(r, w)
+	if !ok {
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		h.listInvites(w, session)
+	case http.MethodPost:
+		if !hasIAMWrite(session.User.Roles) {
+			writeJSONError(w, http.StatusForbidden, "permission_denied")
+			return
+		}
+		h.createInvite(w, r, session)
+	default:
+		methodNotAllowed(w, http.MethodGet+", "+http.MethodPost)
+	}
 }
 
 func (h *IAMHandler) listGroups(w http.ResponseWriter, session authSession) {
@@ -252,3 +293,77 @@ func hasIAMWrite(roles []string) bool {
 	return false
 }
 
+func (h *IAMHandler) listInvites(w http.ResponseWriter, session authSession) {
+	invitesMu.RLock()
+	defer invitesMu.RUnlock()
+	out := make([]iamInvite, 0)
+	for _, invite := range invites {
+		if invite.TenantID == session.ActiveTenantID {
+			out = append(out, invite)
+		}
+	}
+	_ = writeJSON(w, http.StatusOK, map[string]any{"invites": out})
+}
+
+func (h *IAMHandler) createInvite(w http.ResponseWriter, r *http.Request, session authSession) {
+	var req struct {
+		Email     string `json:"email"`
+		Phone     string `json:"phone"`
+		RoleHint  string `json:"role_hint"`
+		ExpiresIn int    `json:"expires_in_hours"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.Email) == "" && strings.TrimSpace(req.Phone) == "" {
+		writeJSONError(w, http.StatusBadRequest, "email_or_phone_required")
+		return
+	}
+	expiresIn := req.ExpiresIn
+	if expiresIn <= 0 {
+		expiresIn = 72
+	}
+	token := newInviteToken()
+	inviteID := "inv-" + token[:12]
+	tenantCode := "unknown"
+	for _, tenant := range session.Available {
+		if tenant.ID == session.ActiveTenantID {
+			tenantCode = tenant.Code
+			break
+		}
+	}
+	invite := iamInvite{
+		ID:           inviteID,
+		TenantID:     session.ActiveTenantID,
+		TenantCode:   tenantCode,
+		InviteeEmail: strings.TrimSpace(req.Email),
+		InviteePhone: strings.TrimSpace(req.Phone),
+		RoleHint:     req.RoleHint,
+		Token:        token,
+		InviteLink:   "/accept-invite?token=" + token,
+		ExpiresAt:    time.Now().UTC().Add(time.Duration(expiresIn) * time.Hour),
+		Status:       "pending",
+	}
+
+	invitesMu.Lock()
+	invites[token] = invite
+	invitesMu.Unlock()
+
+	if invite.InviteeEmail != "" {
+		_ = h.notifier.SendEmail(invite.InviteeEmail, "KubeDeck Invite", invite.InviteLink)
+	}
+	if invite.InviteePhone != "" {
+		_ = h.notifier.SendSMS(invite.InviteePhone, invite.InviteLink)
+	}
+
+	_ = writeJSON(w, http.StatusCreated, invite)
+}
+
+func newInviteToken() string {
+	var raw [24]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "invite-fallback-token"
+	}
+	return hex.EncodeToString(raw[:])
+}

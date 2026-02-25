@@ -174,6 +174,56 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	_ = writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
+func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w, http.MethodPost)
+		return
+	}
+
+	var req struct {
+		Token    string `json:"token"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.Token) == "" {
+		writeJSONError(w, http.StatusBadRequest, "token_required")
+		return
+	}
+
+	invitesMu.Lock()
+	invite, ok := invites[req.Token]
+	if !ok {
+		invitesMu.Unlock()
+		writeJSONError(w, http.StatusNotFound, "invite_not_found")
+		return
+	}
+	if invite.Status != "pending" {
+		invitesMu.Unlock()
+		writeJSONError(w, http.StatusConflict, "invite_not_pending")
+		return
+	}
+	if !time.Now().UTC().Before(invite.ExpiresAt) {
+		invite.Status = "expired"
+		invites[req.Token] = invite
+		invitesMu.Unlock()
+		writeJSONError(w, http.StatusGone, "invite_expired")
+		return
+	}
+	invite.Status = "accepted"
+	invites[req.Token] = invite
+	invitesMu.Unlock()
+
+	_ = writeJSON(w, http.StatusOK, map[string]any{
+		"status":    "accepted",
+		"tenant_id": invite.TenantID,
+		"username":  req.Username,
+	})
+}
+
 func defaultMembershipsForUser(userID string) ([]tenantInfo, []auth.TenantMembership) {
 	now := time.Now().UTC()
 	tenants := []tenantInfo{
@@ -258,4 +308,3 @@ func newToken() string {
 	}
 	return hex.EncodeToString(raw[:])
 }
-

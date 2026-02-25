@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 type registryResponse struct {
@@ -27,6 +28,12 @@ func resetAuthSessions() {
 	authSessionsMu.Lock()
 	authSessions = map[string]authSession{}
 	authSessionsMu.Unlock()
+}
+
+func resetInvites() {
+	invitesMu.Lock()
+	invites = map[string]iamInvite{}
+	invitesMu.Unlock()
 }
 
 type menusResponse struct {
@@ -423,5 +430,84 @@ func TestIAMGroupWriteDeniedForViewer(t *testing.T) {
 	router.ServeHTTP(createResp, createReq)
 	if createResp.Code != http.StatusForbidden {
 		t.Fatalf("expected create group 403 for viewer, got %d", createResp.Code)
+	}
+}
+
+func TestInviteCreateListAndAcceptFlow(t *testing.T) {
+	resetAuthSessions()
+	resetInvites()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	createInvitePayload := []byte(`{"email":"user@example.com","role_hint":"member","expires_in_hours":2}`)
+	createInviteReq := httptest.NewRequest(http.MethodPost, "/api/iam/invites", bytes.NewReader(createInvitePayload))
+	createInviteReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createInviteResp := httptest.NewRecorder()
+	router.ServeHTTP(createInviteResp, createInviteReq)
+	if createInviteResp.Code != http.StatusCreated {
+		t.Fatalf("expected create invite 201, got %d body=%s", createInviteResp.Code, createInviteResp.Body.String())
+	}
+	var inviteBody iamInvite
+	if err := json.Unmarshal(createInviteResp.Body.Bytes(), &inviteBody); err != nil {
+		t.Fatalf("unmarshal invite create: %v", err)
+	}
+	if inviteBody.Token == "" {
+		t.Fatalf("expected invite token")
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/iam/invites", nil)
+	listReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	listResp := httptest.NewRecorder()
+	router.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected list invites 200, got %d", listResp.Code)
+	}
+
+	acceptPayload := []byte(`{"token":"` + inviteBody.Token + `","username":"new-user","password":"pw"}`)
+	acceptReq := httptest.NewRequest(http.MethodPost, "/api/auth/accept-invite", bytes.NewReader(acceptPayload))
+	acceptResp := httptest.NewRecorder()
+	router.ServeHTTP(acceptResp, acceptReq)
+	if acceptResp.Code != http.StatusOK {
+		t.Fatalf("expected accept invite 200, got %d body=%s", acceptResp.Code, acceptResp.Body.String())
+	}
+}
+
+func TestInviteAcceptExpired(t *testing.T) {
+	resetAuthSessions()
+	resetInvites()
+	router := NewRouter()
+
+	invite := iamInvite{
+		ID:         "inv-expired",
+		TenantID:   "tenant-dev",
+		TenantCode: "dev",
+		Token:      "expired-token",
+		InviteLink: "/accept-invite?token=expired-token",
+		ExpiresAt:  time.Now().UTC().Add(-1 * time.Minute),
+		Status:     "pending",
+	}
+	invitesMu.Lock()
+	invites[invite.Token] = invite
+	invitesMu.Unlock()
+
+	acceptPayload := []byte(`{"token":"expired-token","username":"new-user","password":"pw"}`)
+	acceptReq := httptest.NewRequest(http.MethodPost, "/api/auth/accept-invite", bytes.NewReader(acceptPayload))
+	acceptResp := httptest.NewRecorder()
+	router.ServeHTTP(acceptResp, acceptReq)
+	if acceptResp.Code != http.StatusGone {
+		t.Fatalf("expected accept expired invite 410, got %d", acceptResp.Code)
 	}
 }
