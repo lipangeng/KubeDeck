@@ -25,6 +25,8 @@ Optional:
 - `KUBEDECK_OIDC_ROLE_CLAIMS` (comma-separated, default: `roles,groups`)
 - `KUBEDECK_OIDC_ROLE_MAP` (comma-separated map, e.g. `platform-admin=admin,readonly=viewer`)
 - `KUBEDECK_OIDC_DEFAULT_ROLE` (default: `viewer`)
+- `KUBEDECK_OIDC_ALLOWED_ROLES` (comma-separated allowlist, e.g. `admin,owner,viewer`)
+- `KUBEDECK_OIDC_REQUIRE_ALLOWED_ROLE` (`true/false`, default `false`; deny login if no role remains after allowlist)
 
 ## API Flow
 
@@ -47,3 +49,4 @@ Frontend behavior:
 - `state` is one-time and expires in 10 minutes.
 - Invalid or replayed `state` is rejected with `invalid_state`.
 - OIDC claim mapping is configurable by env; if no role claims are present, `KUBEDECK_OIDC_DEFAULT_ROLE` is applied.
+- When role allowlist is configured, only allowed mapped roles are kept; strict mode can deny logins with no allowed roles.

@@ -83,3 +83,62 @@ func TestExtractOIDCIdentityFallbacksToDefaultRole(t *testing.T) {
 		t.Fatalf("expected default viewer role, got %v", roles)
 	}
 }
+
+func TestExtractOIDCIdentityWhitelistFilter(t *testing.T) {
+	claims := map[string]any{
+		"sub":    "user-003",
+		"groups": []any{"team-ops", "platform-admin"},
+	}
+	config := oidcClaimConfig{
+		subjectClaim:       "sub",
+		usernameClaim:      "preferred_username",
+		roleClaims:         []string{"groups"},
+		roleMap:            map[string]string{"platform-admin": "admin", "team-ops": "ops"},
+		defaultRole:        "viewer",
+		allowedRoles:       map[string]struct{}{"admin": {}},
+		requireAllowedRole: false,
+	}
+	_, _, roles, err := extractOIDCIdentity(claims, config)
+	if err != nil {
+		t.Fatalf("extract identity: %v", err)
+	}
+	if len(roles) != 1 || roles[0] != "admin" {
+		t.Fatalf("expected whitelisted admin role only, got %v", roles)
+	}
+}
+
+func TestExtractOIDCIdentityWhitelistStrictModeDenied(t *testing.T) {
+	claims := map[string]any{
+		"sub":    "user-004",
+		"groups": []any{"readonly"},
+	}
+	config := oidcClaimConfig{
+		subjectClaim:       "sub",
+		usernameClaim:      "preferred_username",
+		roleClaims:         []string{"groups"},
+		roleMap:            map[string]string{"readonly": "viewer"},
+		defaultRole:        "viewer",
+		allowedRoles:       map[string]struct{}{"admin": {}},
+		requireAllowedRole: true,
+	}
+	_, _, _, err := extractOIDCIdentity(claims, config)
+	if err == nil {
+		t.Fatal("expected strict whitelist denial error")
+	}
+}
+
+func TestParseOIDCAllowedRoles(t *testing.T) {
+	allowed := parseOIDCAllowedRoles("admin, viewer, owner")
+	if len(allowed) != 3 {
+		t.Fatalf("expected three allowed roles, got %v", allowed)
+	}
+	if _, ok := allowed["admin"]; !ok {
+		t.Fatalf("expected admin allowed role")
+	}
+	if _, ok := allowed["viewer"]; !ok {
+		t.Fatalf("expected viewer allowed role")
+	}
+	if _, ok := allowed["owner"]; !ok {
+		t.Fatalf("expected owner allowed role")
+	}
+}

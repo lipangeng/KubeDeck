@@ -20,11 +20,13 @@ type OIDCProvider struct {
 }
 
 type oidcClaimConfig struct {
-	subjectClaim  string
-	usernameClaim string
-	roleClaims    []string
-	roleMap       map[string]string
-	defaultRole   string
+	subjectClaim       string
+	usernameClaim      string
+	roleClaims         []string
+	roleMap            map[string]string
+	defaultRole        string
+	allowedRoles       map[string]struct{}
+	requireAllowedRole bool
 }
 
 func NewOIDCProviderFromEnv() (*OIDCProvider, error) {
@@ -38,11 +40,13 @@ func NewOIDCProviderFromEnv() (*OIDCProvider, error) {
 	}
 	scopes := parseOIDCScopes(os.Getenv("KUBEDECK_OIDC_SCOPES"))
 	claims := oidcClaimConfig{
-		subjectClaim:  normalizeOrDefault(os.Getenv("KUBEDECK_OIDC_SUBJECT_CLAIM"), "sub"),
-		usernameClaim: normalizeOrDefault(os.Getenv("KUBEDECK_OIDC_USERNAME_CLAIM"), "preferred_username"),
-		roleClaims:    parseOIDCRoleClaims(os.Getenv("KUBEDECK_OIDC_ROLE_CLAIMS")),
-		roleMap:       parseOIDCRoleMap(os.Getenv("KUBEDECK_OIDC_ROLE_MAP")),
-		defaultRole:   normalizeOrDefault(os.Getenv("KUBEDECK_OIDC_DEFAULT_ROLE"), "viewer"),
+		subjectClaim:       normalizeOrDefault(os.Getenv("KUBEDECK_OIDC_SUBJECT_CLAIM"), "sub"),
+		usernameClaim:      normalizeOrDefault(os.Getenv("KUBEDECK_OIDC_USERNAME_CLAIM"), "preferred_username"),
+		roleClaims:         parseOIDCRoleClaims(os.Getenv("KUBEDECK_OIDC_ROLE_CLAIMS")),
+		roleMap:            parseOIDCRoleMap(os.Getenv("KUBEDECK_OIDC_ROLE_MAP")),
+		defaultRole:        normalizeOrDefault(os.Getenv("KUBEDECK_OIDC_DEFAULT_ROLE"), "viewer"),
+		allowedRoles:       parseOIDCAllowedRoles(os.Getenv("KUBEDECK_OIDC_ALLOWED_ROLES")),
+		requireAllowedRole: parseEnvBool(os.Getenv("KUBEDECK_OIDC_REQUIRE_ALLOWED_ROLE")),
 	}
 	return NewOIDCProvider(name, issuer, clientID, clientSecret, redirectURL, scopes, claims)
 }
@@ -102,6 +106,9 @@ func NewOIDCProvider(
 	}
 	if claims.roleMap == nil {
 		claims.roleMap = map[string]string{}
+	}
+	if claims.allowedRoles == nil {
+		claims.allowedRoles = map[string]struct{}{}
 	}
 
 	return &OIDCProvider{
@@ -175,6 +182,27 @@ func parseOIDCRoleMap(raw string) map[string]string {
 		out[key] = value
 	}
 	return out
+}
+
+func parseOIDCAllowedRoles(raw string) map[string]struct{} {
+	allowed := map[string]struct{}{}
+	for _, item := range strings.Split(raw, ",") {
+		role := strings.TrimSpace(item)
+		if role == "" {
+			continue
+		}
+		allowed[role] = struct{}{}
+	}
+	return allowed
+}
+
+func parseEnvBool(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeOrDefault(value string, fallback string) string {
@@ -272,6 +300,13 @@ func extractOIDCIdentity(
 	if len(normalizedRoles) == 0 {
 		normalizedRoles = []string{config.defaultRole}
 	}
+	normalizedRoles = filterAllowedRoles(normalizedRoles, config.allowedRoles)
+	if len(normalizedRoles) == 0 && config.requireAllowedRole {
+		return "", "", nil, errors.New("oidc no allowed role after whitelist filter")
+	}
+	if len(normalizedRoles) == 0 {
+		normalizedRoles = []string{config.defaultRole}
+	}
 	return userID, username, normalizedRoles, nil
 }
 
@@ -348,6 +383,19 @@ func normalizeRoleValues(raw []string, roleMap map[string]string) []string {
 		}
 		seen[trimmed] = struct{}{}
 		out = append(out, trimmed)
+	}
+	return out
+}
+
+func filterAllowedRoles(roles []string, allowed map[string]struct{}) []string {
+	if len(allowed) == 0 {
+		return roles
+	}
+	out := make([]string, 0, len(roles))
+	for _, role := range roles {
+		if _, ok := allowed[role]; ok {
+			out = append(out, role)
+		}
 	}
 	return out
 }

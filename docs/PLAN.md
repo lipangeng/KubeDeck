@@ -46,6 +46,7 @@ Completed and merged:
 - Configurable notification provider for invites (stub/webhook via env)
 - OIDC provider foundation via open-source libraries (`go-oidc` + `oauth2`) with state validation
 - OIDC claim mapping configurability (subject/username/roles claims + role map/default role)
+- OIDC role allowlist mode with optional strict deny-on-empty behavior
 
 ## 4. Next Priority (Phase 1 continuation)
 
