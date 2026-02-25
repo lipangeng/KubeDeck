@@ -5,6 +5,7 @@ import App from './App';
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  window.sessionStorage.clear();
   vi.restoreAllMocks();
 });
 
@@ -745,6 +746,76 @@ describe('App', () => {
       expect.objectContaining({ method: 'POST' }),
     );
 
+    window.history.replaceState({}, '', originalURL || '/');
+  });
+
+  it('uses state-bound tenant code from sessionStorage for oauth callback', async () => {
+    const originalURL = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.history.replaceState({}, '', '/?code=oauth-admin&state=state-tenant-bind');
+    window.sessionStorage.setItem('kubedeck.oauth.pending.state', 'state-tenant-bind');
+    window.sessionStorage.setItem('kubedeck.oauth.pending.tenant_code', 'staging');
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/oauth/callback')) {
+        expect(String(init?.body)).toContain('"tenant_code":"staging"');
+        return new Response(
+          JSON.stringify({
+            token: 'oauth-token-staging',
+            user: { id: 'u-oauth', username: 'oauth-admin', roles: ['admin'] },
+            tenants: [{ id: 'tenant-staging', code: 'staging', name: 'Staging' }],
+            active_tenant_id: 'tenant-staging',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(
+          JSON.stringify({
+            user: { id: 'u-oauth', username: 'oauth-admin', activeTenantID: 'tenant-staging', roles: ['admin'] },
+            tenants: [{ id: 'tenant-staging', code: 'staging', name: 'Staging' }],
+            active_tenant_id: 'tenant-staging',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
+        return new Response('ok', { status: 200 });
+      }
+      if (url.endsWith('/api/meta/clusters')) {
+        return new Response(JSON.stringify({ clusters: ['default'] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/api/meta/registry?cluster=default')) {
+        return new Response(JSON.stringify({ cluster: 'default', resourceTypes: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/api/meta/menus?cluster=default')) {
+        return new Response(JSON.stringify({ cluster: 'default', menus: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        locale="en"
+        onLocaleChange={vi.fn()}
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('oauth-admin')).toBeTruthy();
+    expect(window.sessionStorage.getItem('kubedeck.oauth.pending.state')).toBeNull();
+    expect(window.sessionStorage.getItem('kubedeck.oauth.pending.tenant_code')).toBeNull();
     window.history.replaceState({}, '', originalURL || '/');
   });
 

@@ -83,6 +83,8 @@ type ProbeStatus = 'checking' | 'ok' | 'error';
 const MENU_GROUPS_STORAGE_KEY = 'kubedeck.menu.groups.expanded';
 const USER_FAVORITES_KEY = 'kubedeck.user.favorite.menu.ids';
 const MENU_OVERRIDES_KEY = 'kubedeck.menu.overrides';
+const OAUTH_PENDING_STATE_KEY = 'kubedeck.oauth.pending.state';
+const OAUTH_PENDING_TENANT_KEY = 'kubedeck.oauth.pending.tenant_code';
 
 interface AppProps {
   locale: Locale;
@@ -259,6 +261,28 @@ function clearOAuthCallbackQuery(): void {
   }
   const next = `${window.location.pathname}${window.location.hash}`;
   window.history.replaceState({}, '', next);
+}
+
+function storePendingOAuth(state: string, tenantCode: string): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.sessionStorage.setItem(OAUTH_PENDING_STATE_KEY, state);
+  window.sessionStorage.setItem(OAUTH_PENDING_TENANT_KEY, tenantCode);
+}
+
+function consumePendingOAuthTenant(state: string, fallback: string): string {
+  if (typeof window === 'undefined') {
+    return fallback;
+  }
+  const pendingState = window.sessionStorage.getItem(OAUTH_PENDING_STATE_KEY) ?? '';
+  const pendingTenant = window.sessionStorage.getItem(OAUTH_PENDING_TENANT_KEY) ?? '';
+  window.sessionStorage.removeItem(OAUTH_PENDING_STATE_KEY);
+  window.sessionStorage.removeItem(OAUTH_PENDING_TENANT_KEY);
+  if (pendingState === state && pendingTenant.trim() !== '') {
+    return pendingTenant.trim();
+  }
+  return fallback;
 }
 
 function menuIcon(group: string, targetType: 'page' | 'resource'): ReactNode {
@@ -816,6 +840,7 @@ function App({
     setAuthError(null);
     try {
       const oauth = await oauthURL();
+      storePendingOAuth(oauth.state, loginTenantCode);
       if (typeof window !== 'undefined') {
         window.location.assign(oauth.auth_url);
       }
@@ -851,7 +876,8 @@ function App({
       setAuthBusy(true);
       setAuthError(null);
       try {
-        const payload = await oauthCallback(code, loginTenantCode, state);
+        const tenantCode = consumePendingOAuthTenant(state, loginTenantCode);
+        const payload = await oauthCallback(code, tenantCode, state);
         if (!active) {
           return;
         }
