@@ -422,6 +422,27 @@ func (h *IAMHandler) deleteGroup(w http.ResponseWriter, session authSession, gro
 		return
 	}
 	delete(iamGroups, groupID)
+	// Keep memberships consistent after group deletion by dropping stale group refs.
+	iamMembershipsMu.Lock()
+	for id, membership := range iamMemberships {
+		if membership.TenantID != session.ActiveTenantID || len(membership.GroupIDs) == 0 {
+			continue
+		}
+		nextGroupIDs := make([]string, 0, len(membership.GroupIDs))
+		changed := false
+		for _, existingGroupID := range membership.GroupIDs {
+			if existingGroupID == groupID {
+				changed = true
+				continue
+			}
+			nextGroupIDs = append(nextGroupIDs, existingGroupID)
+		}
+		if changed {
+			membership.GroupIDs = nextGroupIDs
+			iamMemberships[id] = membership
+		}
+	}
+	iamMembershipsMu.Unlock()
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -479,6 +500,16 @@ func (h *IAMHandler) replaceMembershipGroups(
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	iamGroupsMu.RLock()
+	for _, groupID := range req.GroupIDs {
+		group, ok := iamGroups[groupID]
+		if !ok || group.TenantID != session.ActiveTenantID {
+			iamGroupsMu.RUnlock()
+			writeJSONError(w, http.StatusBadRequest, "unknown_group_ids")
+			return
+		}
+	}
+	iamGroupsMu.RUnlock()
 
 	iamMembershipsMu.Lock()
 	defer iamMembershipsMu.Unlock()

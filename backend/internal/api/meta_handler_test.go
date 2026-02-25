@@ -519,6 +519,24 @@ func TestMembershipListAndReplaceGroupsFlow(t *testing.T) {
 		t.Fatalf("expected memberships in response")
 	}
 
+	createAdminsPayload := []byte(`{"name":"admins","description":"admins group"}`)
+	createAdminsReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader(createAdminsPayload))
+	createAdminsReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createAdminsResp := httptest.NewRecorder()
+	router.ServeHTTP(createAdminsResp, createAdminsReq)
+	if createAdminsResp.Code != http.StatusCreated {
+		t.Fatalf("expected create admins group 201, got %d body=%s", createAdminsResp.Code, createAdminsResp.Body.String())
+	}
+
+	createDevopsPayload := []byte(`{"name":"devops","description":"devops group"}`)
+	createDevopsReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader(createDevopsPayload))
+	createDevopsReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createDevopsResp := httptest.NewRecorder()
+	router.ServeHTTP(createDevopsResp, createDevopsReq)
+	if createDevopsResp.Code != http.StatusCreated {
+		t.Fatalf("expected create devops group 201, got %d body=%s", createDevopsResp.Code, createDevopsResp.Body.String())
+	}
+
 	replacePayload := []byte(`{"group_ids":["grp-admins","grp-devops"]}`)
 	replaceReq := httptest.NewRequest(http.MethodPut, "/api/iam/memberships/"+listBody.Memberships[0].ID+"/groups", bytes.NewReader(replacePayload))
 	replaceReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
@@ -549,6 +567,141 @@ func TestMembershipListAndReplaceGroupsFlow(t *testing.T) {
 	}
 	if validityUpdated.EffectiveUntil == nil {
 		t.Fatalf("expected effective_until in updated membership")
+	}
+}
+
+func TestMembershipReplaceGroupsRejectsUnknownGroupIDs(t *testing.T) {
+	resetAuthSessions()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/iam/memberships", nil)
+	listReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	listResp := httptest.NewRecorder()
+	router.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected list memberships 200, got %d", listResp.Code)
+	}
+	var listBody struct {
+		Memberships []iamMembership `json:"memberships"`
+	}
+	if err := json.Unmarshal(listResp.Body.Bytes(), &listBody); err != nil {
+		t.Fatalf("unmarshal list memberships: %v", err)
+	}
+	if len(listBody.Memberships) == 0 {
+		t.Fatalf("expected memberships in response")
+	}
+
+	replacePayload := []byte(`{"group_ids":["grp-does-not-exist"]}`)
+	replaceReq := httptest.NewRequest(http.MethodPut, "/api/iam/memberships/"+listBody.Memberships[0].ID+"/groups", bytes.NewReader(replacePayload))
+	replaceReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	replaceResp := httptest.NewRecorder()
+	router.ServeHTTP(replaceResp, replaceReq)
+	if replaceResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected replace membership groups 400, got %d body=%s", replaceResp.Code, replaceResp.Body.String())
+	}
+}
+
+func TestGroupDeleteCleansMembershipGroupRefs(t *testing.T) {
+	resetAuthSessions()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/iam/memberships", nil)
+	listReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	listResp := httptest.NewRecorder()
+	router.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected list memberships 200, got %d", listResp.Code)
+	}
+	var listBody struct {
+		Memberships []iamMembership `json:"memberships"`
+	}
+	if err := json.Unmarshal(listResp.Body.Bytes(), &listBody); err != nil {
+		t.Fatalf("unmarshal list memberships: %v", err)
+	}
+	if len(listBody.Memberships) == 0 {
+		t.Fatalf("expected memberships in response")
+	}
+
+	createPayload := []byte(`{"name":"admins","description":"admins group"}`)
+	createReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader(createPayload))
+	createReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusCreated {
+		t.Fatalf("expected create group 201, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	var created iamGroup
+	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal created group: %v", err)
+	}
+
+	replacePayload := []byte(`{"group_ids":["` + created.ID + `"]}`)
+	replaceReq := httptest.NewRequest(http.MethodPut, "/api/iam/memberships/"+listBody.Memberships[0].ID+"/groups", bytes.NewReader(replacePayload))
+	replaceReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	replaceResp := httptest.NewRecorder()
+	router.ServeHTTP(replaceResp, replaceReq)
+	if replaceResp.Code != http.StatusOK {
+		t.Fatalf("expected replace membership groups 200, got %d body=%s", replaceResp.Code, replaceResp.Body.String())
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/iam/groups/"+created.ID, nil)
+	deleteReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	deleteResp := httptest.NewRecorder()
+	router.ServeHTTP(deleteResp, deleteReq)
+	if deleteResp.Code != http.StatusOK {
+		t.Fatalf("expected delete group 200, got %d body=%s", deleteResp.Code, deleteResp.Body.String())
+	}
+
+	listAfterReq := httptest.NewRequest(http.MethodGet, "/api/iam/memberships", nil)
+	listAfterReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	listAfterResp := httptest.NewRecorder()
+	router.ServeHTTP(listAfterResp, listAfterReq)
+	if listAfterResp.Code != http.StatusOK {
+		t.Fatalf("expected list memberships after delete 200, got %d", listAfterResp.Code)
+	}
+	var listAfterBody struct {
+		Memberships []iamMembership `json:"memberships"`
+	}
+	if err := json.Unmarshal(listAfterResp.Body.Bytes(), &listAfterBody); err != nil {
+		t.Fatalf("unmarshal list memberships after delete: %v", err)
+	}
+	if len(listAfterBody.Memberships) == 0 {
+		t.Fatalf("expected memberships after delete")
+	}
+	if len(listAfterBody.Memberships[0].GroupIDs) != 0 {
+		t.Fatalf("expected membership group ids cleaned after group delete, got %v", listAfterBody.Memberships[0].GroupIDs)
 	}
 }
 
