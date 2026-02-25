@@ -2,6 +2,7 @@ package api
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -716,7 +717,7 @@ func (h *IAMHandler) createGroup(w http.ResponseWriter, r *http.Request, session
 		writeJSONError(w, http.StatusConflict, "group_exists")
 		return
 	}
-	id := "grp-" + strings.ToLower(strings.ReplaceAll(req.Name, " ", "-"))
+	id := groupIDForTenantName(session.ActiveTenantID, normalizedName)
 	group := iamGroup{
 		ID:          id,
 		TenantID:    session.ActiveTenantID,
@@ -767,7 +768,23 @@ func (h *IAMHandler) patchGroup(
 		return
 	}
 	if req.Name != nil {
-		group.Name = *req.Name
+		nextName := strings.TrimSpace(*req.Name)
+		if nextName == "" {
+			iamGroupsMu.Unlock()
+			writeJSONError(w, http.StatusBadRequest, "name_required")
+			return
+		}
+		for id, existing := range iamGroups {
+			if id == groupID {
+				continue
+			}
+			if existing.TenantID == session.ActiveTenantID && strings.EqualFold(existing.Name, nextName) {
+				iamGroupsMu.Unlock()
+				writeJSONError(w, http.StatusConflict, "group_exists")
+				return
+			}
+		}
+		group.Name = nextName
 	}
 	if req.Description != nil {
 		group.Description = *req.Description
@@ -784,6 +801,17 @@ func (h *IAMHandler) patchGroup(
 		Result:     "allowed",
 	})
 	_ = writeJSON(w, http.StatusOK, group)
+}
+
+func groupIDForTenantName(tenantID string, groupName string) string {
+	canonical := canonicalGroupName(groupName)
+	sum := sha256.Sum256([]byte(canonical))
+	return "grp-" + tenantID + "-" + hex.EncodeToString(sum[:4])
+}
+
+func canonicalGroupName(name string) string {
+	parts := strings.Fields(strings.ToLower(strings.TrimSpace(name)))
+	return strings.Join(parts, " ")
 }
 
 func (h *IAMHandler) deleteGroup(w http.ResponseWriter, session authSession, groupID string) {

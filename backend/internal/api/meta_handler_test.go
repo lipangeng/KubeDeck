@@ -1688,6 +1688,139 @@ func TestIAMGroupCreateDuplicateRejected(t *testing.T) {
 	}
 }
 
+func TestIAMGroupSameNameAllowedAcrossTenants(t *testing.T) {
+	resetAuthSessions()
+	resetMemberships()
+	resetGroups()
+	resetAuditWriter()
+	router := NewRouter()
+
+	userID := auth.LocalUserID("admin")
+	now := time.Now().UTC().Add(-1 * time.Hour)
+	iamMembershipsMu.Lock()
+	iamMemberships["mbr-"+userID+"-tenant-dev"] = iamMembership{
+		ID:            "mbr-" + userID + "-tenant-dev",
+		TenantID:      "tenant-dev",
+		UserID:        userID,
+		UserLabel:     "admin",
+		EffectiveFrom: now,
+	}
+	iamMemberships["mbr-"+userID+"-tenant-qa"] = iamMembership{
+		ID:            "mbr-" + userID + "-tenant-qa",
+		TenantID:      "tenant-qa",
+		UserID:        userID,
+		UserLabel:     "admin",
+		EffectiveFrom: now,
+	}
+	iamMembershipsMu.Unlock()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	createDevReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader([]byte(`{"name":"ops","description":"dev ops"}`)))
+	createDevReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createDevResp := httptest.NewRecorder()
+	router.ServeHTTP(createDevResp, createDevReq)
+	if createDevResp.Code != http.StatusCreated {
+		t.Fatalf("expected create dev group 201, got %d body=%s", createDevResp.Code, createDevResp.Body.String())
+	}
+	var devGroup iamGroup
+	if err := json.Unmarshal(createDevResp.Body.Bytes(), &devGroup); err != nil {
+		t.Fatalf("unmarshal dev group: %v", err)
+	}
+
+	switchReq := httptest.NewRequest(http.MethodPost, "/api/auth/switch-tenant", bytes.NewReader([]byte(`{"tenant_code":"qa"}`)))
+	switchReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	switchResp := httptest.NewRecorder()
+	router.ServeHTTP(switchResp, switchReq)
+	if switchResp.Code != http.StatusOK {
+		t.Fatalf("expected switch tenant 200, got %d body=%s", switchResp.Code, switchResp.Body.String())
+	}
+
+	createQAReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader([]byte(`{"name":"ops","description":"qa ops"}`)))
+	createQAReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createQAResp := httptest.NewRecorder()
+	router.ServeHTTP(createQAResp, createQAReq)
+	if createQAResp.Code != http.StatusCreated {
+		t.Fatalf("expected create qa group 201, got %d body=%s", createQAResp.Code, createQAResp.Body.String())
+	}
+	var qaGroup iamGroup
+	if err := json.Unmarshal(createQAResp.Body.Bytes(), &qaGroup); err != nil {
+		t.Fatalf("unmarshal qa group: %v", err)
+	}
+
+	if devGroup.ID == qaGroup.ID {
+		t.Fatalf("expected tenant-scoped group ids to differ, got %q", devGroup.ID)
+	}
+	if !strings.HasPrefix(devGroup.ID, "grp-tenant-dev-") {
+		t.Fatalf("expected dev group id prefix, got %q", devGroup.ID)
+	}
+	if !strings.HasPrefix(qaGroup.ID, "grp-tenant-qa-") {
+		t.Fatalf("expected qa group id prefix, got %q", qaGroup.ID)
+	}
+}
+
+func TestIAMGroupPatchRejectsDuplicateNameInTenant(t *testing.T) {
+	resetAuthSessions()
+	resetMemberships()
+	resetGroups()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	createOpsReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader([]byte(`{"name":"ops","description":"ops group"}`)))
+	createOpsReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createOpsResp := httptest.NewRecorder()
+	router.ServeHTTP(createOpsResp, createOpsReq)
+	if createOpsResp.Code != http.StatusCreated {
+		t.Fatalf("expected create ops group 201, got %d body=%s", createOpsResp.Code, createOpsResp.Body.String())
+	}
+	var opsGroup iamGroup
+	if err := json.Unmarshal(createOpsResp.Body.Bytes(), &opsGroup); err != nil {
+		t.Fatalf("unmarshal ops group: %v", err)
+	}
+
+	createDevopsReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader([]byte(`{"name":"devops","description":"devops group"}`)))
+	createDevopsReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createDevopsResp := httptest.NewRecorder()
+	router.ServeHTTP(createDevopsResp, createDevopsReq)
+	if createDevopsResp.Code != http.StatusCreated {
+		t.Fatalf("expected create devops group 201, got %d body=%s", createDevopsResp.Code, createDevopsResp.Body.String())
+	}
+
+	patchReq := httptest.NewRequest(http.MethodPatch, "/api/iam/groups/"+opsGroup.ID, bytes.NewReader([]byte(`{"name":"devops"}`)))
+	patchReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	patchResp := httptest.NewRecorder()
+	router.ServeHTTP(patchResp, patchReq)
+	if patchResp.Code != http.StatusConflict {
+		t.Fatalf("expected patch conflict 409, got %d body=%s", patchResp.Code, patchResp.Body.String())
+	}
+}
+
 func TestMembershipListAndReplaceGroupsFlow(t *testing.T) {
 	resetAuthSessions()
 	resetMemberships()
@@ -1733,6 +1866,10 @@ func TestMembershipListAndReplaceGroupsFlow(t *testing.T) {
 	if createAdminsResp.Code != http.StatusCreated {
 		t.Fatalf("expected create admins group 201, got %d body=%s", createAdminsResp.Code, createAdminsResp.Body.String())
 	}
+	var adminsGroup iamGroup
+	if err := json.Unmarshal(createAdminsResp.Body.Bytes(), &adminsGroup); err != nil {
+		t.Fatalf("unmarshal admins group: %v", err)
+	}
 
 	createDevopsPayload := []byte(`{"name":"devops","description":"devops group"}`)
 	createDevopsReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader(createDevopsPayload))
@@ -1742,8 +1879,12 @@ func TestMembershipListAndReplaceGroupsFlow(t *testing.T) {
 	if createDevopsResp.Code != http.StatusCreated {
 		t.Fatalf("expected create devops group 201, got %d body=%s", createDevopsResp.Code, createDevopsResp.Body.String())
 	}
+	var devopsGroup iamGroup
+	if err := json.Unmarshal(createDevopsResp.Body.Bytes(), &devopsGroup); err != nil {
+		t.Fatalf("unmarshal devops group: %v", err)
+	}
 
-	replacePayload := []byte(`{"group_ids":["grp-admins","grp-devops"]}`)
+	replacePayload := []byte(`{"group_ids":["` + adminsGroup.ID + `","` + devopsGroup.ID + `"]}`)
 	replaceReq := httptest.NewRequest(http.MethodPut, "/api/iam/memberships/"+listBody.Memberships[0].ID+"/groups", bytes.NewReader(replacePayload))
 	replaceReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
 	replaceResp := httptest.NewRecorder()
