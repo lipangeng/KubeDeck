@@ -81,15 +81,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	user.ActiveTenantID = activeTenantID
 	token := newToken()
 
-	authSessionsMu.Lock()
-	authSessions[token] = authSession{
+	saveAuthSession(token, authSession{
 		Token:          token,
 		User:           user,
 		Available:      tenants,
 		ActiveTenantID: activeTenantID,
-	}
-	authSessionsMu.Unlock()
-	persistAuthSessions()
+	})
 	_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, TenantID: activeTenantID, Action: "auth.login", TargetType: "session", TargetID: token, Result: "allowed"})
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{
@@ -166,10 +163,7 @@ func (h *AuthHandler) SwitchTenant(w http.ResponseWriter, r *http.Request) {
 
 	session.ActiveTenantID = nextTenantID
 	session.User.ActiveTenantID = nextTenantID
-	authSessionsMu.Lock()
-	authSessions[token] = session
-	authSessionsMu.Unlock()
-	persistAuthSessions()
+	saveAuthSession(token, session)
 	_ = defaultAuditWriter.Write(audit.Event{ActorID: session.User.ID, TenantID: nextTenantID, Action: "auth.switch_tenant", TargetType: "session", TargetID: token, Result: "allowed"})
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{
@@ -193,10 +187,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 			tenantID = existing.ActiveTenantID
 		}
 		authSessionsMu.RUnlock()
-		authSessionsMu.Lock()
-		delete(authSessions, token)
-		authSessionsMu.Unlock()
-		persistAuthSessions()
+		deleteAuthSession(token)
 		_ = defaultAuditWriter.Write(audit.Event{ActorID: actorID, TenantID: tenantID, Action: "auth.logout", TargetType: "session", TargetID: token, Result: "allowed"})
 	}
 
@@ -333,6 +324,15 @@ func currentSessionWithToken(r *http.Request) (string, authSession, bool) {
 	authSessionsMu.RLock()
 	session, ok := authSessions[token]
 	authSessionsMu.RUnlock()
+	if ok {
+		return token, session, true
+	}
+	if err := reloadAuthSessionsFromPersistence(); err != nil {
+		return token, authSession{}, false
+	}
+	authSessionsMu.RLock()
+	session, ok = authSessions[token]
+	authSessionsMu.RUnlock()
 	return token, session, ok
 }
 
@@ -342,13 +342,24 @@ func currentValidSessionFromRequest(r *http.Request) (string, authSession, bool,
 		return "", authSession{}, false, "unauthorized"
 	}
 	if !isMembershipActiveForTenant(session.User.Memberships, session.ActiveTenantID, time.Now().UTC()) {
-		authSessionsMu.Lock()
-		delete(authSessions, token)
-		authSessionsMu.Unlock()
-		persistAuthSessions()
+		deleteAuthSession(token)
 		return "", authSession{}, false, "membership_expired"
 	}
 	return token, session, true, ""
+}
+
+func saveAuthSession(token string, session authSession) {
+	authSessionsMu.Lock()
+	authSessions[token] = session
+	authSessionsMu.Unlock()
+	persistAuthSessions()
+}
+
+func deleteAuthSession(token string) {
+	authSessionsMu.Lock()
+	delete(authSessions, token)
+	authSessionsMu.Unlock()
+	persistAuthSessions()
 }
 
 func newToken() string {

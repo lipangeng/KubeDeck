@@ -131,18 +131,9 @@ func loadIAMPersistentState(repo storage.IAMPersistence) error {
 		}
 	}
 
-	loadSessions := map[string]authSession{}
-	for _, item := range snapshot.Sessions {
-		var session authSession
-		if err := json.Unmarshal([]byte(item.UserJSON), &session.User); err != nil {
-			return err
-		}
-		if err := json.Unmarshal([]byte(item.AvailableJSON), &session.Available); err != nil {
-			return err
-		}
-		session.Token = item.Token
-		session.ActiveTenantID = item.ActiveTenantID
-		loadSessions[item.Token] = session
+	loadSessions, err := decodeAuthSessions(snapshot.Sessions)
+	if err != nil {
+		return err
 	}
 
 	iamGroupsMu.Lock()
@@ -162,6 +153,42 @@ func loadIAMPersistentState(repo storage.IAMPersistence) error {
 	authSessionsMu.Unlock()
 
 	return nil
+}
+
+func reloadAuthSessionsFromPersistence() error {
+	ensureIAMPersistence()
+	if iamPersistenceRepo == nil {
+		return nil
+	}
+	snapshot, err := iamPersistenceRepo.Load()
+	if err != nil {
+		return err
+	}
+	loadSessions, err := decodeAuthSessions(snapshot.Sessions)
+	if err != nil {
+		return err
+	}
+	authSessionsMu.Lock()
+	authSessions = loadSessions
+	authSessionsMu.Unlock()
+	return nil
+}
+
+func decodeAuthSessions(records []storage.AuthSessionRecord) (map[string]authSession, error) {
+	loadSessions := map[string]authSession{}
+	for _, item := range records {
+		var session authSession
+		if err := json.Unmarshal([]byte(item.UserJSON), &session.User); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(item.AvailableJSON), &session.Available); err != nil {
+			return nil, err
+		}
+		session.Token = item.Token
+		session.ActiveTenantID = item.ActiveTenantID
+		loadSessions[item.Token] = session
+	}
+	return loadSessions, nil
 }
 
 func persistIAMGroups() {
