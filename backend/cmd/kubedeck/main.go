@@ -16,10 +16,12 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/", api.NewRouter())
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+	healthHandler := func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
-	})
+	}
+	mux.HandleFunc("/healthz", healthHandler)
+	mux.HandleFunc("/readyz", healthHandler)
 
 	addr := ":" + port
 	log.Printf("kubedeck backend listening on %s", addr)
