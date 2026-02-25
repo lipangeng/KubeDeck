@@ -21,6 +21,8 @@ export interface IAMMembership {
   userID: string;
   userLabel: string;
   groupIDs: string[];
+  effectiveFrom: string;
+  effectiveUntil: string;
 }
 
 export interface IAMInvite {
@@ -82,6 +84,8 @@ export function parseMembershipsResponse(value: unknown): IAMMembership[] {
     groupIDs: Array.isArray(item.group_ids)
       ? item.group_ids.map((groupID) => String(groupID)).filter((groupID) => groupID !== '')
       : [],
+    effectiveFrom: String(item.effective_from ?? ''),
+    effectiveUntil: String(item.effective_until ?? ''),
   }));
 }
 

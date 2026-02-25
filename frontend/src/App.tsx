@@ -318,6 +318,12 @@ function App({
   const [newGroupDescription, setNewGroupDescription] = useState('');
   const [groupPermissionDrafts, setGroupPermissionDrafts] = useState<Record<string, string>>({});
   const [membershipGroupDrafts, setMembershipGroupDrafts] = useState<Record<string, string>>({});
+  const [membershipEffectiveFromDrafts, setMembershipEffectiveFromDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [membershipEffectiveUntilDrafts, setMembershipEffectiveUntilDrafts] = useState<
+    Record<string, string>
+  >({});
   const [inviteEmail, setInviteEmail] = useState('');
   const [invitePhone, setInvitePhone] = useState('');
   const [inviteRoleHint, setInviteRoleHint] = useState('member');
@@ -855,6 +861,18 @@ function App({
           return acc;
         }, {}),
       );
+      setMembershipEffectiveFromDrafts(
+        memberships.reduce<Record<string, string>>((acc, membership) => {
+          acc[membership.id] = membership.effectiveFrom;
+          return acc;
+        }, {}),
+      );
+      setMembershipEffectiveUntilDrafts(
+        memberships.reduce<Record<string, string>>((acc, membership) => {
+          acc[membership.id] = membership.effectiveUntil;
+          return acc;
+        }, {}),
+      );
     } catch (e) {
       setIamError(e instanceof Error ? e.message : 'load iam failed');
     } finally {
@@ -958,6 +976,51 @@ function App({
       }));
     } catch (e) {
       setIamError(e instanceof Error ? e.message : 'save membership groups failed');
+    }
+  }
+
+  async function saveMembershipValidity(membership: IAMMembership) {
+    if (!authUser) {
+      setIamError('auth_required');
+      return;
+    }
+    setIamError(null);
+    try {
+      const effectiveFrom = membershipEffectiveFromDrafts[membership.id] ?? '';
+      const effectiveUntil = membershipEffectiveUntilDrafts[membership.id] ?? '';
+      const response = await apiFetch(
+        `/api/iam/memberships/${encodeURIComponent(membership.id)}/validity`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            effective_from: effectiveFrom,
+            effective_until: effectiveUntil,
+          }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`save membership validity failed: ${response.status}`);
+      }
+      const updated = parseMembershipsResponse({
+        memberships: [await response.json()],
+      })[0];
+      if (!updated) {
+        throw new Error('invalid membership validity response');
+      }
+      setIamMemberships((previous) =>
+        previous.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setMembershipEffectiveFromDrafts((previous) => ({
+        ...previous,
+        [updated.id]: updated.effectiveFrom,
+      }));
+      setMembershipEffectiveUntilDrafts((previous) => ({
+        ...previous,
+        [updated.id]: updated.effectiveUntil,
+      }));
+    } catch (e) {
+      setIamError(e instanceof Error ? e.message : 'save membership validity failed');
     }
   }
 
@@ -1594,6 +1657,42 @@ function App({
                       onClick={() => void saveMembershipGroups(membership)}
                     >
                       {t('saveMembershipGroups')}
+                    </Button>
+                  </Stack>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }}>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      label={t('membershipEffectiveFrom')}
+                      value={membershipEffectiveFromDrafts[membership.id] ?? ''}
+                      onChange={(event) =>
+                        setMembershipEffectiveFromDrafts((previous) => ({
+                          ...previous,
+                          [membership.id]: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      size="small"
+                      fullWidth
+                      label={t('membershipEffectiveUntil')}
+                      value={membershipEffectiveUntilDrafts[membership.id] ?? ''}
+                      onChange={(event) =>
+                        setMembershipEffectiveUntilDrafts((previous) => ({
+                          ...previous,
+                          [membership.id]: event.target.value,
+                        }))
+                      }
+                      placeholder={t('membershipEffectiveUntilPlaceholder')}
+                    />
+                  </Stack>
+                  <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => void saveMembershipValidity(membership)}
+                    >
+                      {t('saveMembershipValidity')}
                     </Button>
                   </Stack>
                 </Paper>

@@ -55,11 +55,14 @@ describe('iamApi', () => {
           user_id: 'u1',
           user_label: 'alice',
           group_ids: ['grp-admin'],
+          effective_from: '2026-02-25T00:00:00Z',
+          effective_until: '2026-12-31T00:00:00Z',
         },
       ],
     });
     expect(memberships).toHaveLength(1);
     expect(memberships[0]?.userLabel).toBe('alice');
+    expect(memberships[0]?.effectiveUntil).toBe('2026-12-31T00:00:00Z');
   });
 
   it('parses invites response', () => {

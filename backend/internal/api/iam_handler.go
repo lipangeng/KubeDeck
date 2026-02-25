@@ -35,11 +35,13 @@ var (
 )
 
 type iamMembership struct {
-	ID        string   `json:"id"`
-	TenantID  string   `json:"tenant_id"`
-	UserID    string   `json:"user_id"`
-	UserLabel string   `json:"user_label"`
-	GroupIDs  []string `json:"group_ids"`
+	ID             string     `json:"id"`
+	TenantID       string     `json:"tenant_id"`
+	UserID         string     `json:"user_id"`
+	UserLabel      string     `json:"user_label"`
+	GroupIDs       []string   `json:"group_ids"`
+	EffectiveFrom  time.Time  `json:"effective_from"`
+	EffectiveUntil *time.Time `json:"effective_until,omitempty"`
 }
 
 func NewIAMHandler() *IAMHandler {
@@ -166,20 +168,32 @@ func (h *IAMHandler) MembershipByID(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "membership_id_required")
 		return
 	}
-	if !strings.HasSuffix(trimmed, "/groups") {
+	switch {
+	case strings.HasSuffix(trimmed, "/groups"):
+		membershipID := strings.TrimSuffix(trimmed, "/groups")
+		if r.Method != http.MethodPut {
+			methodNotAllowed(w, http.MethodPut)
+			return
+		}
+		if !hasIAMWrite(session.User.Roles) {
+			writeJSONError(w, http.StatusForbidden, "permission_denied")
+			return
+		}
+		h.replaceMembershipGroups(w, r, session, membershipID)
+	case strings.HasSuffix(trimmed, "/validity"):
+		membershipID := strings.TrimSuffix(trimmed, "/validity")
+		if r.Method != http.MethodPut {
+			methodNotAllowed(w, http.MethodPut)
+			return
+		}
+		if !hasIAMWrite(session.User.Roles) {
+			writeJSONError(w, http.StatusForbidden, "permission_denied")
+			return
+		}
+		h.replaceMembershipValidity(w, r, session, membershipID)
+	default:
 		methodNotAllowed(w, http.MethodPut)
-		return
 	}
-	membershipID := strings.TrimSuffix(trimmed, "/groups")
-	if r.Method != http.MethodPut {
-		methodNotAllowed(w, http.MethodPut)
-		return
-	}
-	if !hasIAMWrite(session.User.Roles) {
-		writeJSONError(w, http.StatusForbidden, "permission_denied")
-		return
-	}
-	h.replaceMembershipGroups(w, r, session, membershipID)
 }
 
 func (h *IAMHandler) Invites(w http.ResponseWriter, r *http.Request) {
@@ -226,11 +240,12 @@ func (h *IAMHandler) listMemberships(w http.ResponseWriter, session authSession)
 	}
 	if len(out) == 0 {
 		seed := iamMembership{
-			ID:        "mbr-" + session.User.ID + "-" + session.ActiveTenantID,
-			TenantID:  session.ActiveTenantID,
-			UserID:    session.User.ID,
-			UserLabel: session.User.Username,
-			GroupIDs:  []string{},
+			ID:            "mbr-" + session.User.ID + "-" + session.ActiveTenantID,
+			TenantID:      session.ActiveTenantID,
+			UserID:        session.User.ID,
+			UserLabel:     session.User.Username,
+			GroupIDs:      []string{},
+			EffectiveFrom: time.Now().UTC().Add(-24 * time.Hour),
 		}
 		iamMemberships[seed.ID] = seed
 		out = append(out, seed)
@@ -396,6 +411,61 @@ func (h *IAMHandler) replaceMembershipGroups(
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
 		Action:     "iam.membership.groups.replace",
+		TargetType: "membership",
+		TargetID:   membership.ID,
+		Result:     "allowed",
+	})
+	_ = writeJSON(w, http.StatusOK, membership)
+}
+
+func (h *IAMHandler) replaceMembershipValidity(
+	w http.ResponseWriter,
+	r *http.Request,
+	session authSession,
+	membershipID string,
+) {
+	var req struct {
+		EffectiveFrom  string `json:"effective_from"`
+		EffectiveUntil string `json:"effective_until"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	effectiveFrom, err := time.Parse(time.RFC3339, strings.TrimSpace(req.EffectiveFrom))
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid_effective_from")
+		return
+	}
+	var effectiveUntilPtr *time.Time
+	if trimmed := strings.TrimSpace(req.EffectiveUntil); trimmed != "" {
+		effectiveUntil, parseErr := time.Parse(time.RFC3339, trimmed)
+		if parseErr != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid_effective_until")
+			return
+		}
+		if effectiveUntil.Before(effectiveFrom) {
+			writeJSONError(w, http.StatusBadRequest, "effective_until_before_from")
+			return
+		}
+		effectiveUntilPtr = &effectiveUntil
+	}
+
+	iamMembershipsMu.Lock()
+	defer iamMembershipsMu.Unlock()
+	membership, ok := iamMemberships[membershipID]
+	if !ok || membership.TenantID != session.ActiveTenantID {
+		writeJSONError(w, http.StatusNotFound, "membership_not_found")
+		return
+	}
+	membership.EffectiveFrom = effectiveFrom.UTC()
+	membership.EffectiveUntil = effectiveUntilPtr
+	iamMemberships[membershipID] = membership
+	_ = defaultAuditWriter.Write(audit.Event{
+		TenantID:   session.ActiveTenantID,
+		ActorID:    session.User.ID,
+		Action:     "iam.membership.validity.replace",
 		TargetType: "membership",
 		TargetID:   membership.ID,
 		Result:     "allowed",

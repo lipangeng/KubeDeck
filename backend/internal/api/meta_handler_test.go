@@ -534,6 +534,22 @@ func TestMembershipListAndReplaceGroupsFlow(t *testing.T) {
 	if len(updated.GroupIDs) != 2 {
 		t.Fatalf("expected 2 group ids, got %d", len(updated.GroupIDs))
 	}
+
+	validityPayload := []byte(`{"effective_from":"2026-02-25T00:00:00Z","effective_until":"2026-12-31T00:00:00Z"}`)
+	validityReq := httptest.NewRequest(http.MethodPut, "/api/iam/memberships/"+listBody.Memberships[0].ID+"/validity", bytes.NewReader(validityPayload))
+	validityReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	validityResp := httptest.NewRecorder()
+	router.ServeHTTP(validityResp, validityReq)
+	if validityResp.Code != http.StatusOK {
+		t.Fatalf("expected replace membership validity 200, got %d body=%s", validityResp.Code, validityResp.Body.String())
+	}
+	var validityUpdated iamMembership
+	if err := json.Unmarshal(validityResp.Body.Bytes(), &validityUpdated); err != nil {
+		t.Fatalf("unmarshal validity membership: %v", err)
+	}
+	if validityUpdated.EffectiveUntil == nil {
+		t.Fatalf("expected effective_until in updated membership")
+	}
 }
 
 func TestIAMGroupWriteDeniedForViewer(t *testing.T) {
