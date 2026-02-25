@@ -38,10 +38,11 @@ Completed and merged:
 - Single-executable backend mode (embedded static + optional `--static-dir` override)
 - Runtime persistence flags (`--db-driver`, `--db-dsn`, `--disable-persist`)
 - Storage regression tests for IAM persistence (dialect placeholders + sqlite round-trip)
+- IAM repo-first fallback chain for auth/groups/memberships/invites (cache miss -> persistence reload)
 
 ## 4. Next Priority (Phase 1 continuation)
 
-- Replace API-level in-memory maps with repository-first read/write flow end-to-end
+- Replace API-level in-memory maps with repository-only read/write flow end-to-end
 - Add production migrations strategy for mysql/postgres IAM schema evolution
 - Add auth middleware abstraction and route policy table (instead of per-handler checks)
 - Add OAuth provider integration and RBAC administration UI

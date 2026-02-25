@@ -680,6 +680,106 @@ func TestAuthAcceptInviteReloadsFromPersistenceWhenCacheMiss(t *testing.T) {
 	}
 }
 
+func TestIAMGroupPatchReloadFromPersistenceWhenCacheMiss(t *testing.T) {
+	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		resetIAMPersistenceForTest()
+	})
+	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
+	t.Setenv("KUBEDECK_SQLITE_DSN", filepath.Join(t.TempDir(), "group-patch-reload.sqlite"))
+
+	resetAuthSessions()
+	resetGroups()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader([]byte(`{"name":"ops","description":"Ops Team"}`)))
+	createReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusCreated {
+		t.Fatalf("expected create group status %d, got %d body=%s", http.StatusCreated, createResp.Code, createResp.Body.String())
+	}
+	var created iamGroup
+	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("expected create group JSON, got error: %v", err)
+	}
+
+	resetGroups()
+
+	patchReq := httptest.NewRequest(http.MethodPatch, "/api/iam/groups/"+created.ID, bytes.NewReader([]byte(`{"description":"patched"}`)))
+	patchReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	patchResp := httptest.NewRecorder()
+	router.ServeHTTP(patchResp, patchReq)
+	if patchResp.Code != http.StatusOK {
+		t.Fatalf("expected patch status %d, got %d body=%s", http.StatusOK, patchResp.Code, patchResp.Body.String())
+	}
+}
+
+func TestIAMMembershipValidityReloadFromPersistenceWhenCacheMiss(t *testing.T) {
+	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		resetIAMPersistenceForTest()
+	})
+	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
+	t.Setenv("KUBEDECK_SQLITE_DSN", filepath.Join(t.TempDir(), "membership-validity-reload.sqlite"))
+
+	resetAuthSessions()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+
+	createMemberReq := httptest.NewRequest(http.MethodPost, "/api/iam/tenants/tenant-dev/members", bytes.NewReader([]byte(`{"user_id":"u-99","user_label":"user99","effective_from":"2026-02-25T00:00:00Z"}`)))
+	createMemberReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createMemberResp := httptest.NewRecorder()
+	router.ServeHTTP(createMemberResp, createMemberReq)
+	if createMemberResp.Code != http.StatusCreated {
+		t.Fatalf("expected create member status %d, got %d body=%s", http.StatusCreated, createMemberResp.Code, createMemberResp.Body.String())
+	}
+	var createdMember iamMembership
+	if err := json.Unmarshal(createMemberResp.Body.Bytes(), &createdMember); err != nil {
+		t.Fatalf("expected create member JSON, got error: %v", err)
+	}
+
+	resetMemberships()
+
+	validityReq := httptest.NewRequest(http.MethodPut, "/api/iam/memberships/"+createdMember.ID+"/validity", bytes.NewReader([]byte(`{"effective_from":"2026-02-25T00:00:00Z","effective_until":"2026-12-31T00:00:00Z"}`)))
+	validityReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	validityResp := httptest.NewRecorder()
+	router.ServeHTTP(validityResp, validityReq)
+	if validityResp.Code != http.StatusOK {
+		t.Fatalf("expected validity replace status %d, got %d body=%s", http.StatusOK, validityResp.Code, validityResp.Body.String())
+	}
+}
+
 func TestAuthLoginTenantCodeDeniedWhenUnknown(t *testing.T) {
 	resetAuthSessions()
 	resetAuditWriter()
