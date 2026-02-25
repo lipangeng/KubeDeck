@@ -13,6 +13,13 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/api/meta/clusters", meta.Clusters)
 	mux.HandleFunc("/api/meta/menus", meta.Menus)
 	mux.HandleFunc("/api/resources/apply", resources.Apply)
+	mux.HandleFunc("/api/healthz", healthHandler)
+	mux.HandleFunc("/api/readyz", healthHandler)
 
 	return mux
+}
+
+func healthHandler(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
 }
