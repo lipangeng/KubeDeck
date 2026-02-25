@@ -8,6 +8,7 @@ Enforce a strict Git workflow:
 1) Use feature branches for all changes.
 2) The agent must not operate on main/master or any non-feature branches.
 3) The agent must not merge into main/master; merging is done manually by a human.
+4) Each implementation task must use its own dedicated feature branch.
 
 # When to use
 Use for any task that changes code or docs under version control.
@@ -50,6 +51,17 @@ Suggested naming:
     - test status
     - review notes
 
+## G5. One task = one branch (required)
+- Never implement multiple independent tasks on the same branch.
+- For each task:
+  1) Create a dedicated feature branch from default branch (or agreed base branch).
+  2) Implement only that task's scoped changes.
+  3) Push that branch and open/prepare a separate PR.
+- Branch naming should include task identity, e.g.:
+  - `codex/task-08-shell-plugin-host-20260225`
+  - `feature/task-12-verify-baseline`
+- Recommended: use `git worktree` so each task has isolated workspace and no branch switching side effects.
+
 # Standard operating procedure (SOP)
 
 ## Step 0: Inspect
@@ -65,6 +77,11 @@ If NOT on allowed branch:
     - `git checkout -b codex/<topic>-<YYYYMMDD> origin/<default>`
       (Alternative: `git switch -c ...`)
 
+## Step 1.5: Ensure task-isolated branch
+- Before editing, confirm whether current work is a new task.
+- If yes, create/switch to a task-specific branch even if already on a feature branch.
+- Do not reuse an existing task branch for a different task.
+
 ## Step 2: Work only on this branch
 - Make edits
 - Run formatting/tests if present
@@ -77,10 +94,12 @@ If NOT on allowed branch:
 ## Step 4: Prepare for human merge
 - Provide a PR description (What/Why/How to test/Risk).
 - Confirm no default-branch modifications occurred.
+- Confirm branch maps to exactly one task scope.
 
 # Guardrails / self-checks
 Before finishing:
 - [ ] `git branch --show-current` is an allowed feature branch.
+- [ ] Current branch is dedicated to one task only.
 - [ ] `git log --decorate -n 5` shows commits only on feature branch.
 - [ ] `git status` clean or intentional.
 - [ ] No operations were performed on `main/master` or other branches.
