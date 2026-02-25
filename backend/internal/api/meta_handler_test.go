@@ -810,6 +810,9 @@ func TestInviteCreateListAndAcceptFlow(t *testing.T) {
 	if inviteBody.Token == "" {
 		t.Fatalf("expected invite token")
 	}
+	if !strings.HasPrefix(inviteBody.InviteLink, "#/accept-invite?token=") {
+		t.Fatalf("expected hash invite link, got %q", inviteBody.InviteLink)
+	}
 
 	listReq := httptest.NewRequest(http.MethodGet, "/api/iam/invites", nil)
 	listReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
@@ -826,6 +829,40 @@ func TestInviteCreateListAndAcceptFlow(t *testing.T) {
 	if acceptResp.Code != http.StatusOK {
 		t.Fatalf("expected accept invite 200, got %d body=%s", acceptResp.Code, acceptResp.Body.String())
 	}
+}
+
+func TestInviteRevokePendingFlow(t *testing.T) {
+	resetAuthSessions()
+	resetInvites()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	createInvitePayload := []byte(`{"email":"user@example.com","role_hint":"member","expires_in_hours":2}`)
+	createInviteReq := httptest.NewRequest(http.MethodPost, "/api/iam/invites", bytes.NewReader(createInvitePayload))
+	createInviteReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createInviteResp := httptest.NewRecorder()
+	router.ServeHTTP(createInviteResp, createInviteReq)
+	if createInviteResp.Code != http.StatusCreated {
+		t.Fatalf("expected create invite 201, got %d body=%s", createInviteResp.Code, createInviteResp.Body.String())
+	}
+	var inviteBody iamInvite
+	if err := json.Unmarshal(createInviteResp.Body.Bytes(), &inviteBody); err != nil {
+		t.Fatalf("unmarshal invite create: %v", err)
+	}
 
 	revokeReq := httptest.NewRequest(http.MethodDelete, "/api/iam/invites/"+inviteBody.ID, nil)
 	revokeReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
@@ -841,6 +878,14 @@ func TestInviteCreateListAndAcceptFlow(t *testing.T) {
 	if revokeBody.Status != "revoked" {
 		t.Fatalf("expected revoked status, got %q", revokeBody.Status)
 	}
+
+	revokeAgainReq := httptest.NewRequest(http.MethodDelete, "/api/iam/invites/"+inviteBody.ID, nil)
+	revokeAgainReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	revokeAgainResp := httptest.NewRecorder()
+	router.ServeHTTP(revokeAgainResp, revokeAgainReq)
+	if revokeAgainResp.Code != http.StatusConflict {
+		t.Fatalf("expected second revoke 409, got %d body=%s", revokeAgainResp.Code, revokeAgainResp.Body.String())
+	}
 }
 
 func TestInviteAcceptExpired(t *testing.T) {
@@ -854,7 +899,7 @@ func TestInviteAcceptExpired(t *testing.T) {
 		TenantID:   "tenant-dev",
 		TenantCode: "dev",
 		Token:      "expired-token",
-		InviteLink: "/accept-invite?token=expired-token",
+		InviteLink: "#/accept-invite?token=expired-token",
 		ExpiresAt:  time.Now().UTC().Add(-1 * time.Minute),
 		Status:     "pending",
 	}

@@ -660,7 +660,7 @@ func (h *IAMHandler) createInvite(w http.ResponseWriter, r *http.Request, sessio
 		InviteePhone: strings.TrimSpace(req.Phone),
 		RoleHint:     req.RoleHint,
 		Token:        token,
-		InviteLink:   "/accept-invite?token=" + token,
+		InviteLink:   "#/accept-invite?token=" + token,
 		ExpiresAt:    time.Now().UTC().Add(time.Duration(expiresIn) * time.Hour),
 		Status:       "pending",
 	}
@@ -696,6 +696,10 @@ func (h *IAMHandler) revokeInvite(w http.ResponseWriter, session authSession, in
 		}
 		if invite.TenantID != session.ActiveTenantID {
 			writeJSONError(w, http.StatusNotFound, "invite_not_found")
+			return
+		}
+		if invite.Status != "pending" {
+			writeJSONError(w, http.StatusConflict, "invite_not_pending")
 			return
 		}
 		invite.Status = "revoked"

@@ -76,7 +76,7 @@ describe('iamApi', () => {
           invitee_email: 'a@example.com',
           role_hint: 'member',
           token: 'abc',
-          invite_link: '/accept-invite?token=abc',
+          invite_link: '#/accept-invite?token=abc',
           expires_at: '2026-02-25T00:00:00Z',
           status: 'pending',
         },
