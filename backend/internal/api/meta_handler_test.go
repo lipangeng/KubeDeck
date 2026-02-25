@@ -336,3 +336,92 @@ func TestAuthLoginTenantCodeDeniedWhenUnknown(t *testing.T) {
 		t.Fatalf("expected login status 403, got %d body=%s", loginResp.Code, loginResp.Body.String())
 	}
 }
+
+func TestIAMGroupManagementFlow(t *testing.T) {
+	resetAuthSessions()
+	iamGroupsMu.Lock()
+	iamGroups = map[string]iamGroup{}
+	iamGroupsMu.Unlock()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	createPayload := []byte(`{"name":"platform-admins","description":"Platform admins"}`)
+	createReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader(createPayload))
+	createReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusCreated {
+		t.Fatalf("expected create group 201, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+
+	var created iamGroup
+	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal created group: %v", err)
+	}
+
+	permPayload := []byte(`{"permissions":["iam:read","iam:write"]}`)
+	permReq := httptest.NewRequest(http.MethodPut, "/api/iam/groups/"+created.ID+"/permissions", bytes.NewReader(permPayload))
+	permReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	permResp := httptest.NewRecorder()
+	router.ServeHTTP(permResp, permReq)
+	if permResp.Code != http.StatusOK {
+		t.Fatalf("expected replace permissions 200, got %d body=%s", permResp.Code, permResp.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/iam/groups", nil)
+	listReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	listResp := httptest.NewRecorder()
+	router.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected list groups 200, got %d", listResp.Code)
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/iam/groups/"+created.ID, nil)
+	deleteReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	deleteResp := httptest.NewRecorder()
+	router.ServeHTTP(deleteResp, deleteReq)
+	if deleteResp.Code != http.StatusOK {
+		t.Fatalf("expected delete group 200, got %d", deleteResp.Code)
+	}
+}
+
+func TestIAMGroupWriteDeniedForViewer(t *testing.T) {
+	resetAuthSessions()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"viewer","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	createPayload := []byte(`{"name":"readonly-group"}`)
+	createReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader(createPayload))
+	createReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusForbidden {
+		t.Fatalf("expected create group 403 for viewer, got %d", createResp.Code)
+	}
+}

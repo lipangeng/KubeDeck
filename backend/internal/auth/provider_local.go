@@ -15,11 +15,15 @@ func (p *LocalProvider) Authenticate(username, _ string) (User, error) {
 	if username == "" {
 		username = "local-test"
 	}
+	roles := []string{"viewer"}
+	if username == "admin" || username == "owner" {
+		roles = []string{"admin"}
+	}
 
 	return User{
 		ID:                "local-test-user",
 		Username:          username,
-		Roles:             []string{"viewer"},
+		Roles:             roles,
 		AllowedClusters:   []string{"*"},
 		AllowedNamespaces: []string{"*"},
 	}, nil
