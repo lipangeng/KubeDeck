@@ -44,6 +44,7 @@ Completed and merged:
 - Versioned IAM schema migrations (`schema_migrations` + baseline migration runner)
 - OAuth MVP endpoints (`/api/auth/oauth/url`, `/api/auth/oauth/callback`) with provider stub wiring
 - Configurable notification provider for invites (stub/webhook via env)
+- OIDC provider foundation via open-source libraries (`go-oidc` + `oauth2`) with state validation
 
 ## 4. Next Priority (Phase 1 continuation)
 
@@ -60,6 +61,7 @@ Completed and merged:
 - Runtime persistence guide: `docs/runbooks/backend-persistence.md`
 - IAM migration strategy (mysql/postgres): `docs/runbooks/iam-migrations-mysql-postgres.md`
 - Notification provider guide: `docs/runbooks/notification-provider.md`
+- OIDC provider guide: `docs/runbooks/oidc-provider.md`
 
 ## 6. Execution Rule
 

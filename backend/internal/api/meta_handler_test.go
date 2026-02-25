@@ -604,7 +604,20 @@ func TestOAuthCallbackFlow(t *testing.T) {
 	resetAuditWriter()
 	router := NewRouter()
 
-	payload := []byte(`{"code":"oauth-admin","tenant_code":"staging"}`)
+	oauthURLReq := httptest.NewRequest(http.MethodGet, "/api/auth/oauth/url", nil)
+	oauthURLResp := httptest.NewRecorder()
+	router.ServeHTTP(oauthURLResp, oauthURLReq)
+	if oauthURLResp.Code != http.StatusOK {
+		t.Fatalf("expected oauth url status %d, got %d body=%s", http.StatusOK, oauthURLResp.Code, oauthURLResp.Body.String())
+	}
+	var oauthURLBody struct {
+		State string `json:"state"`
+	}
+	if err := json.Unmarshal(oauthURLResp.Body.Bytes(), &oauthURLBody); err != nil {
+		t.Fatalf("expected oauth url response json, got %v", err)
+	}
+
+	payload := []byte(`{"code":"oauth-admin","tenant_code":"staging","state":"` + oauthURLBody.State + `"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/callback", bytes.NewReader(payload))
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -638,12 +651,36 @@ func TestOAuthCallbackRejectsInvalidCode(t *testing.T) {
 	resetAuditWriter()
 	router := NewRouter()
 
-	payload := []byte(`{"code":"invalid-oauth-code","tenant_code":"dev"}`)
+	oauthURLReq := httptest.NewRequest(http.MethodGet, "/api/auth/oauth/url", nil)
+	oauthURLResp := httptest.NewRecorder()
+	router.ServeHTTP(oauthURLResp, oauthURLReq)
+	var oauthURLBody struct {
+		State string `json:"state"`
+	}
+	if err := json.Unmarshal(oauthURLResp.Body.Bytes(), &oauthURLBody); err != nil {
+		t.Fatalf("expected oauth url response json, got %v", err)
+	}
+
+	payload := []byte(`{"code":"invalid-oauth-code","tenant_code":"dev","state":"` + oauthURLBody.State + `"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/callback", bytes.NewReader(payload))
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
 	if resp.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status %d, got %d body=%s", http.StatusUnauthorized, resp.Code, resp.Body.String())
+	}
+}
+
+func TestOAuthCallbackRejectsInvalidState(t *testing.T) {
+	resetAuthSessions()
+	resetAuditWriter()
+	router := NewRouter()
+
+	payload := []byte(`{"code":"oauth-admin","tenant_code":"dev","state":"invalid-state"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/callback", bytes.NewReader(payload))
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, resp.Code, resp.Body.String())
 	}
 }
 

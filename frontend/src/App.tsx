@@ -41,6 +41,7 @@ import {
   clearAuthToken,
   login,
   me,
+  oauthURL,
   oauthCallback,
   readAuthToken,
   switchTenant,
@@ -795,7 +796,8 @@ function App({
     setAuthBusy(true);
     setAuthError(null);
     try {
-      const payload = await oauthCallback('oauth-admin', loginTenantCode);
+      const oauth = await oauthURL();
+      const payload = await oauthCallback('oauth-admin', loginTenantCode, oauth.state);
       applyAuthPayload(payload);
       setAuthDialogOpen(false);
     } catch (e) {

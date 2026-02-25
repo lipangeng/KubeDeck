@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -35,15 +34,15 @@ type authSession struct {
 var (
 	authSessionsMu sync.RWMutex
 	authSessions   = map[string]authSession{}
+	oauthStatesMu  sync.Mutex
+	oauthStates    = map[string]time.Time{}
 )
 
 func NewAuthHandler() *AuthHandler {
 	ensureIAMPersistence()
-	oauthProviderName := strings.TrimSpace(os.Getenv("KUBEDECK_OAUTH_PROVIDER"))
-	oauthAuthorizeURL := strings.TrimSpace(os.Getenv("KUBEDECK_OAUTH_AUTHORIZE_URL"))
 	return &AuthHandler{
 		provider:      auth.NewLocalProvider(),
-		oauthProvider: auth.NewOAuthProvider(oauthProviderName, oauthAuthorizeURL),
+		oauthProvider: auth.NewOAuthProviderFromEnv(),
 	}
 }
 
@@ -242,7 +241,7 @@ func (h *AuthHandler) OAuthURL(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w, http.MethodGet)
 		return
 	}
-	state := newToken()
+	state := issueOAuthState()
 	_ = writeJSON(w, http.StatusOK, map[string]any{
 		"provider": h.oauthProvider.Name(),
 		"state":    state,
@@ -258,11 +257,17 @@ func (h *AuthHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Code       string `json:"code"`
+		State      string `json:"state"`
 		TenantCode string `json:"tenant_code"`
 		TenantID   string `json:"tenant_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if !consumeOAuthState(req.State) {
+		_ = defaultAuditWriter.Write(audit.Event{Action: "auth.oauth.callback", TargetType: "session", Result: "denied", Reason: "invalid_state"})
+		writeJSONError(w, http.StatusBadRequest, "invalid_state")
 		return
 	}
 	user, err := h.oauthProvider.ExchangeCode(req.Code)
@@ -432,4 +437,39 @@ func newToken() string {
 		return "token-fallback"
 	}
 	return hex.EncodeToString(raw[:])
+}
+
+func issueOAuthState() string {
+	now := time.Now().UTC()
+	state := newToken()
+	expiry := now.Add(10 * time.Minute)
+
+	oauthStatesMu.Lock()
+	for token, expiresAt := range oauthStates {
+		if !now.Before(expiresAt) {
+			delete(oauthStates, token)
+		}
+	}
+	oauthStates[state] = expiry
+	oauthStatesMu.Unlock()
+
+	return state
+}
+
+func consumeOAuthState(state string) bool {
+	state = strings.TrimSpace(state)
+	if state == "" {
+		return false
+	}
+	now := time.Now().UTC()
+	oauthStatesMu.Lock()
+	expiry, ok := oauthStates[state]
+	if ok {
+		delete(oauthStates, state)
+	}
+	oauthStatesMu.Unlock()
+	if !ok {
+		return false
+	}
+	return now.Before(expiry)
 }

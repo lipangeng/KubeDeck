@@ -150,12 +150,13 @@ describe('authApi', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const payload = await oauthCallback('oauth-admin', 'dev');
+    const payload = await oauthCallback('oauth-admin', 'dev', 'oauth-state');
 
     expect(payload.token).toBe('oauth-token');
     const init = (fetchMock.mock.calls[0] as unknown[])[1] as RequestInit;
     expect(init.method).toBe('POST');
     expect(String(init.body)).toContain('"code":"oauth-admin"');
     expect(String(init.body)).toContain('"tenant_code":"dev"');
+    expect(String(init.body)).toContain('"state":"oauth-state"');
   });
 });

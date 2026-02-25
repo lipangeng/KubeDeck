@@ -164,13 +164,18 @@ export async function oauthURL(): Promise<OAuthURLResponse> {
   };
 }
 
-export async function oauthCallback(code: string, tenantCode: string): Promise<AuthLoginResponse> {
+export async function oauthCallback(
+  code: string,
+  tenantCode: string,
+  state: string,
+): Promise<AuthLoginResponse> {
   const response = await fetch('/api/auth/oauth/callback', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       code,
       tenant_code: tenantCode,
+      state,
     }),
   });
   if (!response.ok) {

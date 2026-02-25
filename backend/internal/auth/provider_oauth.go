@@ -3,7 +3,9 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -74,4 +76,17 @@ func (p *OAuthProviderStub) ExchangeCode(code string) (User, error) {
 	default:
 		return User{}, ErrOAuthNotImplemented
 	}
+}
+
+func NewOAuthProviderFromEnv() OAuthProvider {
+	mode := strings.ToLower(strings.TrimSpace(os.Getenv("KUBEDECK_OAUTH_MODE")))
+	if mode == "oidc" {
+		provider, err := NewOIDCProviderFromEnv()
+		if err != nil {
+			log.Printf("oauth oidc init failed, fallback to stub: %v", err)
+			return NewOAuthProvider("oauth", "https://example.com/oauth/authorize")
+		}
+		return provider
+	}
+	return NewOAuthProvider("oauth", "https://example.com/oauth/authorize")
 }
