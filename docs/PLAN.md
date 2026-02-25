@@ -45,6 +45,7 @@ Completed and merged:
 - OAuth MVP endpoints (`/api/auth/oauth/url`, `/api/auth/oauth/callback`) with provider stub wiring
 - Configurable notification provider for invites (stub/webhook via env)
 - OIDC provider foundation via open-source libraries (`go-oidc` + `oauth2`) with state validation
+- OIDC claim mapping configurability (subject/username/roles claims + role map/default role)
 
 ## 4. Next Priority (Phase 1 continuation)
 

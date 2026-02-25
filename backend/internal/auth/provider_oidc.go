@@ -16,6 +16,15 @@ type OIDCProvider struct {
 	config    oauth2.Config
 	verifier  *oidc.IDTokenVerifier
 	exchangeC context.Context
+	claims    oidcClaimConfig
+}
+
+type oidcClaimConfig struct {
+	subjectClaim  string
+	usernameClaim string
+	roleClaims    []string
+	roleMap       map[string]string
+	defaultRole   string
 }
 
 func NewOIDCProviderFromEnv() (*OIDCProvider, error) {
@@ -28,7 +37,14 @@ func NewOIDCProviderFromEnv() (*OIDCProvider, error) {
 		name = "oidc"
 	}
 	scopes := parseOIDCScopes(os.Getenv("KUBEDECK_OIDC_SCOPES"))
-	return NewOIDCProvider(name, issuer, clientID, clientSecret, redirectURL, scopes)
+	claims := oidcClaimConfig{
+		subjectClaim:  normalizeOrDefault(os.Getenv("KUBEDECK_OIDC_SUBJECT_CLAIM"), "sub"),
+		usernameClaim: normalizeOrDefault(os.Getenv("KUBEDECK_OIDC_USERNAME_CLAIM"), "preferred_username"),
+		roleClaims:    parseOIDCRoleClaims(os.Getenv("KUBEDECK_OIDC_ROLE_CLAIMS")),
+		roleMap:       parseOIDCRoleMap(os.Getenv("KUBEDECK_OIDC_ROLE_MAP")),
+		defaultRole:   normalizeOrDefault(os.Getenv("KUBEDECK_OIDC_DEFAULT_ROLE"), "viewer"),
+	}
+	return NewOIDCProvider(name, issuer, clientID, clientSecret, redirectURL, scopes, claims)
 }
 
 func NewOIDCProvider(
@@ -38,6 +54,7 @@ func NewOIDCProvider(
 	clientSecret string,
 	redirectURL string,
 	scopes []string,
+	claims oidcClaimConfig,
 ) (*OIDCProvider, error) {
 	if strings.TrimSpace(issuer) == "" {
 		return nil, errors.New("oidc issuer is required")
@@ -71,6 +88,21 @@ func NewOIDCProvider(
 	if !hasOpenID {
 		scopes = append([]string{"openid"}, scopes...)
 	}
+	if strings.TrimSpace(claims.subjectClaim) == "" {
+		claims.subjectClaim = "sub"
+	}
+	if strings.TrimSpace(claims.usernameClaim) == "" {
+		claims.usernameClaim = "preferred_username"
+	}
+	if len(claims.roleClaims) == 0 {
+		claims.roleClaims = []string{"roles", "groups"}
+	}
+	if strings.TrimSpace(claims.defaultRole) == "" {
+		claims.defaultRole = "viewer"
+	}
+	if claims.roleMap == nil {
+		claims.roleMap = map[string]string{}
+	}
 
 	return &OIDCProvider{
 		name: name,
@@ -83,6 +115,7 @@ func NewOIDCProvider(
 		},
 		verifier:  oidcProvider.Verifier(&oidc.Config{ClientID: clientID}),
 		exchangeC: ctx,
+		claims:    claims,
 	}, nil
 }
 
@@ -101,6 +134,55 @@ func parseOIDCScopes(raw string) []string {
 		out = append(out, scope)
 	}
 	return out
+}
+
+func parseOIDCRoleClaims(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return []string{"roles", "groups"}
+	}
+	items := strings.Split(raw, ",")
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		normalized := strings.TrimSpace(item)
+		if normalized == "" {
+			continue
+		}
+		out = append(out, normalized)
+	}
+	if len(out) == 0 {
+		return []string{"roles", "groups"}
+	}
+	return out
+}
+
+func parseOIDCRoleMap(raw string) map[string]string {
+	out := map[string]string{}
+	for _, pair := range strings.Split(raw, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		parts := strings.SplitN(pair, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key == "" || value == "" {
+			continue
+		}
+		out[key] = value
+	}
+	return out
+}
+
+func normalizeOrDefault(value string, fallback string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return fallback
+	}
+	return trimmed
 }
 
 func (p *OIDCProvider) Name() string {
@@ -132,46 +214,13 @@ func (p *OIDCProvider) ExchangeCode(code string) (User, error) {
 		return User{}, fmt.Errorf("verify id_token: %w", err)
 	}
 
-	var claims struct {
-		Sub               string   `json:"sub"`
-		PreferredUsername string   `json:"preferred_username"`
-		Email             string   `json:"email"`
-		Name              string   `json:"name"`
-		Roles             []string `json:"roles"`
-		Groups            []string `json:"groups"`
-	}
+	var claims map[string]any
 	if err := idToken.Claims(&claims); err != nil {
 		return User{}, fmt.Errorf("decode id_token claims: %w", err)
 	}
-
-	userID := strings.TrimSpace(claims.Sub)
-	if userID == "" {
-		userID = strings.TrimSpace(claims.Email)
-	}
-	if userID == "" {
-		userID = strings.TrimSpace(claims.PreferredUsername)
-	}
-	if userID == "" {
-		return User{}, errors.New("oidc claim subject is missing")
-	}
-
-	username := strings.TrimSpace(claims.PreferredUsername)
-	if username == "" {
-		username = strings.TrimSpace(claims.Email)
-	}
-	if username == "" {
-		username = strings.TrimSpace(claims.Name)
-	}
-	if username == "" {
-		username = userID
-	}
-
-	roles := claims.Roles
-	if len(roles) == 0 {
-		roles = claims.Groups
-	}
-	if len(roles) == 0 {
-		roles = []string{"viewer"}
+	userID, username, roles, err := extractOIDCIdentity(claims, p.claims)
+	if err != nil {
+		return User{}, err
 	}
 
 	return User{
@@ -181,4 +230,124 @@ func (p *OIDCProvider) ExchangeCode(code string) (User, error) {
 		AllowedClusters:   []string{"*"},
 		AllowedNamespaces: []string{"*"},
 	}, nil
+}
+
+func extractOIDCIdentity(
+	claims map[string]any,
+	config oidcClaimConfig,
+) (userID string, username string, roles []string, err error) {
+	userID = claimString(claims, config.subjectClaim)
+	if userID == "" {
+		userID = claimString(claims, "sub")
+	}
+	if userID == "" {
+		userID = claimString(claims, "email")
+	}
+	if userID == "" {
+		userID = claimString(claims, "preferred_username")
+	}
+	if userID == "" {
+		return "", "", nil, errors.New("oidc claim subject is missing")
+	}
+
+	username = claimString(claims, config.usernameClaim)
+	if username == "" {
+		username = claimString(claims, "preferred_username")
+	}
+	if username == "" {
+		username = claimString(claims, "email")
+	}
+	if username == "" {
+		username = claimString(claims, "name")
+	}
+	if username == "" {
+		username = userID
+	}
+
+	roleValues := make([]string, 0, 4)
+	for _, claim := range config.roleClaims {
+		roleValues = append(roleValues, claimStrings(claims, claim)...)
+	}
+	normalizedRoles := normalizeRoleValues(roleValues, config.roleMap)
+	if len(normalizedRoles) == 0 {
+		normalizedRoles = []string{config.defaultRole}
+	}
+	return userID, username, normalizedRoles, nil
+}
+
+func claimString(claims map[string]any, key string) string {
+	value, ok := claims[key]
+	if !ok {
+		return ""
+	}
+	text, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(text)
+}
+
+func claimStrings(claims map[string]any, key string) []string {
+	value, ok := claims[key]
+	if !ok {
+		return nil
+	}
+	switch typed := value.(type) {
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		if trimmed == "" {
+			return nil
+		}
+		return []string{trimmed}
+	case []string:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			trimmed := strings.TrimSpace(item)
+			if trimmed == "" {
+				continue
+			}
+			out = append(out, trimmed)
+		}
+		return out
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			text, ok := item.(string)
+			if !ok {
+				continue
+			}
+			trimmed := strings.TrimSpace(text)
+			if trimmed == "" {
+				continue
+			}
+			out = append(out, trimmed)
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func normalizeRoleValues(raw []string, roleMap map[string]string) []string {
+	if roleMap == nil {
+		roleMap = map[string]string{}
+	}
+	out := make([]string, 0, len(raw))
+	seen := map[string]struct{}{}
+	for _, role := range raw {
+		trimmed := strings.TrimSpace(role)
+		if trimmed == "" {
+			continue
+		}
+		mapped, ok := roleMap[trimmed]
+		if ok && strings.TrimSpace(mapped) != "" {
+			trimmed = strings.TrimSpace(mapped)
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+	}
+	return out
 }

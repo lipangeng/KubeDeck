@@ -20,6 +20,11 @@ KubeDeck OAuth can run in `stub` mode (default) or `oidc` mode (production-orien
 Optional:
 - `KUBEDECK_OIDC_SCOPES` (comma-separated, default: `openid,profile,email`)
 - `KUBEDECK_OAUTH_PROVIDER` (display/provider label, default `oidc`)
+- `KUBEDECK_OIDC_SUBJECT_CLAIM` (default: `sub`)
+- `KUBEDECK_OIDC_USERNAME_CLAIM` (default: `preferred_username`)
+- `KUBEDECK_OIDC_ROLE_CLAIMS` (comma-separated, default: `roles,groups`)
+- `KUBEDECK_OIDC_ROLE_MAP` (comma-separated map, e.g. `platform-admin=admin,readonly=viewer`)
+- `KUBEDECK_OIDC_DEFAULT_ROLE` (default: `viewer`)
 
 ## API Flow
 
@@ -41,4 +46,4 @@ Frontend behavior:
 
 - `state` is one-time and expires in 10 minutes.
 - Invalid or replayed `state` is rejected with `invalid_state`.
-- OIDC claim mapping currently defaults roles to `viewer` if no role/group claim is present.
+- OIDC claim mapping is configurable by env; if no role claims are present, `KUBEDECK_OIDC_DEFAULT_ROLE` is applied.
