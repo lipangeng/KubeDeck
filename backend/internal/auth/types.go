@@ -7,6 +7,8 @@ type User struct {
 	Roles             []string
 	AllowedClusters   []string
 	AllowedNamespaces []string
+	ActiveTenantID    string
+	Memberships       []TenantMembership
 }
 
 // AccessRequest is the target scope for an authorization decision.

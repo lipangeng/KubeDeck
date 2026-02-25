@@ -1,6 +1,9 @@
 package auth
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestEvaluateAccess(t *testing.T) {
 	tests := []struct {
@@ -84,6 +87,76 @@ func TestEvaluateAccess(t *testing.T) {
 			}
 			if decision.Reason != tt.wantDenyCause {
 				t.Fatalf("deny cause mismatch: got %q, want %q", decision.Reason, tt.wantDenyCause)
+			}
+		})
+	}
+}
+
+func TestTenantMembershipIsActiveAt(t *testing.T) {
+	now := time.Date(2026, 2, 25, 12, 0, 0, 0, time.UTC)
+	past := now.Add(-2 * time.Hour)
+	future := now.Add(2 * time.Hour)
+
+	tests := []struct {
+		name       string
+		membership TenantMembership
+		want       bool
+	}{
+		{
+			name: "active with open-ended expiry",
+			membership: TenantMembership{
+				TenantID:      "t-1",
+				UserID:        "u-1",
+				EffectiveFrom: past,
+			},
+			want: true,
+		},
+		{
+			name: "inactive before effective time",
+			membership: TenantMembership{
+				TenantID:      "t-1",
+				UserID:        "u-1",
+				EffectiveFrom: future,
+			},
+			want: false,
+		},
+		{
+			name: "inactive after expiry",
+			membership: TenantMembership{
+				TenantID:       "t-1",
+				UserID:         "u-1",
+				EffectiveFrom:  past.Add(-2 * time.Hour),
+				EffectiveUntil: &past,
+			},
+			want: false,
+		},
+		{
+			name: "active inside closed interval",
+			membership: TenantMembership{
+				TenantID:       "t-1",
+				UserID:         "u-1",
+				EffectiveFrom:  past,
+				EffectiveUntil: &future,
+			},
+			want: true,
+		},
+		{
+			name: "boundary at effective until is inactive",
+			membership: TenantMembership{
+				TenantID:       "t-1",
+				UserID:         "u-1",
+				EffectiveFrom:  past,
+				EffectiveUntil: &now,
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.membership.IsActiveAt(now)
+			if got != tt.want {
+				t.Fatalf("active mismatch: got %v, want %v", got, tt.want)
 			}
 		})
 	}
