@@ -18,12 +18,31 @@ export function createAppTheme(mode: PaletteMode) {
       primary: {
         main: '#0f4c81',
       },
+      secondary: {
+        main: '#00897b',
+      },
     },
     shape: {
-      borderRadius: 12,
+      borderRadius: 14,
     },
     typography: {
       fontFamily: '"IBM Plex Sans", "Noto Sans SC", sans-serif',
+    },
+    components: {
+      MuiPaper: {
+        styleOverrides: {
+          root: {
+            backgroundImage: 'none',
+          },
+        },
+      },
+      MuiChip: {
+        styleOverrides: {
+          root: {
+            fontWeight: 600,
+          },
+        },
+      },
     },
   });
 }

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { parseMenusResponse } from './metaApi';
+import {
+  parseClustersResponse,
+  parseMenusResponse,
+  parseRegistryResponse,
+} from './metaApi';
 
 describe('parseMenusResponse', () => {
   it('parses valid menu response', () => {
@@ -39,5 +43,35 @@ describe('parseMenusResponse', () => {
         ],
       }),
     ).toThrowError(/group is required/);
+  });
+});
+
+describe('parseClustersResponse', () => {
+  it('parses valid clusters response', () => {
+    const parsed = parseClustersResponse({ clusters: ['default', 'dev'] });
+    expect(parsed.clusters).toEqual(['default', 'dev']);
+  });
+});
+
+describe('parseRegistryResponse', () => {
+  it('parses typed registry response', () => {
+    const parsed = parseRegistryResponse({
+      cluster: 'default',
+      resourceTypes: [
+        {
+          id: 'apps.v1.deployments',
+          group: 'apps',
+          version: 'v1',
+          kind: 'Deployment',
+          plural: 'deployments',
+          namespaced: true,
+          preferredVersion: 'v1',
+          source: 'system',
+        },
+      ],
+    });
+
+    expect(parsed.cluster).toBe('default');
+    expect(parsed.resourceTypes[0].kind).toBe('Deployment');
   });
 });
