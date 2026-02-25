@@ -955,7 +955,14 @@ func TestIAMTenantMembersReloadFromPersistenceWhenCacheMiss(t *testing.T) {
 	if err := json.Unmarshal(listMembersResp.Body.Bytes(), &membersBody); err != nil {
 		t.Fatalf("expected members JSON body, got error: %v", err)
 	}
-	if len(membersBody.Members) == 0 || membersBody.Members[0].UserID != "u-9" {
+	foundUser9 := false
+	for _, member := range membersBody.Members {
+		if member.UserID == "u-9" {
+			foundUser9 = true
+			break
+		}
+	}
+	if !foundUser9 {
 		t.Fatalf("expected persisted tenant members after reload, body=%s", listMembersResp.Body.String())
 	}
 }
@@ -2323,5 +2330,61 @@ func TestAuditEventsEndpointSupportsFilters(t *testing.T) {
 	}
 	if payload.Events[0].Result != "allowed" {
 		t.Fatalf("expected result allowed, got %q", payload.Events[0].Result)
+	}
+}
+
+func TestSwitchTenantNotFoundWritesDeniedAuditEvent(t *testing.T) {
+	resetAuthSessions()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	switchPayload := []byte(`{"tenant_code":"staging"}`)
+	switchReq := httptest.NewRequest(http.MethodPost, "/api/auth/switch-tenant", bytes.NewReader(switchPayload))
+	switchReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	switchResp := httptest.NewRecorder()
+	router.ServeHTTP(switchResp, switchReq)
+	if switchResp.Code != http.StatusForbidden {
+		t.Fatalf("expected switch tenant 403, got %d body=%s", switchResp.Code, switchResp.Body.String())
+	}
+
+	eventsReq := httptest.NewRequest(http.MethodGet, "/api/audit/events?action=switch_tenant&result=denied&limit=1", nil)
+	eventsReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	eventsResp := httptest.NewRecorder()
+	router.ServeHTTP(eventsResp, eventsReq)
+	if eventsResp.Code != http.StatusOK {
+		t.Fatalf("expected audit events 200, got %d body=%s", eventsResp.Code, eventsResp.Body.String())
+	}
+	var payload struct {
+		Events []struct {
+			Action string `json:"action"`
+			Result string `json:"result"`
+			Reason string `json:"reason"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(eventsResp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal audit events: %v", err)
+	}
+	if len(payload.Events) == 0 {
+		t.Fatalf("expected denied switch_tenant event")
+	}
+	if !strings.Contains(payload.Events[0].Action, "switch_tenant") {
+		t.Fatalf("expected switch_tenant action, got %q", payload.Events[0].Action)
+	}
+	if payload.Events[0].Result != "denied" {
+		t.Fatalf("expected denied result, got %q", payload.Events[0].Result)
 	}
 }

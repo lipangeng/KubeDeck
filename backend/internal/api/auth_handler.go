@@ -132,6 +132,14 @@ func (h *AuthHandler) SwitchTenant(w http.ResponseWriter, r *http.Request) {
 
 	nextTenantID := resolveActiveTenant(req.TenantCode, req.TenantID, session.Available)
 	if nextTenantID == "" {
+		_ = defaultAuditWriter.Write(audit.Event{
+			ActorID:    session.User.ID,
+			TenantID:   session.ActiveTenantID,
+			Action:     "auth.switch_tenant",
+			TargetType: "tenant",
+			Result:     "denied",
+			Reason:     "tenant_not_found",
+		})
 		writeJSONError(w, http.StatusForbidden, "tenant_not_found")
 		return
 	}
@@ -191,10 +199,12 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.TrimSpace(req.Token) == "" {
+		_ = defaultAuditWriter.Write(audit.Event{Action: "auth.accept_invite", TargetType: "invite", Result: "denied", Reason: "token_required"})
 		writeJSONError(w, http.StatusBadRequest, "token_required")
 		return
 	}
 	if strings.TrimSpace(req.Username) == "" || strings.TrimSpace(req.Password) == "" {
+		_ = defaultAuditWriter.Write(audit.Event{Action: "auth.accept_invite", TargetType: "invite", Result: "denied", Reason: "username_password_required"})
 		writeJSONError(w, http.StatusBadRequest, "username_password_required")
 		return
 	}
