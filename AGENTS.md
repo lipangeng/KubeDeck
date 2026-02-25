@@ -1,45 +1,42 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This repository is currently in planning-first stage.
-
-- `docs/plans/`: approved architecture and implementation plans (source of truth for upcoming scaffold work).
-- `.agents/`: local workflow skills and guardrails (commit format, feature-branch policy, requirements).
-- `LICENSE`: project license.
-
-Planned code layout (from approved plans):
-- `frontend/shell/` for Vite + TypeScript + MUI shell.
-- `backend/` for Go microkernel core and APIs.
-- `plugins/templates/` for frontend/backend plugin templates.
+KubeDeck is now a runnable monorepo with backend, frontend, and plugin templates:
+- `backend/`: Go service (`cmd/kubedeck`) plus `internal/{api,auth,core,plugins,registry,storage,webui}`.
+- `frontend/`: Vite + React + TypeScript + MUI shell (`src/{core,state,sdk,components}`).
+- `plugins/templates/`: starter templates for frontend/backend plugins.
+- `docs/`: SSOT planning and architecture documents.
 
 ## Build, Test, and Development Commands
-At this stage, validation is documentation and Git hygiene:
-
-- `rg --files` — list tracked project files quickly.
-- `git status --short` — check working tree before/after edits.
-- `test -f docs/plans/2026-02-25-kubedeck-architecture-design.md` — confirm baseline design doc exists.
-
-When scaffold code is added, follow commands defined in plan docs (for example `go test ./...`, `npm run test`, `npm run build`).
+- `cd backend && go test ./...` — run backend unit tests.
+- `cd backend && go build ./...` — verify backend compiles.
+- `cd frontend && npm install --registry=https://registry.npmmirror.com` — install frontend deps.
+- `cd frontend && npm test -- --run` — run frontend tests.
+- `cd frontend && npm run build` — production frontend build.
+- Dev run: backend `PORT=8080 go run ./cmd/kubedeck`, frontend `npm run dev`.
 
 ## Coding Style & Naming Conventions
 - Use ASCII by default.
-- Keep changes small and scoped to one logical intent.
-- Follow planned directory boundaries (`frontend/`, `backend/`, `plugins/`).
-- Branch names must be feature-style: `codex/*`, `feature/*`, `feat/*`, or `chore/*`.
+- Go: keep packages small and cohesive under `backend/internal/*`; tests in `_test.go`.
+- Frontend: TypeScript strict mode, colocated tests `*.test.ts[x]`.
+- Prefer explicit contract types for API payloads and plugin SDK boundaries.
+- Branch names: `feat/*`, `fix/*`, `chore/*` (feature-branch workflow only).
 
 ## Testing Guidelines
-- Prefer TDD for new work: write failing test, implement minimal fix, re-run tests.
-- Add tests next to affected modules (Go `_test.go`, frontend `*.test.ts[x]`).
-- Do not claim completion without running relevant verification commands.
+- Follow TDD for behavior changes (fail first, then implement).
+- Always run affected test suites before commit.
+- Minimum verification before PR:
+  - `cd backend && go test ./...`
+  - `cd frontend && npm test -- --run && npm run build`
 
 ## Commit & Pull Request Guidelines
-- Use Conventional Commits: `<type>(<scope>): <subject>`.
-- Keep subject imperative, <= 72 chars.
+- Conventional Commits: `<type>(<scope>): <subject>`.
+- Keep subject imperative and concise.
 - Commit body must include bilingual EN/ZH sections:
   - EN: What changed / Why / How to test
   - ZH: 变更内容 / 原因 / 测试方法
-- Never commit to `main`/`master`; work only on feature branches and open PRs for human merge.
+- PRs should include: scope summary, validation commands run, and UI screenshots for frontend changes.
 
 ## Security & Configuration Tips
-- Never commit secrets, tokens, private keys, or sensitive `.env` files.
-- Treat backend authorization as authoritative; UI hints are not security controls.
+- Never commit secrets or private credentials.
+- Backend auth/authorization is authoritative; frontend permission hints are display-only.
