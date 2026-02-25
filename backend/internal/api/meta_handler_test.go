@@ -797,6 +797,124 @@ func TestIAMRevokeInviteReloadsFromPersistenceWhenCacheMiss(t *testing.T) {
 	}
 }
 
+func TestIAMRepoFirstCacheMissEndToEnd(t *testing.T) {
+	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		resetIAMPersistenceForTest()
+	})
+	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
+	t.Setenv("KUBEDECK_SQLITE_DSN", filepath.Join(t.TempDir(), "iam-e2e-cache-miss.sqlite"))
+
+	resetAuthSessions()
+	resetGroups()
+	resetMemberships()
+	resetInvites()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+
+	createGroupReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader([]byte(`{"name":"platform-admins","description":"platform group"}`)))
+	createGroupReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createGroupResp := httptest.NewRecorder()
+	router.ServeHTTP(createGroupResp, createGroupReq)
+	if createGroupResp.Code != http.StatusCreated {
+		t.Fatalf("expected create group status %d, got %d body=%s", http.StatusCreated, createGroupResp.Code, createGroupResp.Body.String())
+	}
+	var createdGroup iamGroup
+	if err := json.Unmarshal(createGroupResp.Body.Bytes(), &createdGroup); err != nil {
+		t.Fatalf("expected group JSON body, got error: %v", err)
+	}
+
+	createMemberReq := httptest.NewRequest(http.MethodPost, "/api/iam/tenants/tenant-dev/members", bytes.NewReader([]byte(`{"user_id":"u-42","user_label":"user-42","effective_from":"2026-02-25T00:00:00Z"}`)))
+	createMemberReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createMemberResp := httptest.NewRecorder()
+	router.ServeHTTP(createMemberResp, createMemberReq)
+	if createMemberResp.Code != http.StatusCreated {
+		t.Fatalf("expected create member status %d, got %d body=%s", http.StatusCreated, createMemberResp.Code, createMemberResp.Body.String())
+	}
+	var createdMember iamMembership
+	if err := json.Unmarshal(createMemberResp.Body.Bytes(), &createdMember); err != nil {
+		t.Fatalf("expected membership JSON body, got error: %v", err)
+	}
+
+	createInviteReq := httptest.NewRequest(http.MethodPost, "/api/iam/invites", bytes.NewReader([]byte(`{"email":"e2e@example.com","role_hint":"member","expires_in_hours":2}`)))
+	createInviteReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createInviteResp := httptest.NewRecorder()
+	router.ServeHTTP(createInviteResp, createInviteReq)
+	if createInviteResp.Code != http.StatusCreated {
+		t.Fatalf("expected create invite status %d, got %d body=%s", http.StatusCreated, createInviteResp.Code, createInviteResp.Body.String())
+	}
+	var createdInvite iamInvite
+	if err := json.Unmarshal(createInviteResp.Body.Bytes(), &createdInvite); err != nil {
+		t.Fatalf("expected invite JSON body, got error: %v", err)
+	}
+
+	resetAuthSessions()
+	resetGroups()
+	resetMemberships()
+	resetInvites()
+
+	meReq := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	meReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	meResp := httptest.NewRecorder()
+	router.ServeHTTP(meResp, meReq)
+	if meResp.Code != http.StatusOK {
+		t.Fatalf("expected me status %d after cache reset, got %d body=%s", http.StatusOK, meResp.Code, meResp.Body.String())
+	}
+
+	groupPatchReq := httptest.NewRequest(http.MethodPatch, "/api/iam/groups/"+createdGroup.ID, bytes.NewReader([]byte(`{"description":"patched-after-reload"}`)))
+	groupPatchReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	groupPatchResp := httptest.NewRecorder()
+	router.ServeHTTP(groupPatchResp, groupPatchReq)
+	if groupPatchResp.Code != http.StatusOK {
+		t.Fatalf("expected group patch status %d after cache reset, got %d body=%s", http.StatusOK, groupPatchResp.Code, groupPatchResp.Body.String())
+	}
+
+	validityReq := httptest.NewRequest(http.MethodPut, "/api/iam/memberships/"+createdMember.ID+"/validity", bytes.NewReader([]byte(`{"effective_from":"2026-02-25T00:00:00Z","effective_until":"2026-12-31T00:00:00Z"}`)))
+	validityReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	validityResp := httptest.NewRecorder()
+	router.ServeHTTP(validityResp, validityReq)
+	if validityResp.Code != http.StatusOK {
+		t.Fatalf("expected validity replace status %d after cache reset, got %d body=%s", http.StatusOK, validityResp.Code, validityResp.Body.String())
+	}
+
+	usersReq := httptest.NewRequest(http.MethodGet, "/api/iam/users", nil)
+	usersReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	usersResp := httptest.NewRecorder()
+	router.ServeHTTP(usersResp, usersReq)
+	if usersResp.Code != http.StatusOK {
+		t.Fatalf("expected users status %d after cache reset, got %d body=%s", http.StatusOK, usersResp.Code, usersResp.Body.String())
+	}
+
+	listInvitesReq := httptest.NewRequest(http.MethodGet, "/api/iam/invites", nil)
+	listInvitesReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	listInvitesResp := httptest.NewRecorder()
+	router.ServeHTTP(listInvitesResp, listInvitesReq)
+	if listInvitesResp.Code != http.StatusOK {
+		t.Fatalf("expected invites status %d after cache reset, got %d body=%s", http.StatusOK, listInvitesResp.Code, listInvitesResp.Body.String())
+	}
+
+	acceptInviteReq := httptest.NewRequest(http.MethodPost, "/api/auth/accept-invite", bytes.NewReader([]byte(`{"token":"`+createdInvite.Token+`","username":"new-e2e-user","password":"pw"}`)))
+	acceptInviteResp := httptest.NewRecorder()
+	router.ServeHTTP(acceptInviteResp, acceptInviteReq)
+	if acceptInviteResp.Code != http.StatusOK {
+		t.Fatalf("expected accept invite status %d after cache reset, got %d body=%s", http.StatusOK, acceptInviteResp.Code, acceptInviteResp.Body.String())
+	}
+}
+
 func TestIAMGroupPatchReloadFromPersistenceWhenCacheMiss(t *testing.T) {
 	resetIAMPersistenceForTest()
 	t.Cleanup(func() {

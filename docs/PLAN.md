@@ -42,7 +42,7 @@ Completed and merged:
 
 ## 4. Next Priority (Phase 1 continuation)
 
-- Replace API-level in-memory maps with repository-only read/write flow end-to-end
+- (Completed for IAM MVP) repository-first fallback chain for IAM auth/group/member/invite/users flows
 - Add production migrations strategy for mysql/postgres IAM schema evolution
 - Add auth middleware abstraction and route policy table (instead of per-handler checks)
 - Add OAuth provider integration and RBAC administration UI
