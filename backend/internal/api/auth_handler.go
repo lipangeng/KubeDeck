@@ -193,6 +193,10 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "token_required")
 		return
 	}
+	if strings.TrimSpace(req.Username) == "" || strings.TrimSpace(req.Password) == "" {
+		writeJSONError(w, http.StatusBadRequest, "username_password_required")
+		return
+	}
 
 	invite, ok := inviteByToken(req.Token)
 	if !ok {

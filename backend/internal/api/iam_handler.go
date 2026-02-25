@@ -1019,6 +1019,9 @@ func (h *IAMHandler) listInvites(w http.ResponseWriter, session authSession) {
 		}
 		return out[i].CreatedAt.After(out[j].CreatedAt)
 	})
+	for i := range out {
+		out[i] = sanitizeInviteForRead(out[i])
+	}
 	_ = writeJSON(w, http.StatusOK, map[string]any{"invites": out})
 }
 
@@ -1064,9 +1067,11 @@ func (h *IAMHandler) createInvite(w http.ResponseWriter, r *http.Request, sessio
 		ExpiresAt:    now.Add(time.Duration(expiresIn) * time.Hour),
 		Status:       "pending",
 	}
+	storedInvite := sanitizeInviteForStorage(invite)
+	storageKey := hashToken(token)
 
 	invitesMu.Lock()
-	invites[token] = invite
+	invites[storageKey] = storedInvite
 	invitesMu.Unlock()
 	persistIAMInvites()
 	_ = defaultAuditWriter.Write(audit.Event{
@@ -1197,6 +1202,18 @@ func inviteByToken(token string) (iamInvite, bool) {
 		invite, ok = invites[hashedToken]
 	}
 	return invite, ok
+}
+
+func sanitizeInviteForStorage(invite iamInvite) iamInvite {
+	invite.Token = ""
+	invite.InviteLink = "#/accept-invite"
+	return invite
+}
+
+func sanitizeInviteForRead(invite iamInvite) iamInvite {
+	invite.Token = ""
+	invite.InviteLink = "#/accept-invite"
+	return invite
 }
 
 func newInviteToken() string {

@@ -1973,6 +1973,21 @@ func TestInviteCreateListAndAcceptFlow(t *testing.T) {
 	if listResp.Code != http.StatusOK {
 		t.Fatalf("expected list invites 200, got %d", listResp.Code)
 	}
+	var listBody struct {
+		Invites []iamInvite `json:"invites"`
+	}
+	if err := json.Unmarshal(listResp.Body.Bytes(), &listBody); err != nil {
+		t.Fatalf("unmarshal list invites: %v", err)
+	}
+	if len(listBody.Invites) == 0 {
+		t.Fatalf("expected at least one invite in list")
+	}
+	if listBody.Invites[0].Token != "" {
+		t.Fatalf("expected invite token redacted in list, got %q", listBody.Invites[0].Token)
+	}
+	if listBody.Invites[0].InviteLink != "#/accept-invite" {
+		t.Fatalf("expected invite link redacted in list, got %q", listBody.Invites[0].InviteLink)
+	}
 
 	acceptPayload := []byte(`{"token":"` + inviteBody.Token + `","username":"new-user","password":"pw"}`)
 	acceptReq := httptest.NewRequest(http.MethodPost, "/api/auth/accept-invite", bytes.NewReader(acceptPayload))
@@ -2040,6 +2055,48 @@ func TestInviteRevokePendingFlow(t *testing.T) {
 	}
 }
 
+func TestAcceptInviteRequiresUsernameAndPassword(t *testing.T) {
+	resetAuthSessions()
+	resetInvites()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	createInvitePayload := []byte(`{"email":"required@example.com","role_hint":"member","expires_in_hours":2}`)
+	createInviteReq := httptest.NewRequest(http.MethodPost, "/api/iam/invites", bytes.NewReader(createInvitePayload))
+	createInviteReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createInviteResp := httptest.NewRecorder()
+	router.ServeHTTP(createInviteResp, createInviteReq)
+	if createInviteResp.Code != http.StatusCreated {
+		t.Fatalf("expected create invite 201, got %d body=%s", createInviteResp.Code, createInviteResp.Body.String())
+	}
+	var inviteBody iamInvite
+	if err := json.Unmarshal(createInviteResp.Body.Bytes(), &inviteBody); err != nil {
+		t.Fatalf("unmarshal invite create: %v", err)
+	}
+
+	acceptPayload := []byte(`{"token":"` + inviteBody.Token + `","username":"","password":"pw"}`)
+	acceptReq := httptest.NewRequest(http.MethodPost, "/api/auth/accept-invite", bytes.NewReader(acceptPayload))
+	acceptResp := httptest.NewRecorder()
+	router.ServeHTTP(acceptResp, acceptReq)
+	if acceptResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected accept invite 400, got %d body=%s", acceptResp.Code, acceptResp.Body.String())
+	}
+}
+
 func TestInviteListOrderedByCreatedAtDesc(t *testing.T) {
 	resetAuthSessions()
 	resetInvites()
@@ -2080,12 +2137,12 @@ func TestInviteListOrderedByCreatedAtDesc(t *testing.T) {
 	second := createInvite("second@example.com")
 
 	invitesMu.Lock()
-	firstRecord := invites[first.Token]
-	secondRecord := invites[second.Token]
+	firstRecord := invites[hashToken(first.Token)]
+	secondRecord := invites[hashToken(second.Token)]
 	firstRecord.CreatedAt = time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 	secondRecord.CreatedAt = time.Date(2026, 2, 2, 0, 0, 0, 0, time.UTC)
-	invites[first.Token] = firstRecord
-	invites[second.Token] = secondRecord
+	invites[hashToken(first.Token)] = firstRecord
+	invites[hashToken(second.Token)] = secondRecord
 	invitesMu.Unlock()
 
 	listReq := httptest.NewRequest(http.MethodGet, "/api/iam/invites", nil)
