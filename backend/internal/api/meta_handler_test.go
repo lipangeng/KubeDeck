@@ -2004,6 +2004,54 @@ func TestIAMRebuildGroupIDsEndpointRejectsCanonicalConflict(t *testing.T) {
 	}
 }
 
+func TestIAMRebuildGroupIDsEndpointReturns500OnPersistenceFailure(t *testing.T) {
+	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		ConfigurePersistence(PersistenceConfig{})
+		resetIAMPersistenceForTest()
+	})
+	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
+	ConfigurePersistence(PersistenceConfig{
+		Driver: "not-a-real-driver",
+		DSN:    "ignored",
+	})
+
+	resetAuthSessions()
+	resetGroups()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	iamGroupsMu.Lock()
+	iamGroups["grp-admins"] = iamGroup{ID: "grp-admins", TenantID: "tenant-dev", Name: "Admins"}
+	iamGroupsMu.Unlock()
+
+	rebuildReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups/rebuild-ids", nil)
+	rebuildReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	rebuildResp := httptest.NewRecorder()
+	router.ServeHTTP(rebuildResp, rebuildReq)
+	if rebuildResp.Code != http.StatusInternalServerError {
+		t.Fatalf("expected rebuild endpoint 500 on persistence failure, got %d body=%s", rebuildResp.Code, rebuildResp.Body.String())
+	}
+	if !strings.Contains(rebuildResp.Body.String(), "rebuild_failed") {
+		t.Fatalf("expected rebuild_failed error, got %s", rebuildResp.Body.String())
+	}
+}
+
 func TestMembershipListAndReplaceGroupsFlow(t *testing.T) {
 	resetAuthSessions()
 	resetMemberships()

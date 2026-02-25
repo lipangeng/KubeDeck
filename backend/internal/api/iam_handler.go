@@ -931,8 +931,28 @@ func rebuildGroupIDsForAllTenants() error {
 	iamMembershipsMu.Unlock()
 	iamGroupsMu.Unlock()
 
-	persistIAMGroups()
-	persistIAMMemberships()
+	if err := persistIAMGroupsStrict(); err != nil {
+		iamGroupsMu.Lock()
+		iamMembershipsMu.Lock()
+		iamGroups = originalGroups
+		iamMemberships = originalMemberships
+		iamMembershipsMu.Unlock()
+		iamGroupsMu.Unlock()
+		persistIAMGroups()
+		persistIAMMemberships()
+		return err
+	}
+	if err := persistIAMMembershipsStrict(); err != nil {
+		iamGroupsMu.Lock()
+		iamMembershipsMu.Lock()
+		iamGroups = originalGroups
+		iamMemberships = originalMemberships
+		iamMembershipsMu.Unlock()
+		iamGroupsMu.Unlock()
+		persistIAMGroups()
+		persistIAMMemberships()
+		return err
+	}
 	return nil
 }
 

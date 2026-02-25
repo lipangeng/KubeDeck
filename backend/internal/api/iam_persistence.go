@@ -205,9 +205,18 @@ func decodeAuthSessions(records []storage.AuthSessionRecord) (map[string]authSes
 }
 
 func persistIAMGroups() {
+	if err := persistIAMGroupsStrict(); err != nil {
+		log.Printf("persist iam groups failed: %v", err)
+	}
+}
+
+func persistIAMGroupsStrict() error {
 	ensureIAMPersistence()
+	if err := persistenceInitError(); err != nil {
+		return err
+	}
 	if iamPersistenceRepo == nil {
-		return
+		return nil
 	}
 	iamGroupsMu.RLock()
 	snapshot := make([]storage.IAMGroupRecord, 0, len(iamGroups))
@@ -221,15 +230,22 @@ func persistIAMGroups() {
 		})
 	}
 	iamGroupsMu.RUnlock()
-	if err := iamPersistenceRepo.ReplaceGroups(snapshot); err != nil {
-		log.Printf("persist iam groups failed: %v", err)
-	}
+	return iamPersistenceRepo.ReplaceGroups(snapshot)
 }
 
 func persistIAMMemberships() {
+	if err := persistIAMMembershipsStrict(); err != nil {
+		log.Printf("persist iam memberships failed: %v", err)
+	}
+}
+
+func persistIAMMembershipsStrict() error {
 	ensureIAMPersistence()
+	if err := persistenceInitError(); err != nil {
+		return err
+	}
 	if iamPersistenceRepo == nil {
-		return
+		return nil
 	}
 	iamMembershipsMu.RLock()
 	snapshot := make([]storage.IAMMembershipRecord, 0, len(iamMemberships))
@@ -245,15 +261,22 @@ func persistIAMMemberships() {
 		})
 	}
 	iamMembershipsMu.RUnlock()
-	if err := iamPersistenceRepo.ReplaceMemberships(snapshot); err != nil {
-		log.Printf("persist iam memberships failed: %v", err)
-	}
+	return iamPersistenceRepo.ReplaceMemberships(snapshot)
 }
 
 func persistIAMInvites() {
+	if err := persistIAMInvitesStrict(); err != nil {
+		log.Printf("persist iam invites failed: %v", err)
+	}
+}
+
+func persistIAMInvitesStrict() error {
 	ensureIAMPersistence()
+	if err := persistenceInitError(); err != nil {
+		return err
+	}
 	if iamPersistenceRepo == nil {
-		return
+		return nil
 	}
 	invitesMu.RLock()
 	snapshot := make([]storage.IAMInviteRecord, 0, len(invites))
@@ -277,15 +300,22 @@ func persistIAMInvites() {
 		})
 	}
 	invitesMu.RUnlock()
-	if err := iamPersistenceRepo.ReplaceInvites(snapshot); err != nil {
-		log.Printf("persist iam invites failed: %v", err)
-	}
+	return iamPersistenceRepo.ReplaceInvites(snapshot)
 }
 
 func persistAuthSessions() {
+	if err := persistAuthSessionsStrict(); err != nil {
+		log.Printf("persist auth sessions failed: %v", err)
+	}
+}
+
+func persistAuthSessionsStrict() error {
 	ensureIAMPersistence()
+	if err := persistenceInitError(); err != nil {
+		return err
+	}
 	if iamPersistenceRepo == nil {
-		return
+		return nil
 	}
 	authSessionsMu.RLock()
 	snapshot := make([]storage.AuthSessionRecord, 0, len(authSessions))
@@ -301,7 +331,15 @@ func persistAuthSessions() {
 		})
 	}
 	authSessionsMu.RUnlock()
-	if err := iamPersistenceRepo.ReplaceSessions(snapshot); err != nil {
-		log.Printf("persist auth sessions failed: %v", err)
+	return iamPersistenceRepo.ReplaceSessions(snapshot)
+}
+
+func persistenceInitError() error {
+	if iamPersistenceErr == nil {
+		return nil
 	}
+	if !iamPersistenceEnabled() {
+		return nil
+	}
+	return iamPersistenceErr
 }
