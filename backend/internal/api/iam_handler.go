@@ -225,6 +225,27 @@ func (h *IAMHandler) Invites(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *IAMHandler) InviteByID(w http.ResponseWriter, r *http.Request) {
+	session, ok := mustSession(r, w)
+	if !ok {
+		return
+	}
+	inviteID := strings.TrimPrefix(r.URL.Path, "/api/iam/invites/")
+	if strings.TrimSpace(inviteID) == "" {
+		writeJSONError(w, http.StatusBadRequest, "invite_id_required")
+		return
+	}
+	if r.Method != http.MethodDelete {
+		methodNotAllowed(w, http.MethodDelete)
+		return
+	}
+	if !hasIAMWrite(session.User.Roles) {
+		writeJSONError(w, http.StatusForbidden, "permission_denied")
+		return
+	}
+	h.revokeInvite(w, session, inviteID)
+}
+
 func (h *IAMHandler) Users(w http.ResponseWriter, r *http.Request) {
 	session, ok := mustSession(r, w)
 	if !ok {
@@ -633,6 +654,33 @@ func (h *IAMHandler) createInvite(w http.ResponseWriter, r *http.Request, sessio
 	}
 
 	_ = writeJSON(w, http.StatusCreated, invite)
+}
+
+func (h *IAMHandler) revokeInvite(w http.ResponseWriter, session authSession, inviteID string) {
+	invitesMu.Lock()
+	defer invitesMu.Unlock()
+	for token, invite := range invites {
+		if invite.ID != inviteID {
+			continue
+		}
+		if invite.TenantID != session.ActiveTenantID {
+			writeJSONError(w, http.StatusNotFound, "invite_not_found")
+			return
+		}
+		invite.Status = "revoked"
+		invites[token] = invite
+		_ = defaultAuditWriter.Write(audit.Event{
+			TenantID:   session.ActiveTenantID,
+			ActorID:    session.User.ID,
+			Action:     "iam.invite.revoke",
+			TargetType: "invite",
+			TargetID:   invite.ID,
+			Result:     "allowed",
+		})
+		_ = writeJSON(w, http.StatusOK, invite)
+		return
+	}
+	writeJSONError(w, http.StatusNotFound, "invite_not_found")
 }
 
 func newInviteToken() string {

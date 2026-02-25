@@ -798,6 +798,22 @@ describe('App', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
+      if (url.endsWith('/api/iam/invites/inv-1')) {
+        return new Response(
+          JSON.stringify({
+            id: 'inv-1',
+            tenant_id: 'tenant-dev',
+            tenant_code: 'dev',
+            invitee_email: 'user@example.com',
+            role_hint: 'member',
+            token: 'token-1',
+            invite_link: '/accept-invite?token=token-1',
+            expires_at: '2026-02-26T00:00:00Z',
+            status: 'revoked',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
       return new Response('not found', { status: 404 });
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -822,6 +838,8 @@ describe('App', () => {
     expect(await screen.findByText('Memberships')).toBeTruthy();
     expect(await screen.findByText('Invites')).toBeTruthy();
     expect(await screen.findByText('user@example.com')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke' }));
+    expect(await screen.findByText(/revoked/)).toBeTruthy();
   });
 
   it('loads audit events with filters in audit dialog', async () => {

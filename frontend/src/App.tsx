@@ -1102,6 +1102,33 @@ function App({
     }
   }
 
+  async function revokeInvite(invite: IAMInvite) {
+    if (!authUser) {
+      setIamError('auth_required');
+      return;
+    }
+    setIamError(null);
+    try {
+      const response = await apiFetch(`/api/iam/invites/${encodeURIComponent(invite.id)}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error(`revoke invite failed: ${response.status}`);
+      }
+      const updated = parseInvitesResponse({
+        invites: [await response.json()],
+      })[0];
+      if (!updated) {
+        throw new Error('invalid revoke invite response');
+      }
+      setIamInvites((previous) =>
+        previous.map((item) => (item.id === updated.id ? updated : item)),
+      );
+    } catch (e) {
+      setIamError(e instanceof Error ? e.message : 'revoke invite failed');
+    }
+  }
+
   async function loadAuditData() {
     if (!authUser) {
       setAuditError('auth_required');
@@ -1871,6 +1898,15 @@ function App({
                     </Typography>
                     <Button size="small" variant="outlined" onClick={() => void copyInviteLink(invite.inviteLink)}>
                       {t('copyInviteLink')}
+                    </Button>
+                    <Button
+                      size="small"
+                      color="warning"
+                      variant="outlined"
+                      onClick={() => void revokeInvite(invite)}
+                      disabled={invite.status !== 'pending'}
+                    >
+                      {t('revokeInvite')}
                     </Button>
                   </Stack>
                 </Paper>

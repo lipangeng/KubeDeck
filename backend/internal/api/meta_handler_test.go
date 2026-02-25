@@ -673,6 +673,21 @@ func TestInviteCreateListAndAcceptFlow(t *testing.T) {
 	if acceptResp.Code != http.StatusOK {
 		t.Fatalf("expected accept invite 200, got %d body=%s", acceptResp.Code, acceptResp.Body.String())
 	}
+
+	revokeReq := httptest.NewRequest(http.MethodDelete, "/api/iam/invites/"+inviteBody.ID, nil)
+	revokeReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	revokeResp := httptest.NewRecorder()
+	router.ServeHTTP(revokeResp, revokeReq)
+	if revokeResp.Code != http.StatusOK {
+		t.Fatalf("expected revoke invite 200, got %d body=%s", revokeResp.Code, revokeResp.Body.String())
+	}
+	var revokeBody iamInvite
+	if err := json.Unmarshal(revokeResp.Body.Bytes(), &revokeBody); err != nil {
+		t.Fatalf("unmarshal revoke invite: %v", err)
+	}
+	if revokeBody.Status != "revoked" {
+		t.Fatalf("expected revoked status, got %q", revokeBody.Status)
+	}
 }
 
 func TestInviteAcceptExpired(t *testing.T) {
