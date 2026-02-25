@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -415,6 +416,48 @@ func TestAuthLoginMeSwitchLogoutFlow(t *testing.T) {
 	router.ServeHTTP(meAfterLogoutResp, meAfterLogoutReq)
 	if meAfterLogoutResp.Code != http.StatusUnauthorized {
 		t.Fatalf("expected me-after-logout status 401, got %d", meAfterLogoutResp.Code)
+	}
+}
+
+func TestAuthMeReloadsSessionFromPersistenceWhenCacheMiss(t *testing.T) {
+	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		resetIAMPersistenceForTest()
+	})
+	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
+	t.Setenv("KUBEDECK_SQLITE_DSN", filepath.Join(t.TempDir(), "session-reload.sqlite"))
+
+	resetAuthSessions()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"alice","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status 200, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login response: %v", err)
+	}
+	if loginBody.Token == "" {
+		t.Fatalf("expected token in login response")
+	}
+
+	authSessionsMu.Lock()
+	authSessions = map[string]authSession{}
+	authSessionsMu.Unlock()
+
+	meReq := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	meReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	meResp := httptest.NewRecorder()
+	router.ServeHTTP(meResp, meReq)
+	if meResp.Code != http.StatusOK {
+		t.Fatalf("expected me status 200 after persistence reload, got %d body=%s", meResp.Code, meResp.Body.String())
 	}
 }
 
