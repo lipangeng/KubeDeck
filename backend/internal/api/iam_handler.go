@@ -112,6 +112,7 @@ func (h *IAMHandler) Groups(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	_ = reloadIAMStateFromPersistence()
 
 	switch r.Method {
 	case http.MethodGet:
@@ -132,6 +133,7 @@ func (h *IAMHandler) GroupByID(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	_ = reloadIAMStateFromPersistence()
 
 	trimmed := strings.TrimPrefix(r.URL.Path, "/api/iam/groups/")
 	if trimmed == "" {
@@ -175,6 +177,7 @@ func (h *IAMHandler) Memberships(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	_ = reloadIAMStateFromPersistence()
 	switch r.Method {
 	case http.MethodGet:
 		h.listMemberships(w, session)
@@ -188,6 +191,7 @@ func (h *IAMHandler) MembershipByID(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	_ = reloadIAMStateFromPersistence()
 	trimmed := strings.TrimPrefix(r.URL.Path, "/api/iam/memberships/")
 	if trimmed == "" {
 		writeJSONError(w, http.StatusBadRequest, "membership_id_required")
@@ -226,6 +230,7 @@ func (h *IAMHandler) Invites(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	_ = reloadIAMStateFromPersistence()
 	switch r.Method {
 	case http.MethodGet:
 		h.listInvites(w, session)
@@ -266,6 +271,7 @@ func (h *IAMHandler) Users(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	_ = reloadIAMStateFromPersistence()
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w, http.MethodGet)
 		return
@@ -278,6 +284,7 @@ func (h *IAMHandler) Tenants(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	_ = reloadIAMStateFromPersistence()
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w, http.MethodGet)
 		return
@@ -298,6 +305,7 @@ func (h *IAMHandler) TenantMembers(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	_ = reloadIAMStateFromPersistence()
 	trimmed := strings.TrimPrefix(r.URL.Path, "/api/iam/tenants/")
 	if !strings.HasSuffix(trimmed, "/members") {
 		methodNotAllowed(w, http.MethodGet+", "+http.MethodPost+", "+http.MethodDelete)

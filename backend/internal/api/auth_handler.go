@@ -199,6 +199,7 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w, http.MethodPost)
 		return
 	}
+	_ = reloadIAMStateFromPersistence()
 
 	var req struct {
 		Token    string `json:"token"`
