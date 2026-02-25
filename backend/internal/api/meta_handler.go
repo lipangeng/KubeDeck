@@ -44,6 +44,40 @@ func (h *MetaHandler) Clusters(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *MetaHandler) Menus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+
+	cluster := r.URL.Query().Get("cluster")
+	if cluster == "" {
+		cluster = "default"
+	}
+
+	if err := writeJSON(w, http.StatusOK, map[string]any{
+		"cluster": cluster,
+		"menus": []map[string]any{
+			{
+				"id":     "workloads",
+				"group":  "system",
+				"title":  "Workloads",
+				"source": "system",
+				"order":  10,
+			},
+			{
+				"id":     "crd-dynamic",
+				"group":  "dynamic",
+				"title":  "Custom Resources",
+				"source": "dynamic",
+				"order":  50,
+			},
+		},
+	}); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal server error")
+	}
+}
+
 func writeJSON(w http.ResponseWriter, status int, payload any) error {
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(payload); err != nil {

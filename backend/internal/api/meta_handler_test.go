@@ -51,6 +51,28 @@ func TestClustersEndpoint(t *testing.T) {
 	}
 }
 
+func TestMenusEndpoint(t *testing.T) {
+	router := NewRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/meta/menus?cluster=dev", nil)
+	resp := httptest.NewRecorder()
+
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, resp.Code)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected JSON response, got error: %v", err)
+	}
+
+	if _, ok := body["menus"]; !ok {
+		t.Fatalf("expected response to contain menus key, body=%s", resp.Body.String())
+	}
+}
+
 func TestResourceApplyEndpoint(t *testing.T) {
 	router := NewRouter()
 
