@@ -41,12 +41,13 @@ Completed and merged:
 - IAM repo-first fallback chain for auth/groups/memberships/invites (cache miss -> persistence reload)
 - Route-policy auth middleware table with per-method permission requirements
 - Group-aware authorization (membership-group permission inheritance) and default tenant groups (`tenant-owner/admin/viewer`)
+- Versioned IAM schema migrations (`schema_migrations` + baseline migration runner)
 
 ## 4. Next Priority (Phase 1 continuation)
 
 - (Completed for IAM MVP) repository-first fallback chain for IAM auth/group/member/invite/users flows
 - (Completed for IAM MVP) auth middleware abstraction and route policy table (instead of per-handler checks)
-- Add production migrations strategy for mysql/postgres IAM schema evolution
+- (Completed for IAM MVP) production migration strategy baseline (runbook + migration runner foundation)
 - Add OAuth provider integration and RBAC administration UI
 - Expand invite delivery providers (email production adapter + SMS adapter)
 
