@@ -459,26 +459,37 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
         </Paper>
 
         <Stack spacing={2}>
-          <Paper elevation={3} sx={{ p: 2.2, border: 1, borderColor: 'divider' }}>
+          <Paper
+            elevation={3}
+            sx={{
+              p: 2.2,
+              border: 1,
+              borderColor: 'divider',
+              background:
+                'linear-gradient(120deg, rgba(25,118,210,0.08), rgba(46,125,50,0.07))',
+            }}
+          >
             <Typography variant="overline" color="primary.main" sx={{ letterSpacing: 1.1 }}>
-              Control Plane
+              Kubernetes Dashboard
             </Typography>
             <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.8 }}>
               Cluster {activeCluster} Overview
             </Typography>
-            <Typography color="text.secondary">
-              API target ({apiTargetHint})
-            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+              <Typography color="text.secondary">API target ({apiTargetHint})</Typography>
+              <Chip size="small" label={`Health: ${healthStatus}`} color={statusColor(healthStatus)} />
+              <Chip size="small" label={`Ready: ${readyStatus}`} color={statusColor(readyStatus)} />
+            </Stack>
           </Paper>
 
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' },
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' },
               gap: 1.5,
             }}
           >
-            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
+            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider', borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary">
                 Registry Resource Types
               </Typography>
@@ -486,7 +497,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                 {resourceTypeCount}
               </Typography>
             </Paper>
-            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
+            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider', borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary">
                 Namespaced Types
               </Typography>
@@ -494,7 +505,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                 {namespacedResourceCount}
               </Typography>
             </Paper>
-            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
+            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider', borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary">
                 Cluster-Scoped Types
               </Typography>
@@ -502,16 +513,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                 {clusterScopedResourceCount}
               </Typography>
             </Paper>
-          </Box>
-
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' },
-              gap: 1.5,
-            }}
-          >
-            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
+            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider', borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary">
                 Dynamic CRD Menus
               </Typography>
@@ -519,25 +521,9 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                 {dynamicMenuCount}
               </Typography>
             </Paper>
-            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
-              <Typography variant="caption" color="text.secondary">
-                Health Endpoint
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                {healthStatus}
-              </Typography>
-            </Paper>
-            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
-              <Typography variant="caption" color="text.secondary">
-                Readiness Endpoint
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                {readyStatus}
-              </Typography>
-            </Paper>
           </Box>
 
-          <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
+          <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider', borderRadius: 2 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.4 }}>
               Failure summary
             </Typography>
@@ -545,7 +531,6 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
               Failure summary: {failureSummary}
             </Typography>
           </Paper>
-
         </Stack>
       </Box>
 
