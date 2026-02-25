@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  acceptInvite,
   AUTH_TOKEN_KEY,
   clearAuthToken,
   login,
@@ -89,5 +90,27 @@ describe('authApi', () => {
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer token-abc');
     expect(String(init.body)).toContain('"tenant_code":"staging"');
+  });
+
+  it('accepts invite by token with signup credentials', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          status: 'accepted',
+          tenant_id: 'tenant-dev',
+          username: 'new-user',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const payload = await acceptInvite('invite-token', 'new-user', 'strong-pass');
+
+    expect(payload.status).toBe('accepted');
+    expect(payload.tenant_id).toBe('tenant-dev');
+    const init = (fetchMock.mock.calls[0] as unknown[])[1] as RequestInit;
+    expect(init.method).toBe('POST');
+    expect(String(init.body)).toContain('"token":"invite-token"');
   });
 });

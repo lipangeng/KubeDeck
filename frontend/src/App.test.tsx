@@ -565,4 +565,75 @@ describe('App', () => {
     });
     expect(await screen.findByDisplayValue('staging')).toBeTruthy();
   });
+
+  it('accepts invite when hash route contains invite token', async () => {
+    const originalHash = window.location.hash;
+    window.location.hash = '#/accept-invite?token=invite-xyz';
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
+        return new Response('ok', { status: 200 });
+      }
+      if (url.endsWith('/api/meta/clusters')) {
+        return new Response(
+          JSON.stringify({
+            clusters: ['default'],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/meta/registry?cluster=default')) {
+        return new Response(
+          JSON.stringify({
+            cluster: 'default',
+            resourceTypes: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/meta/menus?cluster=default')) {
+        return new Response(
+          JSON.stringify({
+            cluster: 'default',
+            menus: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/auth/accept-invite')) {
+        return new Response(
+          JSON.stringify({
+            status: 'accepted',
+            tenant_id: 'tenant-dev',
+            username: 'new-user',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response('not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        locale="en"
+        onLocaleChange={vi.fn()}
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Accept Invite' });
+    fireEvent.change(within(dialog).getByLabelText('Username'), {
+      target: { value: 'new-user' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Password'), {
+      target: { value: 'strong-pass' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Accept Invite' }));
+
+    expect(await screen.findByText('Invite accepted: accepted')).toBeTruthy();
+    window.location.hash = originalHash;
+  });
 });

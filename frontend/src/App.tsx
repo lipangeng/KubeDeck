@@ -36,6 +36,7 @@ import { composeMenus } from './core/menuComposer';
 import { groupMenusByGroup } from './core/menuGrouping';
 import { translate, type Locale } from './i18n';
 import {
+  acceptInvite,
   clearAuthToken,
   login,
   me,
@@ -204,6 +205,19 @@ function normalizeRoute(route: string): string {
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }
 
+function routePath(route: string): string {
+  return normalizeRoute(route.split('?')[0] ?? '/');
+}
+
+function parseInviteToken(route: string): string {
+  const [path, query = ''] = route.split('?');
+  if (routePath(path) !== '/accept-invite') {
+    return '';
+  }
+  const params = new URLSearchParams(query);
+  return params.get('token')?.trim() ?? '';
+}
+
 function menuIcon(group: string, targetType: 'page' | 'resource'): ReactNode {
   const normalizedGroup = group.trim().toUpperCase();
   if (normalizedGroup === 'WORKLOAD') {
@@ -282,6 +296,11 @@ function App({
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [tenantBusy, setTenantBusy] = useState(false);
+  const [inviteUsername, setInviteUsername] = useState('');
+  const [invitePassword, setInvitePassword] = useState('');
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   function applyMenuOverride(menu: MenuItem): MenuItem {
     const override = menuOverrides[menu.id];
@@ -433,7 +452,7 @@ function App({
 
   useEffect(() => {
     const matched = configuredMenus.find(
-      (menu) => normalizeRoute(menu.targetRef) === normalizeRoute(currentRoute),
+      (menu) => routePath(menu.targetRef) === routePath(currentRoute),
     );
     if (matched && matched.id !== selectedMenuID) {
       setSelectedMenuID(matched.id);
@@ -441,7 +460,7 @@ function App({
   }, [configuredMenus, currentRoute, selectedMenuID]);
 
   function navigateMenu(menu: MenuItem) {
-    const nextRoute = normalizeRoute(menu.targetRef);
+    const nextRoute = routePath(menu.targetRef);
     setSelectedMenuID(menu.id);
     setCurrentRoute(nextRoute);
     if (typeof window !== 'undefined') {
@@ -731,6 +750,23 @@ function App({
     }
   }
 
+  async function submitAcceptInvite(inviteToken: string) {
+    if (inviteToken === '') {
+      return;
+    }
+    setInviteBusy(true);
+    setInviteError(null);
+    setInviteStatus(null);
+    try {
+      const payload = await acceptInvite(inviteToken, inviteUsername, invitePassword);
+      setInviteStatus(payload.status);
+    } catch (e) {
+      setInviteError(e instanceof Error ? e.message : 'accept invite failed');
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
   const failureSummary =
     healthError || readyError
       ? [
@@ -751,6 +787,8 @@ function App({
     : 'never';
   const activeTenantCode =
     authTenants.find((tenant) => tenant.id === activeTenantID)?.code || authTenants[0]?.code || '';
+  const inviteToken = parseInviteToken(currentRoute);
+  const acceptInviteOpen = inviteToken !== '';
 
   return (
     <Box
@@ -919,7 +957,7 @@ function App({
                     <ListItemButton
                       selected={
                         selectedMenuID === menu.id ||
-                        normalizeRoute(menu.targetRef) === normalizeRoute(currentRoute)
+                        routePath(menu.targetRef) === routePath(currentRoute)
                       }
                       onClick={() => navigateMenu(menu)}
                       sx={{
@@ -1003,7 +1041,7 @@ function App({
                           <ListItemButton
                             selected={
                               selectedMenuID === item.id ||
-                              normalizeRoute(item.targetRef) === normalizeRoute(currentRoute)
+                              routePath(item.targetRef) === routePath(currentRoute)
                             }
                             onClick={() => navigateMenu(item)}
                             sx={{
@@ -1159,6 +1197,67 @@ function App({
           </Paper>
         </Stack>
       </Box>
+
+      <Dialog
+        open={acceptInviteOpen}
+        onClose={() => {
+          setCurrentRoute('/');
+          if (typeof window !== 'undefined') {
+            window.location.hash = '/';
+          }
+        }}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>{t('acceptInvite')}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.2} sx={{ pt: 0.4 }}>
+            <Typography variant="caption" color="text.secondary">
+              {t('inviteTokenDetected')}
+            </Typography>
+            <TextField
+              label={t('username')}
+              value={inviteUsername}
+              onChange={(event) => setInviteUsername(event.target.value)}
+            />
+            <TextField
+              label={t('password')}
+              type="password"
+              value={invitePassword}
+              onChange={(event) => setInvitePassword(event.target.value)}
+            />
+            {inviteStatus ? (
+              <Typography variant="body2" color="success.main">
+                {t('inviteAccepted', { status: inviteStatus })}
+              </Typography>
+            ) : null}
+            {inviteError ? (
+              <Typography variant="body2" color="error">
+                {t('inviteAcceptError', { error: inviteError })}
+              </Typography>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setCurrentRoute('/');
+              if (typeof window !== 'undefined') {
+                window.location.hash = '/';
+              }
+            }}
+          >
+            {t('close')}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => void submitAcceptInvite(inviteToken)}
+            disabled={inviteBusy || inviteUsername.trim() === '' || invitePassword.trim() === ''}
+          >
+            {t('acceptInvite')}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={authDialogOpen}

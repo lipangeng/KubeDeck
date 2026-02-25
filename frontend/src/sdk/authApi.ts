@@ -110,6 +110,36 @@ export async function switchTenant(
   };
 }
 
+export async function acceptInvite(
+  token: string,
+  username: string,
+  password: string,
+): Promise<{ status: string; tenant_id: string; username: string }> {
+  const response = await fetch('/api/auth/accept-invite', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      token,
+      username,
+      password,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`accept invite failed: ${response.status}`);
+  }
+  const payload = await response.json();
+  if (!isObject(payload) || typeof payload.status !== 'string') {
+    throw new Error('invalid accept invite response');
+  }
+  return {
+    status: payload.status,
+    tenant_id: String(payload.tenant_id ?? ''),
+    username: String(payload.username ?? ''),
+  };
+}
+
 function parseAuthLoginResponse(value: unknown): AuthLoginResponse {
   if (!isObject(value) || typeof value.token !== 'string' || !isObject(value.user)) {
     throw new Error('invalid auth login response');
