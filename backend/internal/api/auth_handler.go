@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"kubedeck/backend/internal/auth"
 	"kubedeck/backend/internal/core/audit"
@@ -67,14 +68,21 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	tenantCode, ok := normalizeTenantCode(req.TenantCode)
+	if !ok {
+		_ = defaultAuditWriter.Write(audit.Event{Action: "auth.login.failed", TargetType: "session", Result: "denied", Reason: "invalid_tenant_code"})
+		writeJSONError(w, http.StatusBadRequest, "invalid_tenant_code")
+		return
+	}
+	_ = defaultAuditWriter.Write(audit.Event{Action: "auth.login.attempted", TargetType: "session", Result: "attempted"})
 
 	user, err := h.provider.Authenticate(req.Username, req.Password)
 	if err != nil {
-		_ = defaultAuditWriter.Write(audit.Event{Action: "auth.login", TargetType: "session", Result: "denied", Reason: "invalid_credentials"})
+		_ = defaultAuditWriter.Write(audit.Event{Action: "auth.login.failed", TargetType: "session", Result: "denied", Reason: "invalid_credentials"})
 		writeJSONError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
-	h.loginWithResolvedUser(w, user, req.TenantCode, req.TenantID, "auth.login")
+	h.loginWithResolvedUser(w, user, tenantCode, req.TenantID, "auth.login")
 }
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
@@ -129,8 +137,21 @@ func (h *AuthHandler) SwitchTenant(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	tenantCode, ok := normalizeTenantCode(req.TenantCode)
+	if !ok {
+		_ = defaultAuditWriter.Write(audit.Event{
+			ActorID:    session.User.ID,
+			TenantID:   session.ActiveTenantID,
+			Action:     "auth.switch_tenant",
+			TargetType: "tenant",
+			Result:     "denied",
+			Reason:     "invalid_tenant_code",
+		})
+		writeJSONError(w, http.StatusBadRequest, "invalid_tenant_code")
+		return
+	}
 
-	nextTenantID := resolveActiveTenant(req.TenantCode, req.TenantID, session.Available)
+	nextTenantID := resolveActiveTenant(tenantCode, req.TenantID, session.Available)
 	if nextTenantID == "" {
 		_ = defaultAuditWriter.Write(audit.Event{
 			ActorID:    session.User.ID,
@@ -421,6 +442,12 @@ func (h *AuthHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	tenantCode, ok := normalizeTenantCode(req.TenantCode)
+	if !ok {
+		_ = defaultAuditWriter.Write(audit.Event{Action: "auth.oauth.callback", TargetType: "session", Result: "denied", Reason: "invalid_tenant_code"})
+		writeJSONError(w, http.StatusBadRequest, "invalid_tenant_code")
+		return
+	}
 	if !consumeOAuthState(req.State) {
 		_ = defaultAuditWriter.Write(audit.Event{Action: "auth.oauth.callback", TargetType: "session", Result: "denied", Reason: "invalid_state"})
 		writeJSONError(w, http.StatusBadRequest, "invalid_state")
@@ -432,7 +459,7 @@ func (h *AuthHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "invalid_oauth_code")
 		return
 	}
-	h.loginWithResolvedUser(w, user, req.TenantCode, req.TenantID, "auth.oauth.callback")
+	h.loginWithResolvedUser(w, user, tenantCode, req.TenantID, "auth.oauth.callback")
 }
 
 func (h *AuthHandler) loginWithResolvedUser(
@@ -445,12 +472,12 @@ func (h *AuthHandler) loginWithResolvedUser(
 	tenants, memberships := resolveTenantsAndMembershipsForUser(user)
 	activeTenantID := resolveActiveTenant(tenantCode, tenantID, tenants)
 	if activeTenantID == "" {
-		_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, Action: auditAction, TargetType: "tenant", Result: "denied", Reason: "tenant_not_found"})
+		_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, Action: auditAction + ".failed", TargetType: "tenant", Result: "denied", Reason: "tenant_not_found"})
 		writeJSONError(w, http.StatusForbidden, "tenant_not_found")
 		return
 	}
 	if !isMembershipActiveForTenant(memberships, activeTenantID, time.Now().UTC()) {
-		_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, TenantID: activeTenantID, Action: auditAction, TargetType: "tenant_membership", Result: "denied", Reason: "membership_expired"})
+		_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, TenantID: activeTenantID, Action: auditAction + ".failed", TargetType: "tenant_membership", Result: "denied", Reason: "membership_expired"})
 		writeJSONError(w, http.StatusForbidden, "membership_expired")
 		return
 	}
@@ -467,7 +494,7 @@ func (h *AuthHandler) loginWithResolvedUser(
 		ActiveTenantID: activeTenantID,
 		ExpiresAt:      expiresAt,
 	})
-	_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, TenantID: activeTenantID, Action: auditAction, TargetType: "session", TargetID: token, Result: "allowed"})
+	_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, TenantID: activeTenantID, Action: auditAction + ".succeeded", TargetType: "session", TargetID: token, Result: "allowed"})
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{
 		"token":            token,
@@ -476,6 +503,23 @@ func (h *AuthHandler) loginWithResolvedUser(
 		"active_tenant_id": activeTenantID,
 		"expires_at":       expiresAt,
 	})
+}
+
+func normalizeTenantCode(raw string) (string, bool) {
+	code := strings.TrimSpace(raw)
+	if code == "" {
+		return "", true
+	}
+	if len(code) > 64 {
+		return "", false
+	}
+	for _, ch := range code {
+		if unicode.IsLetter(ch) || unicode.IsDigit(ch) || ch == '-' || ch == '_' {
+			continue
+		}
+		return "", false
+	}
+	return strings.ToLower(code), true
 }
 
 func resolveTenantsAndMembershipsForUser(user auth.User) ([]tenantInfo, []auth.TenantMembership) {

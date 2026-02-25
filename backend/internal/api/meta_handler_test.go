@@ -644,6 +644,102 @@ func TestAuthLoginDeniedWhenUserHasNoTenantMembership(t *testing.T) {
 	}
 }
 
+func TestAuthLoginRejectsInvalidTenantCode(t *testing.T) {
+	resetAuthSessions()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"alice","password":"pw","tenant_code":"bad code!"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected login 400 for invalid tenant code, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+	if !strings.Contains(loginResp.Body.String(), "invalid_tenant_code") {
+		t.Fatalf("expected invalid_tenant_code error, got %s", loginResp.Body.String())
+	}
+}
+
+func TestSwitchTenantRejectsInvalidTenantCode(t *testing.T) {
+	resetAuthSessions()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"alice","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login response: %v", err)
+	}
+
+	switchPayload := []byte(`{"tenant_code":"bad code!"}`)
+	switchReq := httptest.NewRequest(http.MethodPost, "/api/auth/switch-tenant", bytes.NewReader(switchPayload))
+	switchReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	switchResp := httptest.NewRecorder()
+	router.ServeHTTP(switchResp, switchReq)
+	if switchResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected switch 400 for invalid tenant code, got %d body=%s", switchResp.Code, switchResp.Body.String())
+	}
+	if !strings.Contains(switchResp.Body.String(), "invalid_tenant_code") {
+		t.Fatalf("expected invalid_tenant_code error, got %s", switchResp.Body.String())
+	}
+}
+
+func TestAuthLoginWritesAttemptedAndOutcomeAuditEvents(t *testing.T) {
+	resetAuthSessions()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	failedPayload := []byte(`{"username":"alice","password":"wrong","tenant_code":"dev"}`)
+	failedReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(failedPayload))
+	failedResp := httptest.NewRecorder()
+	router.ServeHTTP(failedResp, failedReq)
+	if failedResp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected failed login 401, got %d", failedResp.Code)
+	}
+
+	successPayload := []byte(`{"username":"alice","password":"pw","tenant_code":"dev"}`)
+	successReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(successPayload))
+	successResp := httptest.NewRecorder()
+	router.ServeHTTP(successResp, successReq)
+	if successResp.Code != http.StatusOK {
+		t.Fatalf("expected success login 200, got %d body=%s", successResp.Code, successResp.Body.String())
+	}
+
+	writer, ok := defaultAuditWriter.(*audit.MemoryWriter)
+	if !ok {
+		t.Fatalf("expected memory audit writer")
+	}
+	events := writer.List("")
+	var hasAttempted bool
+	var hasFailed bool
+	var hasSucceeded bool
+	for _, event := range events {
+		switch event.Action {
+		case "auth.login.attempted":
+			hasAttempted = true
+		case "auth.login.failed":
+			hasFailed = true
+		case "auth.login.succeeded":
+			hasSucceeded = true
+		}
+	}
+	if !hasAttempted || !hasFailed || !hasSucceeded {
+		t.Fatalf("expected attempted/failed/succeeded login events, got %+v", events)
+	}
+}
+
 func TestOAuthURLFlow(t *testing.T) {
 	resetAuthSessions()
 	resetAuditWriter()
