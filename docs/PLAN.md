@@ -24,6 +24,11 @@ Completed and merged:
 - Backend module skeleton (`api/auth/core/plugins/registry/storage/webui`)
 - Multi-database storage abstraction contracts (default sqlite, mysql/postgres stubs)
 - Metadata/resource stub APIs and health probes (`/api/healthz`, `/api/readyz`)
+- Local auth session APIs (`login/me/logout/switch-tenant`) with `tenant_code` targeting
+- Membership validity domain model (`effective_from/effective_to`) and validation hooks
+- Tenant-scoped IAM APIs (group CRUD, permission binding, membership-group binding)
+- Invite onboarding APIs (`create/list/accept`) with notification provider abstraction
+- Structured audit pipeline and tenant-scoped audit events API
 - Frontend shell baseline with MUI
 - Theme preference (`system/light/dark`) with persistence
 - Sidebar menu composition and grouped rendering (`system/user/dynamic`)
@@ -33,10 +38,11 @@ Completed and merged:
 
 ## 4. Next Priority (Phase 1 continuation)
 
-- Multi-YAML create dialog with namespace defaulting rules
-- Registry payload enrichment (typed resource/page/slot/menu schema alignment)
-- Cluster switch lifecycle hardening (state/cache invalidation)
-- User preferences API persistence (theme/language/cluster/namespace)
+- Persist IAM domain from in-memory state to sqlite repositories
+- Add auth middleware protection for sensitive API groups by default
+- Implement tenant/member/group/invite storage queries with unique constraints
+- Add frontend IAM bootstrap (session-aware startup and tenant switch UX)
+- Add invite link entry/accept flow in UI
 
 ## 5. Canonical Documents
 
