@@ -349,6 +349,20 @@ func TestRegistryMethodNotAllowed(t *testing.T) {
 	}
 }
 
+func TestRoutePolicyRequiresSessionForIAMUsers(t *testing.T) {
+	resetAuthSessions()
+	resetAuditWriter()
+	router := NewRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/iam/users", nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusUnauthorized, resp.Code, resp.Body.String())
+	}
+}
+
 func TestAuthLoginMeSwitchLogoutFlow(t *testing.T) {
 	resetAuthSessions()
 	resetAuditWriter()
