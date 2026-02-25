@@ -17,6 +17,7 @@ import Paper from '@mui/material/Paper';
 import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { composeMenus } from './core/menuComposer';
@@ -68,6 +69,16 @@ function statusColor(status: ProbeStatus): 'success' | 'warning' | 'error' {
     return 'warning';
   }
   return 'error';
+}
+
+function resolveRuntimeStatus(healthStatus: ProbeStatus, readyStatus: ProbeStatus): ProbeStatus {
+  if (healthStatus === 'error' || readyStatus === 'error') {
+    return 'error';
+  }
+  if (healthStatus === 'checking' || readyStatus === 'checking') {
+    return 'checking';
+  }
+  return 'ok';
 }
 
 function countYamlDocuments(yaml: string): number {
@@ -307,6 +318,10 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const clusterScopedResourceCount = resourceTypeCount - namespacedResourceCount;
   const dynamicMenuCount = groupedMenus.dynamic.length;
   const yamlDocumentCount = countYamlDocuments(yamlInput);
+  const runtimeStatus = resolveRuntimeStatus(healthStatus, readyStatus);
+  const checkedAtLabel = lastCheckedAt
+    ? new Date(lastCheckedAt).toLocaleTimeString()
+    : 'never';
 
   return (
     <Box
@@ -333,38 +348,25 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             KubeDeck
           </Typography>
 
-          <Paper
-            variant="outlined"
-            sx={{
-              px: 1,
-              py: 0.5,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.8,
-              flexWrap: 'wrap',
-              borderRadius: 2,
-              bgcolor: 'background.paper',
-            }}
+          <Tooltip
+            arrow
+            title={`healthz: ${healthStatus}, readyz: ${readyStatus}, checked: ${lastCheckedAt ?? 'never'}`}
           >
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-              Runtime
-            </Typography>
             <Chip
               size="small"
-              color={statusColor(healthStatus)}
-              variant="filled"
-              label={`healthz: ${healthStatus}`}
+              color={statusColor(runtimeStatus)}
+              variant="outlined"
+              label={`Runtime: ${runtimeStatus}`}
+              sx={{
+                borderRadius: 999,
+                fontWeight: 600,
+                bgcolor: 'background.paper',
+              }}
             />
-            <Chip
-              size="small"
-              color={statusColor(readyStatus)}
-              variant="filled"
-              label={`readyz: ${readyStatus}`}
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-              Checked: {lastCheckedAt ?? 'never'}
-            </Typography>
-          </Paper>
+          </Tooltip>
+          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+            Updated {checkedAtLabel}
+          </Typography>
 
           <Box sx={{ flexGrow: 1 }} />
 

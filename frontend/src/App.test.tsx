@@ -150,15 +150,16 @@ describe('App', () => {
     expect(screen.getByText('User Menus')).toBeTruthy();
     expect(screen.getByText('Dynamic Menus')).toBeTruthy();
     expect(screen.getByText('API target (test: http://127.0.0.1:8080)')).toBeTruthy();
-    expect(await screen.findByText('healthz: ok')).toBeTruthy();
-    expect(await screen.findByText('readyz: ok')).toBeTruthy();
+    expect(await screen.findByText('Runtime: ok')).toBeTruthy();
+    expect(await screen.findByText('Health: ok')).toBeTruthy();
+    expect(await screen.findByText('Ready: ok')).toBeTruthy();
     expect(await screen.findByText('Registry Resource Types')).toBeTruthy();
     expect(await screen.findByText('Namespaced Types')).toBeTruthy();
     expect(await screen.findByText('Cluster-Scoped Types')).toBeTruthy();
     expect(screen.getByTestId('registry-resource-type-count').textContent).toBe('2');
     expect(screen.getByTestId('namespaced-resource-type-count').textContent).toBe('2');
     expect(screen.getByTestId('cluster-scoped-resource-type-count').textContent).toBe('0');
-    expect(await screen.findByText(/Checked:/)).toBeTruthy();
+    expect(await screen.findByText(/Updated/)).toBeTruthy();
     expect(await screen.findByText('Failure summary: none')).toBeTruthy();
 
     expect(await screen.findByText('Workloads')).toBeTruthy();
@@ -244,8 +245,9 @@ describe('App', () => {
       />,
     );
 
-    expect(await screen.findByText('healthz: ok')).toBeTruthy();
-    expect(await screen.findByText('readyz: error')).toBeTruthy();
+    expect(await screen.findByText('Runtime: error')).toBeTruthy();
+    expect(await screen.findByText('Health: ok')).toBeTruthy();
+    expect(await screen.findByText('Ready: error')).toBeTruthy();
     expect(await screen.findByText('Failure summary: readyz: status 503')).toBeTruthy();
   });
 
