@@ -3,27 +3,39 @@ package api
 import "net/http"
 
 type routePolicy struct {
-	requireSession bool
+	requireSession          bool
+	requiredAnyPermissions []string
+	methodPermissions      map[string][]string
 }
 
 func withRoutePolicy(handler http.HandlerFunc, policy routePolicy) http.HandlerFunc {
-	if !policy.requireSession {
+	if !policy.requireSession && len(policy.requiredAnyPermissions) == 0 && len(policy.methodPermissions) == 0 {
 		return handler
 	}
-	return requireSession(handler)
-}
-
-func requireSession(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, _, ok, reason := currentValidSessionFromRequest(r)
-		if !ok {
-			if reason == "membership_expired" {
-				writeJSONError(w, http.StatusForbidden, "membership_expired")
+		var session authSession
+		if policy.requireSession || len(policy.requiredAnyPermissions) > 0 || len(policy.methodPermissions) > 0 {
+			_, current, ok, reason := currentValidSessionFromRequest(r)
+			if !ok {
+				if reason == "membership_expired" {
+					writeJSONError(w, http.StatusForbidden, "membership_expired")
+					return
+				}
+				writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
-			writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+			session = current
+		}
+
+		required := policy.requiredAnyPermissions
+		if perms, ok := policy.methodPermissions[r.Method]; ok {
+			required = perms
+		}
+		if len(required) > 0 && !sessionHasAnyPermission(session, required) {
+			writeJSONError(w, http.StatusForbidden, "permission_denied")
 			return
 		}
-		next(w, r)
+
+		handler(w, r)
 	}
 }

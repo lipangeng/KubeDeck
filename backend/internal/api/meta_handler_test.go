@@ -363,6 +363,41 @@ func TestRoutePolicyRequiresSessionForIAMUsers(t *testing.T) {
 	}
 }
 
+func TestRoutePolicyRequiresPermissionForAuditEvents(t *testing.T) {
+	resetAuthSessions()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"viewer","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+	if loginBody.Token == "" {
+		t.Fatalf("expected token in login response")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audit/events", nil)
+	req.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusForbidden, resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), "permission_denied") {
+		t.Fatalf("expected permission_denied body, got %s", resp.Body.String())
+	}
+}
+
 func TestAuthLoginMeSwitchLogoutFlow(t *testing.T) {
 	resetAuthSessions()
 	resetAuditWriter()
