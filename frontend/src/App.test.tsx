@@ -157,7 +157,7 @@ describe('App', () => {
 
     expect(await screen.findByText('Workloads')).toBeTruthy();
     expect((await screen.findAllByText('Favorites')).length).toBeGreaterThan(0);
-    expect(await screen.findByText('WORKLOAD')).toBeTruthy();
+    expect(await screen.findByText(/WORKLOAD/)).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Cluster'), {
       target: { value: 'dev' },

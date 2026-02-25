@@ -3,6 +3,7 @@ import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import Collapse from '@mui/material/Collapse';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
@@ -12,6 +13,7 @@ import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import Paper from '@mui/material/Paper';
 import Select from '@mui/material/Select';
@@ -34,6 +36,7 @@ import { ALL_NAMESPACES, resolveCreateDefaultNamespace } from './state/namespace
 import type { ThemePreference } from './themeMode';
 
 type ProbeStatus = 'checking' | 'ok' | 'error';
+const MENU_GROUPS_STORAGE_KEY = 'kubedeck.menu.groups.expanded';
 
 interface AppProps {
   locale: Locale;
@@ -84,6 +87,28 @@ function resolveRuntimeStatus(healthStatus: ProbeStatus, readyStatus: ProbeStatu
   return 'ok';
 }
 
+function readStoredExpandedGroups(): Record<string, boolean> {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+  const raw = window.localStorage.getItem(MENU_GROUPS_STORAGE_KEY);
+  if (!raw) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const sanitized: Record<string, boolean> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === 'boolean') {
+        sanitized[key] = value;
+      }
+    }
+    return sanitized;
+  } catch {
+    return {};
+  }
+}
+
 function countYamlDocuments(yaml: string): number {
   return yaml
     .split(/^---\s*$/m)
@@ -94,40 +119,6 @@ function countYamlDocuments(yaml: string): number {
 function normalizeResourceGroupName(name: string): string {
   const trimmed = name.trim();
   return trimmed === '' ? 'core' : trimmed;
-}
-
-function MenuGroupSection({
-  title,
-  items,
-  locale,
-}: {
-  title: string;
-  items: MenuItem[];
-  locale: Locale;
-}) {
-  return (
-    <Box>
-      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
-        {title}
-      </Typography>
-      <List dense sx={{ pt: 0 }}>
-        {items.length === 0 ? (
-          <ListItem disablePadding>
-            <ListItemText
-              primary={translate(locale, 'noEntries')}
-              primaryTypographyProps={{ color: 'text.disabled' }}
-            />
-          </ListItem>
-        ) : (
-          items.map((menu) => (
-            <ListItem key={menu.id} disablePadding>
-              <ListItemText primary={menu.title} />
-            </ListItem>
-          ))
-        )}
-      </List>
-    </Box>
-  );
 }
 
 function App({
@@ -159,6 +150,10 @@ function App({
   const [healthError, setHealthError] = useState<string | null>(null);
   const [readyError, setReadyError] = useState<string | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
+  const [selectedMenuID, setSelectedMenuID] = useState<string>('');
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
+    () => readStoredExpandedGroups(),
+  );
 
   const configuredMenus = useMemo(() => {
     const systemMenus = menus.filter((menu) => menu.source === 'system');
@@ -191,6 +186,10 @@ function App({
       items,
     }));
   }, [resourceTypes]);
+  const menuIDs = useMemo(
+    () => [...favoritesMenus.map((menu) => menu.id), ...groupedMenus.flatMap((group) => group.items.map((menu) => menu.id))],
+    [favoritesMenus, groupedMenus],
+  );
 
   useEffect(() => {
     setCreateNamespace(
@@ -200,6 +199,39 @@ function App({
       }),
     );
   }, [listFilterNamespace, lastUsedNamespace]);
+
+  useEffect(() => {
+    setExpandedGroups((previous) => {
+      const next = { ...previous };
+      let changed = false;
+      for (const group of groupedMenus) {
+        if (next[group.name] === undefined) {
+          next[group.name] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : previous;
+    });
+  }, [groupedMenus]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(MENU_GROUPS_STORAGE_KEY, JSON.stringify(expandedGroups));
+  }, [expandedGroups]);
+
+  useEffect(() => {
+    if (menuIDs.length === 0) {
+      if (selectedMenuID !== '') {
+        setSelectedMenuID('');
+      }
+      return;
+    }
+    if (!menuIDs.includes(selectedMenuID)) {
+      setSelectedMenuID(menuIDs[0]);
+    }
+  }, [menuIDs, selectedMenuID]);
 
   async function applyResources() {
     setApplyStatus(null);
@@ -499,7 +531,22 @@ function App({
               <List dense sx={{ pt: 0 }}>
                 {favoritesMenus.map((menu) => (
                   <ListItem key={menu.id} disablePadding>
-                    <ListItemText primary={menu.title} />
+                    <ListItemButton
+                      selected={selectedMenuID === menu.id}
+                      onClick={() => setSelectedMenuID(menu.id)}
+                      sx={{
+                        borderRadius: 1.2,
+                        mb: 0.3,
+                        transition: 'all 150ms ease',
+                        '&.Mui-selected': {
+                          bgcolor: 'action.selected',
+                          boxShadow: 'inset 0 0 0 1px',
+                          borderColor: 'divider',
+                        },
+                      }}
+                    >
+                      <ListItemText primary={`★ ${menu.title}`} />
+                    </ListItemButton>
                   </ListItem>
                 ))}
               </List>
@@ -511,7 +558,55 @@ function App({
               <Typography color="text.secondary">{t('noMenus')}</Typography>
             ) : (
               groupedMenus.map((group) => (
-                <MenuGroupSection key={group.name} title={group.name} items={group.items} locale={locale} />
+                <Box key={group.name}>
+                  <ListItemButton
+                    onClick={() =>
+                      setExpandedGroups((previous) => ({
+                        ...previous,
+                        [group.name]: !previous[group.name],
+                      }))
+                    }
+                    sx={{
+                      px: 1,
+                      py: 0.4,
+                      borderRadius: 1.2,
+                      mb: 0.2,
+                    }}
+                  >
+                    <ListItemText
+                      primary={`${expandedGroups[group.name] ? '▾' : '▸'} ${group.name}`}
+                      primaryTypographyProps={{
+                        fontWeight: 700,
+                        fontSize: 12,
+                        color: 'text.secondary',
+                        letterSpacing: 0.35,
+                      }}
+                    />
+                  </ListItemButton>
+                  <Collapse in={expandedGroups[group.name] ?? true} timeout={160}>
+                    <List dense sx={{ pt: 0, pl: 0.8 }}>
+                      {group.items.map((item) => (
+                        <ListItem key={item.id} disablePadding>
+                          <ListItemButton
+                            selected={selectedMenuID === item.id}
+                            onClick={() => setSelectedMenuID(item.id)}
+                            sx={{
+                              borderRadius: 1.2,
+                              mb: 0.2,
+                              '&.Mui-selected': {
+                                bgcolor: 'action.selected',
+                                boxShadow: 'inset 0 0 0 1px',
+                                borderColor: 'divider',
+                              },
+                            }}
+                          >
+                            <ListItemText primary={item.title} />
+                          </ListItemButton>
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Collapse>
+                </Box>
               ))
             )}
           </Stack>
