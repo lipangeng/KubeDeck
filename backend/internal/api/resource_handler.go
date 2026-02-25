@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
+	"kubedeck/backend/internal/core/audit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -143,7 +145,18 @@ func (h *ResourceHandler) Apply(w http.ResponseWriter, r *http.Request) {
 		Results:          results,
 	}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal server error")
+		return
 	}
+	_ = defaultAuditWriter.Write(audit.Event{
+		TenantID:   "default",
+		Action:     "resource.apply",
+		TargetType: "manifest",
+		Result:     status,
+		Metadata: map[string]string{
+			"cluster": cluster,
+			"total":   strconv.Itoa(len(results)),
+		},
+	})
 }
 
 func splitYAMLDocuments(raw []byte) [][]byte {

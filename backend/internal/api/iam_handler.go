@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"kubedeck/backend/internal/core/audit"
 	"kubedeck/backend/internal/core/notification"
 )
 
@@ -203,6 +204,14 @@ func (h *IAMHandler) createGroup(w http.ResponseWriter, r *http.Request, session
 	iamGroupsMu.Lock()
 	iamGroups[id] = group
 	iamGroupsMu.Unlock()
+	_ = defaultAuditWriter.Write(audit.Event{
+		TenantID:   session.ActiveTenantID,
+		ActorID:    session.User.ID,
+		Action:     "iam.group.create",
+		TargetType: "group",
+		TargetID:   group.ID,
+		Result:     "allowed",
+	})
 
 	_ = writeJSON(w, http.StatusCreated, group)
 }
@@ -235,6 +244,14 @@ func (h *IAMHandler) patchGroup(
 		group.Description = *req.Description
 	}
 	iamGroups[groupID] = group
+	_ = defaultAuditWriter.Write(audit.Event{
+		TenantID:   session.ActiveTenantID,
+		ActorID:    session.User.ID,
+		Action:     "iam.group.patch",
+		TargetType: "group",
+		TargetID:   group.ID,
+		Result:     "allowed",
+	})
 	_ = writeJSON(w, http.StatusOK, group)
 }
 
@@ -247,6 +264,14 @@ func (h *IAMHandler) deleteGroup(w http.ResponseWriter, session authSession, gro
 		return
 	}
 	delete(iamGroups, groupID)
+	_ = defaultAuditWriter.Write(audit.Event{
+		TenantID:   session.ActiveTenantID,
+		ActorID:    session.User.ID,
+		Action:     "iam.group.delete",
+		TargetType: "group",
+		TargetID:   group.ID,
+		Result:     "allowed",
+	})
 	_ = writeJSON(w, http.StatusOK, map[string]any{"deleted": group.ID})
 }
 
@@ -272,6 +297,14 @@ func (h *IAMHandler) replaceGroupPermissions(
 	}
 	group.Permissions = append([]string{}, req.Permissions...)
 	iamGroups[groupID] = group
+	_ = defaultAuditWriter.Write(audit.Event{
+		TenantID:   session.ActiveTenantID,
+		ActorID:    session.User.ID,
+		Action:     "iam.group.permissions.replace",
+		TargetType: "group",
+		TargetID:   group.ID,
+		Result:     "allowed",
+	})
 	_ = writeJSON(w, http.StatusOK, group)
 }
 
@@ -349,6 +382,14 @@ func (h *IAMHandler) createInvite(w http.ResponseWriter, r *http.Request, sessio
 	invitesMu.Lock()
 	invites[token] = invite
 	invitesMu.Unlock()
+	_ = defaultAuditWriter.Write(audit.Event{
+		TenantID:   session.ActiveTenantID,
+		ActorID:    session.User.ID,
+		Action:     "iam.invite.create",
+		TargetType: "invite",
+		TargetID:   invite.ID,
+		Result:     "allowed",
+	})
 
 	if invite.InviteeEmail != "" {
 		_ = h.notifier.SendEmail(invite.InviteeEmail, "KubeDeck Invite", invite.InviteLink)

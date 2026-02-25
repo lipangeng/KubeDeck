@@ -10,6 +10,7 @@ func NewRouter() http.Handler {
 	resources := NewResourceHandler()
 	authHandler := NewAuthHandler()
 	iam := NewIAMHandler()
+	audit := NewAuditHandler()
 
 	mux.HandleFunc("/api/meta/registry", meta.Registry)
 	mux.HandleFunc("/api/meta/clusters", meta.Clusters)
@@ -24,6 +25,7 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/api/iam/groups/", iam.GroupByID)
 	mux.HandleFunc("/api/iam/memberships/", iam.ReplaceMembershipGroups)
 	mux.HandleFunc("/api/iam/invites", iam.Invites)
+	mux.HandleFunc("/api/audit/events", audit.Events)
 	mux.HandleFunc("/api/resources/apply", resources.Apply)
 	mux.HandleFunc("/api/healthz", healthHandler)
 	mux.HandleFunc("/api/readyz", healthHandler)

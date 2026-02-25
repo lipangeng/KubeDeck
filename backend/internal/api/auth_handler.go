@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"kubedeck/backend/internal/auth"
+	"kubedeck/backend/internal/core/audit"
 )
 
 type AuthHandler struct {
@@ -57,6 +58,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.provider.Authenticate(req.Username, req.Password)
 	if err != nil {
+		_ = defaultAuditWriter.Write(audit.Event{Action: "auth.login", TargetType: "session", Result: "denied", Reason: "invalid_credentials"})
 		writeJSONError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
@@ -64,10 +66,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	tenants, memberships := defaultMembershipsForUser(user.ID)
 	activeTenantID := resolveActiveTenant(req.TenantCode, req.TenantID, tenants)
 	if activeTenantID == "" {
+		_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, Action: "auth.login", TargetType: "tenant", Result: "denied", Reason: "tenant_not_found"})
 		writeJSONError(w, http.StatusForbidden, "tenant_not_found")
 		return
 	}
 	if !isMembershipActiveForTenant(memberships, activeTenantID, time.Now().UTC()) {
+		_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, TenantID: activeTenantID, Action: "auth.login", TargetType: "tenant_membership", Result: "denied", Reason: "membership_expired"})
 		writeJSONError(w, http.StatusForbidden, "membership_expired")
 		return
 	}
@@ -84,6 +88,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		ActiveTenantID: activeTenantID,
 	}
 	authSessionsMu.Unlock()
+	_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, TenantID: activeTenantID, Action: "auth.login", TargetType: "session", TargetID: token, Result: "allowed"})
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{
 		"token":            token,
@@ -143,6 +148,7 @@ func (h *AuthHandler) SwitchTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !isMembershipActiveForTenant(session.User.Memberships, nextTenantID, time.Now().UTC()) {
+		_ = defaultAuditWriter.Write(audit.Event{ActorID: session.User.ID, TenantID: nextTenantID, Action: "auth.switch_tenant", TargetType: "tenant_membership", Result: "denied", Reason: "membership_expired"})
 		writeJSONError(w, http.StatusForbidden, "membership_expired")
 		return
 	}
@@ -152,6 +158,7 @@ func (h *AuthHandler) SwitchTenant(w http.ResponseWriter, r *http.Request) {
 	authSessionsMu.Lock()
 	authSessions[token] = session
 	authSessionsMu.Unlock()
+	_ = defaultAuditWriter.Write(audit.Event{ActorID: session.User.ID, TenantID: nextTenantID, Action: "auth.switch_tenant", TargetType: "session", TargetID: token, Result: "allowed"})
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{
 		"active_tenant_id": nextTenantID,
@@ -166,9 +173,18 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 
 	token := extractBearerToken(r.Header.Get("Authorization"))
 	if token != "" {
+		var actorID string
+		var tenantID string
+		authSessionsMu.RLock()
+		if existing, ok := authSessions[token]; ok {
+			actorID = existing.User.ID
+			tenantID = existing.ActiveTenantID
+		}
+		authSessionsMu.RUnlock()
 		authSessionsMu.Lock()
 		delete(authSessions, token)
 		authSessionsMu.Unlock()
+		_ = defaultAuditWriter.Write(audit.Event{ActorID: actorID, TenantID: tenantID, Action: "auth.logout", TargetType: "session", TargetID: token, Result: "allowed"})
 	}
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -198,11 +214,13 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	invite, ok := invites[req.Token]
 	if !ok {
 		invitesMu.Unlock()
+		_ = defaultAuditWriter.Write(audit.Event{Action: "auth.accept_invite", TargetType: "invite", Result: "denied", Reason: "invite_not_found"})
 		writeJSONError(w, http.StatusNotFound, "invite_not_found")
 		return
 	}
 	if invite.Status != "pending" {
 		invitesMu.Unlock()
+		_ = defaultAuditWriter.Write(audit.Event{TenantID: invite.TenantID, Action: "auth.accept_invite", TargetType: "invite", TargetID: invite.ID, Result: "denied", Reason: "invite_not_pending"})
 		writeJSONError(w, http.StatusConflict, "invite_not_pending")
 		return
 	}
@@ -210,12 +228,14 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		invite.Status = "expired"
 		invites[req.Token] = invite
 		invitesMu.Unlock()
+		_ = defaultAuditWriter.Write(audit.Event{TenantID: invite.TenantID, Action: "auth.accept_invite", TargetType: "invite", TargetID: invite.ID, Result: "denied", Reason: "invite_expired"})
 		writeJSONError(w, http.StatusGone, "invite_expired")
 		return
 	}
 	invite.Status = "accepted"
 	invites[req.Token] = invite
 	invitesMu.Unlock()
+	_ = defaultAuditWriter.Write(audit.Event{TenantID: invite.TenantID, Action: "auth.accept_invite", TargetType: "invite", TargetID: invite.ID, Result: "allowed"})
 
 	_ = writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "accepted",

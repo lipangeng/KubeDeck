@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"kubedeck/backend/internal/core/audit"
 )
 
 type registryResponse struct {
@@ -36,6 +38,10 @@ func resetInvites() {
 	invitesMu.Unlock()
 }
 
+func resetAuditWriter() {
+	defaultAuditWriter = audit.NewMemoryWriter()
+}
+
 type menusResponse struct {
 	Cluster string `json:"cluster"`
 	Menus   []struct {
@@ -51,6 +57,7 @@ type menusResponse struct {
 }
 
 func TestRegistryEndpoint(t *testing.T) {
+	resetAuditWriter()
 	router := NewRouter()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/meta/registry?cluster=dev", nil)
@@ -264,6 +271,7 @@ func TestRegistryMethodNotAllowed(t *testing.T) {
 
 func TestAuthLoginMeSwitchLogoutFlow(t *testing.T) {
 	resetAuthSessions()
+	resetAuditWriter()
 	router := NewRouter()
 
 	loginPayload := []byte(`{"username":"alice","password":"pw","tenant_code":"staging"}`)
@@ -333,6 +341,7 @@ func TestAuthLoginMeSwitchLogoutFlow(t *testing.T) {
 
 func TestAuthLoginTenantCodeDeniedWhenUnknown(t *testing.T) {
 	resetAuthSessions()
+	resetAuditWriter()
 	router := NewRouter()
 
 	loginPayload := []byte(`{"username":"alice","password":"pw","tenant_code":"unknown"}`)
@@ -349,6 +358,7 @@ func TestIAMGroupManagementFlow(t *testing.T) {
 	iamGroupsMu.Lock()
 	iamGroups = map[string]iamGroup{}
 	iamGroupsMu.Unlock()
+	resetAuditWriter()
 	router := NewRouter()
 
 	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
@@ -407,6 +417,7 @@ func TestIAMGroupManagementFlow(t *testing.T) {
 
 func TestIAMGroupWriteDeniedForViewer(t *testing.T) {
 	resetAuthSessions()
+	resetAuditWriter()
 	router := NewRouter()
 
 	loginPayload := []byte(`{"username":"viewer","password":"pw","tenant_code":"dev"}`)
@@ -436,6 +447,7 @@ func TestIAMGroupWriteDeniedForViewer(t *testing.T) {
 func TestInviteCreateListAndAcceptFlow(t *testing.T) {
 	resetAuthSessions()
 	resetInvites()
+	resetAuditWriter()
 	router := NewRouter()
 
 	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
@@ -488,6 +500,7 @@ func TestInviteCreateListAndAcceptFlow(t *testing.T) {
 func TestInviteAcceptExpired(t *testing.T) {
 	resetAuthSessions()
 	resetInvites()
+	resetAuditWriter()
 	router := NewRouter()
 
 	invite := iamInvite{
@@ -509,5 +522,44 @@ func TestInviteAcceptExpired(t *testing.T) {
 	router.ServeHTTP(acceptResp, acceptReq)
 	if acceptResp.Code != http.StatusGone {
 		t.Fatalf("expected accept expired invite 410, got %d", acceptResp.Code)
+	}
+}
+
+func TestAuditEventsEndpointIncludesAuthEvents(t *testing.T) {
+	resetAuthSessions()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	eventsReq := httptest.NewRequest(http.MethodGet, "/api/audit/events", nil)
+	eventsReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	eventsResp := httptest.NewRecorder()
+	router.ServeHTTP(eventsResp, eventsReq)
+	if eventsResp.Code != http.StatusOK {
+		t.Fatalf("expected audit events 200, got %d body=%s", eventsResp.Code, eventsResp.Body.String())
+	}
+	var payload struct {
+		Events []struct {
+			Action string `json:"action"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(eventsResp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal audit events: %v", err)
+	}
+	if len(payload.Events) == 0 {
+		t.Fatalf("expected non-empty audit events")
 	}
 }
