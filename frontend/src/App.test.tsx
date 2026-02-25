@@ -140,8 +140,8 @@ describe('App', () => {
     expect(screen.getByRole('navigation', { name: 'Primary Sidebar' })).toBeTruthy();
     expect(screen.getByLabelText('Theme')).toBeTruthy();
     expect(screen.getByLabelText('Language')).toBeTruthy();
-    expect(screen.getByText('Configured Menus')).toBeTruthy();
-    expect(screen.getByText('Resource Catalog (for menu config)')).toBeTruthy();
+    expect(screen.getByText('Favorites')).toBeTruthy();
+    expect(screen.getByText('Context')).toBeTruthy();
     expect(screen.getByText('API target (test: http://127.0.0.1:8080)')).toBeTruthy();
     expect(await screen.findByText('Runtime: ok')).toBeTruthy();
     expect(await screen.findByText('Health: ok')).toBeTruthy();
@@ -156,11 +156,8 @@ describe('App', () => {
     expect(await screen.findByText('Failure summary: none')).toBeTruthy();
 
     expect(await screen.findByText('Workloads')).toBeTruthy();
-    expect(await screen.findByText('Favorites')).toBeTruthy();
+    expect((await screen.findAllByText('Favorites')).length).toBeGreaterThan(0);
     expect(await screen.findByText('WORKLOAD')).toBeTruthy();
-    expect(await screen.findByText('FAVORITES')).toBeTruthy();
-    expect(await screen.findByText('APPS')).toBeTruthy();
-    expect(await screen.findByText('CORE')).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Cluster'), {
       target: { value: 'dev' },

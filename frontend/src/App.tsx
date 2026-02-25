@@ -130,34 +130,6 @@ function MenuGroupSection({
   );
 }
 
-function ResourceCatalogSection({
-  groupName,
-  items,
-  locale,
-}: {
-  groupName: string;
-  items: RegistryResourceType[];
-  locale: Locale;
-}) {
-  return (
-    <Box>
-      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
-        {groupName}
-      </Typography>
-      <List dense sx={{ pt: 0 }}>
-        {items.map((resource) => (
-          <ListItem key={resource.id} disablePadding>
-            <ListItemText
-              primary={resource.kind}
-              secondary={`${resource.namespaced ? translate(locale, 'namespaced') : translate(locale, 'clusterScoped')} · ${resource.source}`}
-            />
-          </ListItem>
-        ))}
-      </List>
-    </Box>
-  );
-}
-
 function App({
   locale,
   onLocaleChange,
@@ -193,7 +165,18 @@ function App({
     const userMenus = menus.filter((menu) => menu.source === 'user');
     return composeMenus(systemMenus, userMenus, []);
   }, [menus]);
-  const groupedMenus = useMemo(() => groupMenusByGroup(configuredMenus), [configuredMenus]);
+  const favoritesMenus = useMemo(
+    () =>
+      configuredMenus.filter(
+        (menu) =>
+          menu.source === 'user' || menu.group.trim().toUpperCase() === 'FAVORITES',
+      ),
+    [configuredMenus],
+  );
+  const groupedMenus = useMemo(() => {
+    const favoriteIDs = new Set(favoritesMenus.map((menu) => menu.id));
+    return groupMenusByGroup(configuredMenus.filter((menu) => !favoriteIDs.has(menu.id)));
+  }, [configuredMenus, favoritesMenus]);
   const resourceCatalogGroups = useMemo(() => {
     const grouped = new Map<string, RegistryResourceType[]>();
     for (const resource of resourceTypes) {
@@ -377,7 +360,7 @@ function App({
   const resourceTypeCount = resourceTypes.length;
   const namespacedResourceCount = resourceTypes.filter((item) => item.namespaced).length;
   const clusterScopedResourceCount = resourceTypeCount - namespacedResourceCount;
-  const dynamicMenuCount = resourceCatalogGroups.length;
+  const discoveredApiGroupCount = resourceCatalogGroups.length;
   const yamlDocumentCount = countYamlDocuments(yamlInput);
   const runtimeStatus = resolveRuntimeStatus(healthStatus, readyStatus);
   const checkedAtLabel = lastCheckedAt
@@ -428,6 +411,22 @@ function App({
           <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
             {t('checked', { time: checkedAtLabel })}
           </Typography>
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel htmlFor="cluster-select">{t('cluster')}</InputLabel>
+            <Select
+              native
+              value={activeCluster}
+              onChange={(event) => setActiveCluster(event.target.value)}
+              label={t('cluster')}
+              inputProps={{ id: 'cluster-select' }}
+            >
+              {clusters.map((clusterId) => (
+                <option key={clusterId} value={clusterId}>
+                  {clusterId}
+                </option>
+              ))}
+            </Select>
+          </FormControl>
 
           <Box sx={{ flexGrow: 1 }} />
 
@@ -486,78 +485,66 @@ function App({
           }}
         >
           <Stack spacing={2}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              {t('navigation')}
-            </Typography>
-            <FormControl size="small" fullWidth>
-              <InputLabel htmlFor="cluster-select">{t('cluster')}</InputLabel>
-              <Select
-                native
-                value={activeCluster}
-                onChange={(event) => setActiveCluster(event.target.value)}
-                label={t('cluster')}
-                inputProps={{ id: 'cluster-select' }}
-              >
-                {clusters.map((clusterId) => (
-                  <option key={clusterId} value={clusterId}>
-                    {clusterId}
-                  </option>
-                ))}
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" fullWidth>
-              <InputLabel htmlFor="namespace-filter-select">{t('namespaceFilter')}</InputLabel>
-              <Select
-                native
-                value={listFilterNamespace}
-                onChange={(event) => setListFilterNamespace(event.target.value)}
-                label={t('namespaceFilter')}
-                inputProps={{ id: 'namespace-filter-select' }}
-              >
-                <option value={ALL_NAMESPACES}>{ALL_NAMESPACES}</option>
-                <option value="default">default</option>
-                <option value="kube-system">kube-system</option>
-                <option value="dev">dev</option>
-              </Select>
-            </FormControl>
-
-            <Divider />
-
             {loading ? <Typography>{t('loadingMenus')}</Typography> : null}
             {error ? (
               <Typography color="error">{t('failedMenus', { error })}</Typography>
             ) : null}
+
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              {t('configuredMenus')}
+              {t('favorites')}
             </Typography>
+            {favoritesMenus.length === 0 ? (
+              <Typography color="text.secondary">{t('noMenus')}</Typography>
+            ) : (
+              <List dense sx={{ pt: 0 }}>
+                {favoritesMenus.map((menu) => (
+                  <ListItem key={menu.id} disablePadding>
+                    <ListItemText primary={menu.title} />
+                  </ListItem>
+                ))}
+              </List>
+            )}
+
+            <Divider />
+
             {groupedMenus.length === 0 ? (
-              <Typography color="text.secondary">{t('noConfiguredMenus')}</Typography>
+              <Typography color="text.secondary">{t('noMenus')}</Typography>
             ) : (
               groupedMenus.map((group) => (
                 <MenuGroupSection key={group.name} title={group.name} items={group.items} locale={locale} />
               ))
             )}
-
-            <Divider />
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              {t('resourceCatalog')}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {t('resourceCatalogDesc')}
-            </Typography>
-            {resourceCatalogGroups.map((group) => (
-              <ResourceCatalogSection
-                key={group.groupName}
-                groupName={group.groupName}
-                items={group.items}
-                locale={locale}
-              />
-            ))}
           </Stack>
         </Paper>
 
         <Stack spacing={2}>
+          <Paper elevation={1} sx={{ p: 1.4, border: 1, borderColor: 'divider', borderRadius: 2 }}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1.2}
+              alignItems={{ sm: 'center' }}
+            >
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                {t('context')}
+              </Typography>
+              <Chip size="small" variant="outlined" label={`${t('cluster')}: ${activeCluster}`} />
+              <FormControl size="small" sx={{ minWidth: 220 }}>
+                <InputLabel htmlFor="namespace-filter-select">{t('namespaceFilter')}</InputLabel>
+                <Select
+                  native
+                  value={listFilterNamespace}
+                  onChange={(event) => setListFilterNamespace(event.target.value)}
+                  label={t('namespaceFilter')}
+                  inputProps={{ id: 'namespace-filter-select' }}
+                >
+                  <option value={ALL_NAMESPACES}>{ALL_NAMESPACES}</option>
+                  <option value="default">default</option>
+                  <option value="kube-system">kube-system</option>
+                  <option value="dev">dev</option>
+                </Select>
+              </FormControl>
+            </Stack>
+          </Paper>
           <Paper
             elevation={3}
             sx={{
@@ -617,7 +604,7 @@ function App({
                 {t('resourceCatalogGroups')}
               </Typography>
               <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                {dynamicMenuCount}
+                {discoveredApiGroupCount}
               </Typography>
             </Paper>
           </Box>
