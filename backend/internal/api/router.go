@@ -12,26 +12,37 @@ func NewRouter() http.Handler {
 	iam := NewIAMHandler()
 	audit := NewAuditHandler()
 
-	mux.HandleFunc("/api/meta/registry", meta.Registry)
-	mux.HandleFunc("/api/meta/clusters", meta.Clusters)
-	mux.HandleFunc("/api/meta/menus", meta.Menus)
-	mux.HandleFunc("/api/auth/login", authHandler.Login)
-	mux.HandleFunc("/api/auth/me", authHandler.Me)
-	mux.HandleFunc("/api/auth/switch-tenant", authHandler.SwitchTenant)
-	mux.HandleFunc("/api/auth/logout", authHandler.Logout)
-	mux.HandleFunc("/api/auth/accept-invite", authHandler.AcceptInvite)
-	mux.HandleFunc("/api/iam/permissions", iam.Permissions)
-	mux.HandleFunc("/api/iam/groups", iam.Groups)
-	mux.HandleFunc("/api/iam/groups/", iam.GroupByID)
-	mux.HandleFunc("/api/iam/users", iam.Users)
-	mux.HandleFunc("/api/iam/tenants", iam.Tenants)
-	mux.HandleFunc("/api/iam/tenants/", iam.TenantMembers)
-	mux.HandleFunc("/api/iam/memberships", iam.Memberships)
-	mux.HandleFunc("/api/iam/memberships/", iam.MembershipByID)
-	mux.HandleFunc("/api/iam/invites", iam.Invites)
-	mux.HandleFunc("/api/iam/invites/", iam.InviteByID)
-	mux.HandleFunc("/api/audit/events", audit.Events)
-	mux.HandleFunc("/api/resources/apply", resources.Apply)
+	type routeEntry struct {
+		pattern string
+		handler http.HandlerFunc
+		policy  routePolicy
+	}
+	routes := []routeEntry{
+		{pattern: "/api/meta/registry", handler: meta.Registry},
+		{pattern: "/api/meta/clusters", handler: meta.Clusters},
+		{pattern: "/api/meta/menus", handler: meta.Menus},
+		{pattern: "/api/auth/login", handler: authHandler.Login},
+		{pattern: "/api/auth/me", handler: authHandler.Me, policy: routePolicy{requireSession: true}},
+		{pattern: "/api/auth/switch-tenant", handler: authHandler.SwitchTenant, policy: routePolicy{requireSession: true}},
+		{pattern: "/api/auth/logout", handler: authHandler.Logout, policy: routePolicy{requireSession: true}},
+		{pattern: "/api/auth/accept-invite", handler: authHandler.AcceptInvite},
+		{pattern: "/api/iam/permissions", handler: iam.Permissions, policy: routePolicy{requireSession: true}},
+		{pattern: "/api/iam/groups", handler: iam.Groups, policy: routePolicy{requireSession: true}},
+		{pattern: "/api/iam/groups/", handler: iam.GroupByID, policy: routePolicy{requireSession: true}},
+		{pattern: "/api/iam/users", handler: iam.Users, policy: routePolicy{requireSession: true}},
+		{pattern: "/api/iam/tenants", handler: iam.Tenants, policy: routePolicy{requireSession: true}},
+		{pattern: "/api/iam/tenants/", handler: iam.TenantMembers, policy: routePolicy{requireSession: true}},
+		{pattern: "/api/iam/memberships", handler: iam.Memberships, policy: routePolicy{requireSession: true}},
+		{pattern: "/api/iam/memberships/", handler: iam.MembershipByID, policy: routePolicy{requireSession: true}},
+		{pattern: "/api/iam/invites", handler: iam.Invites, policy: routePolicy{requireSession: true}},
+		{pattern: "/api/iam/invites/", handler: iam.InviteByID, policy: routePolicy{requireSession: true}},
+		{pattern: "/api/audit/events", handler: audit.Events, policy: routePolicy{requireSession: true}},
+		{pattern: "/api/resources/apply", handler: resources.Apply, policy: routePolicy{requireSession: true}},
+	}
+	for _, entry := range routes {
+		mux.HandleFunc(entry.pattern, withRoutePolicy(entry.handler, entry.policy))
+	}
+
 	mux.HandleFunc("/api/healthz", healthHandler)
 	mux.HandleFunc("/api/readyz", healthHandler)
 
