@@ -1,0 +1,12 @@
+{
+  "pluginId": "example-backend-plugin",
+  "version": "0.1.0",
+  "displayName": "Example Backend Plugin",
+  "contributions": {
+    "pages": [],
+    "extensions": [],
+    "menus": [],
+    "resources": []
+  },
+  "requiredCapabilities": []
+}
