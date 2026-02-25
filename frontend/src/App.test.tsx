@@ -152,8 +152,8 @@ describe('App', () => {
     expect(screen.getByText('Context')).toBeTruthy();
     expect(screen.getByText('API target (test: http://127.0.0.1:8080)')).toBeTruthy();
     expect(await screen.findByText('Runtime: ok')).toBeTruthy();
-    expect(await screen.findByText('Health: ok')).toBeTruthy();
-    expect(await screen.findByText('Ready: ok')).toBeTruthy();
+    expect((await screen.findAllByText('Health: ok')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Ready: ok')).length).toBeGreaterThan(0);
     expect(await screen.findByText('Registry Resource Types')).toBeTruthy();
     expect(await screen.findByText('Namespaced Types')).toBeTruthy();
     expect(await screen.findByText('Cluster-Scoped Types')).toBeTruthy();
@@ -253,9 +253,59 @@ describe('App', () => {
     );
 
     expect(await screen.findByText('Runtime: error')).toBeTruthy();
-    expect(await screen.findByText('Health: ok')).toBeTruthy();
-    expect(await screen.findByText('Ready: error')).toBeTruthy();
+    expect((await screen.findAllByText('Health: ok')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Ready: error')).length).toBeGreaterThan(0);
     expect(await screen.findByText('Failure summary: readyz: status 503')).toBeTruthy();
+  });
+
+  it('renders polished top status panel and login dialog visual shell', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
+        return new Response('ok', { status: 200 });
+      }
+      if (url.endsWith('/api/meta/clusters')) {
+        return new Response(
+          JSON.stringify({
+            clusters: ['default'],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/meta/registry?cluster=default')) {
+        return new Response(
+          JSON.stringify({
+            cluster: 'default',
+            resourceTypes: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          cluster: 'default',
+          menus: [],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        locale="en"
+        onLocaleChange={vi.fn()}
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByTestId('top-status-panel')).toBeTruthy();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Login' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Login' });
+    expect(within(dialog).getByTestId('login-visual-panel')).toBeTruthy();
   });
 
   it('applies multi-yaml payload with namespace default linkage', async () => {

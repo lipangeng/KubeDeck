@@ -1601,36 +1601,80 @@ function App({
         color="transparent"
         elevation={0}
         sx={{
-          backdropFilter: 'blur(10px)',
+          backdropFilter: 'blur(14px)',
           borderBottom: 1,
           borderColor: 'divider',
-          backgroundColor: 'rgba(255,255,255,0.72)',
+          backgroundColor: (theme) =>
+            theme.palette.mode === 'dark' ? 'rgba(6, 16, 34, 0.72)' : 'rgba(242, 248, 255, 0.74)',
         }}
       >
-        <Toolbar sx={{ gap: 1.5, minHeight: 72 }}>
-          <Typography variant="h5" component="h1" sx={{ fontWeight: 800, pr: 1.5 }}>
-            KubeDeck
-          </Typography>
+        <Toolbar sx={{ gap: 1.2, minHeight: 72, alignItems: 'center', flexWrap: 'wrap', py: 1 }}>
+          <Box sx={{ pr: 1.2 }}>
+            <Typography variant="h5" component="h1" sx={{ fontWeight: 800, lineHeight: 1.05 }}>
+              KubeDeck
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ letterSpacing: 0.4 }}>
+              Cluster Command Surface
+            </Typography>
+          </Box>
 
-          <Tooltip
-            arrow
-            title={`healthz: ${healthStatus}, readyz: ${readyStatus}, checked: ${lastCheckedAt ?? 'never'}`}
+          <Box
+            data-testid="top-status-panel"
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.8,
+              px: 1.1,
+              py: 0.7,
+              borderRadius: 2.5,
+              border: 1,
+              borderColor: (theme) =>
+                theme.palette.mode === 'dark' ? 'rgba(124,200,255,0.25)' : 'rgba(33,106,196,0.24)',
+              background:
+                'linear-gradient(145deg, rgba(56,142,255,0.2), rgba(17,84,184,0.08) 48%, rgba(56,142,255,0.14))',
+              boxShadow: (theme) =>
+                theme.palette.mode === 'dark'
+                  ? 'inset 0 1px 0 rgba(194,230,255,0.12), 0 8px 24px rgba(2,10,23,0.5)'
+                  : 'inset 0 1px 0 rgba(255,255,255,0.7), 0 8px 20px rgba(22,82,156,0.15)',
+              backdropFilter: 'blur(8px)',
+            }}
           >
+            <Tooltip
+              arrow
+              title={`healthz: ${healthStatus}, readyz: ${readyStatus}, checked: ${lastCheckedAt ?? 'never'}`}
+            >
+              <Chip
+                size="small"
+                color={statusColor(runtimeStatus)}
+                variant="outlined"
+                label={`${t('runtime')}: ${runtimeStatus}`}
+                sx={{
+                  borderRadius: 999,
+                  fontWeight: 700,
+                  bgcolor: (theme) =>
+                    theme.palette.mode === 'dark' ? 'rgba(6, 17, 35, 0.6)' : 'rgba(255,255,255,0.76)',
+                }}
+              />
+            </Tooltip>
             <Chip
               size="small"
-              color={statusColor(runtimeStatus)}
               variant="outlined"
-              label={`${t('runtime')}: ${runtimeStatus}`}
-              sx={{
-                borderRadius: 999,
-                fontWeight: 600,
-                bgcolor: 'background.paper',
-              }}
+              color={statusColor(healthStatus)}
+              label={`${t('health')}: ${healthStatus}`}
+              sx={{ borderRadius: 999, fontWeight: 600 }}
             />
-          </Tooltip>
-          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-            {t('checked', { time: checkedAtLabel })}
-          </Typography>
+            <Chip
+              size="small"
+              variant="outlined"
+              color={statusColor(readyStatus)}
+              label={`${t('ready')}: ${readyStatus}`}
+              sx={{ borderRadius: 999, fontWeight: 600 }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+              {t('checked', { time: checkedAtLabel })}
+            </Typography>
+          </Box>
+
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel htmlFor="cluster-select">{t('cluster')}</InputLabel>
             <Select
@@ -2537,15 +2581,53 @@ function App({
         onClose={() => setAuthDialogOpen(false)}
         fullWidth
         maxWidth="xs"
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            overflow: 'hidden',
+            border: 1,
+            borderColor: (theme) =>
+              theme.palette.mode === 'dark' ? 'rgba(124,200,255,0.28)' : 'rgba(33,106,196,0.22)',
+            background: (theme) =>
+              theme.palette.mode === 'dark'
+                ? 'linear-gradient(180deg, rgba(11,22,44,0.94), rgba(7,14,29,0.9))'
+                : 'linear-gradient(180deg, rgba(250,253,255,0.98), rgba(239,247,255,0.94))',
+          },
+        }}
       >
-        <DialogTitle>{t('login')}</DialogTitle>
+        <DialogTitle sx={{ pb: 0.8 }}>{t('login')}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.2} sx={{ pt: 0.4 }}>
+            <Box
+              data-testid="login-visual-panel"
+              sx={{
+                p: 1.3,
+                borderRadius: 2,
+                border: 1,
+                borderColor: (theme) =>
+                  theme.palette.mode === 'dark' ? 'rgba(124,200,255,0.3)' : 'rgba(33,106,196,0.22)',
+                background:
+                  'linear-gradient(140deg, rgba(71,149,255,0.28), rgba(21,95,201,0.08) 60%, rgba(71,149,255,0.16))',
+                boxShadow: (theme) =>
+                  theme.palette.mode === 'dark'
+                    ? 'inset 0 1px 0 rgba(213,236,255,0.14)'
+                    : 'inset 0 1px 0 rgba(255,255,255,0.8)',
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                Secure Operator Login
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {t('tenant')}: {loginTenantCode || '-'}
+              </Typography>
+            </Box>
             <TextField
               label={t('username')}
               value={loginUsername}
               onChange={(event) => setLoginUsername(event.target.value)}
               autoComplete="username"
+              autoFocus
+              size="small"
             />
             <TextField
               label={t('password')}
@@ -2553,11 +2635,14 @@ function App({
               value={loginPassword}
               onChange={(event) => setLoginPassword(event.target.value)}
               autoComplete="current-password"
+              size="small"
             />
             <TextField
               label={t('tenantCode')}
               value={loginTenantCode}
               onChange={(event) => setLoginTenantCode(event.target.value)}
+              helperText={t('tenant')}
+              size="small"
             />
             {showOAuthConfigDiagnostics && oauthConfigDiagnostics ? (
               <Stack spacing={0.2}>
@@ -2600,7 +2685,15 @@ function App({
             ) : null}
           </Stack>
         </DialogContent>
-        <DialogActions>
+        <DialogActions
+          sx={{
+            px: 2.5,
+            pb: 2,
+            pt: 1.3,
+            backgroundColor: (theme) =>
+              theme.palette.mode === 'dark' ? 'rgba(8, 17, 35, 0.5)' : 'rgba(244, 250, 255, 0.8)',
+          }}
+        >
           <Button onClick={() => setAuthDialogOpen(false)}>{t('close')}</Button>
           <Button variant="outlined" onClick={() => void submitOAuthLogin()} disabled={authBusy}>
             {t('oauthLogin')}
