@@ -676,6 +676,78 @@ describe('App', () => {
     expect(window.localStorage.getItem('kubedeck.auth.token')).toBeNull();
   });
 
+  it('completes oauth callback from query params and clears url search', async () => {
+    const originalURL = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.history.replaceState({}, '', '/?code=oauth-admin&state=state-123');
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/oauth/callback')) {
+        return new Response(
+          JSON.stringify({
+            token: 'oauth-token-1',
+            user: { id: 'u-oauth', username: 'oauth-admin', roles: ['admin'] },
+            tenants: [{ id: 'tenant-dev', code: 'dev', name: 'Development' }],
+            active_tenant_id: 'tenant-dev',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(
+          JSON.stringify({
+            user: { id: 'u-oauth', username: 'oauth-admin', activeTenantID: 'tenant-dev', roles: ['admin'] },
+            tenants: [{ id: 'tenant-dev', code: 'dev', name: 'Development' }],
+            active_tenant_id: 'tenant-dev',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
+        return new Response('ok', { status: 200 });
+      }
+      if (url.endsWith('/api/meta/clusters')) {
+        return new Response(JSON.stringify({ clusters: ['default'] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/api/meta/registry?cluster=default')) {
+        return new Response(JSON.stringify({ cluster: 'default', resourceTypes: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/api/meta/menus?cluster=default')) {
+        return new Response(JSON.stringify({ cluster: 'default', menus: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        locale="en"
+        onLocaleChange={vi.fn()}
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('oauth-admin')).toBeTruthy();
+    expect(window.localStorage.getItem('kubedeck.auth.token')).toBe('oauth-token-1');
+    expect(window.location.search).toBe('');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/auth/oauth/callback',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    window.history.replaceState({}, '', originalURL || '/');
+  });
+
   it('loads iam groups, memberships, invites and permissions in access control dialog', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
