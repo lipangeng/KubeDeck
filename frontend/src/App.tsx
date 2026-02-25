@@ -56,10 +56,12 @@ import {
   parseInvitesResponse,
   parseMembershipsResponse,
   parsePermissionsResponse,
+  parseUsersResponse,
   type IAMGroup,
   type IAMInvite,
   type IAMMembership,
   type IAMPermission,
+  type IAMUser,
 } from './sdk/iamApi';
 import {
   parseApplyResponse,
@@ -319,6 +321,7 @@ function App({
   const [iamGroups, setIamGroups] = useState<IAMGroup[]>([]);
   const [iamMemberships, setIamMemberships] = useState<IAMMembership[]>([]);
   const [iamInvites, setIamInvites] = useState<IAMInvite[]>([]);
+  const [iamUsers, setIamUsers] = useState<IAMUser[]>([]);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDescription, setNewGroupDescription] = useState('');
   const [groupPermissionDrafts, setGroupPermissionDrafts] = useState<Record<string, string>>({});
@@ -830,16 +833,18 @@ function App({
       setIamGroups([]);
       setIamMemberships([]);
       setIamInvites([]);
+      setIamUsers([]);
       return;
     }
     setIamLoading(true);
     setIamError(null);
     try {
-      const [permissionsResponse, groupsResponse, membershipsResponse, invitesResponse] = await Promise.all([
+      const [permissionsResponse, groupsResponse, membershipsResponse, invitesResponse, usersResponse] = await Promise.all([
         apiFetch('/api/iam/permissions'),
         apiFetch('/api/iam/groups'),
         apiFetch('/api/iam/memberships'),
         apiFetch('/api/iam/invites'),
+        apiFetch('/api/iam/users'),
       ]);
       if (!permissionsResponse.ok) {
         throw new Error(`permissions request failed: ${permissionsResponse.status}`);
@@ -853,14 +858,19 @@ function App({
       if (!invitesResponse.ok) {
         throw new Error(`invites request failed: ${invitesResponse.status}`);
       }
+      if (!usersResponse.ok) {
+        throw new Error(`users request failed: ${usersResponse.status}`);
+      }
       const permissions = parsePermissionsResponse(await permissionsResponse.json());
       const groups = parseGroupsResponse(await groupsResponse.json());
       const memberships = parseMembershipsResponse(await membershipsResponse.json());
       const invites = parseInvitesResponse(await invitesResponse.json());
+      const users = parseUsersResponse(await usersResponse.json());
       setIamPermissions(permissions);
       setIamGroups(groups);
       setIamMemberships(memberships);
       setIamInvites(invites);
+      setIamUsers(users);
       setGroupPermissionDrafts(
         groups.reduce<Record<string, string>>((acc, group) => {
           acc[group.id] = group.permissions.join(', ');
@@ -1697,6 +1707,27 @@ function App({
                 </Paper>
               ))}
               {iamGroups.length === 0 && !iamLoading ? (
+                <Typography color="text.secondary">{t('noEntries')}</Typography>
+              ) : null}
+            </Stack>
+
+            <Stack spacing={1}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                {t('iamUsers')}
+              </Typography>
+              {iamUsers.map((user) => (
+                <Paper key={`${user.id}-${user.membershipID}`} variant="outlined" sx={{ p: 1 }}>
+                  <Typography variant="subtitle2">{user.username || user.id}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {user.roles.join(', ') || 'viewer'} | {user.membershipID}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    {user.effectiveFrom}
+                    {user.effectiveUntil ? ` ~ ${user.effectiveUntil}` : ''}
+                  </Typography>
+                </Paper>
+              ))}
+              {iamUsers.length === 0 && !iamLoading ? (
                 <Typography color="text.secondary">{t('noEntries')}</Typography>
               ) : null}
             </Stack>

@@ -581,6 +581,47 @@ func TestIAMGroupWriteDeniedForViewer(t *testing.T) {
 	}
 }
 
+func TestIAMUsersListFlow(t *testing.T) {
+	resetAuthSessions()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	usersReq := httptest.NewRequest(http.MethodGet, "/api/iam/users", nil)
+	usersReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	usersResp := httptest.NewRecorder()
+	router.ServeHTTP(usersResp, usersReq)
+	if usersResp.Code != http.StatusOK {
+		t.Fatalf("expected list users 200, got %d body=%s", usersResp.Code, usersResp.Body.String())
+	}
+	var payload struct {
+		Users []iamUser `json:"users"`
+	}
+	if err := json.Unmarshal(usersResp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal users response: %v", err)
+	}
+	if len(payload.Users) == 0 {
+		t.Fatalf("expected non-empty users list")
+	}
+	if payload.Users[0].TenantID != "tenant-dev" {
+		t.Fatalf("expected tenant-dev user, got %q", payload.Users[0].TenantID)
+	}
+}
+
 func TestInviteCreateListAndAcceptFlow(t *testing.T) {
 	resetAuthSessions()
 	resetInvites()

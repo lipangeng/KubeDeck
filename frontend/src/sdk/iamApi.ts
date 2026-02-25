@@ -38,6 +38,16 @@ export interface IAMInvite {
   status: string;
 }
 
+export interface IAMUser {
+  id: string;
+  username: string;
+  roles: string[];
+  tenantID: string;
+  membershipID: string;
+  effectiveFrom: string;
+  effectiveUntil: string;
+}
+
 export function parsePermissionsResponse(value: unknown): IAMPermission[] {
   if (!isObject(value) || !Array.isArray(value.permissions)) {
     throw new Error('invalid iam permissions response');
@@ -104,5 +114,20 @@ export function parseInvitesResponse(value: unknown): IAMInvite[] {
     inviteLink: String(item.invite_link ?? ''),
     expiresAt: String(item.expires_at ?? ''),
     status: String(item.status ?? ''),
+  }));
+}
+
+export function parseUsersResponse(value: unknown): IAMUser[] {
+  if (!isObject(value) || !Array.isArray(value.users)) {
+    throw new Error('invalid iam users response');
+  }
+  return value.users.filter((item) => isObject(item)).map((item) => ({
+    id: String(item.id ?? ''),
+    username: String(item.username ?? ''),
+    roles: Array.isArray(item.roles) ? item.roles.map((role) => String(role)) : [],
+    tenantID: String(item.tenant_id ?? ''),
+    membershipID: String(item.membership_id ?? ''),
+    effectiveFrom: String(item.effective_from ?? ''),
+    effectiveUntil: String(item.effective_until ?? ''),
   }));
 }

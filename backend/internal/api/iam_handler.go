@@ -44,6 +44,16 @@ type iamMembership struct {
 	EffectiveUntil *time.Time `json:"effective_until,omitempty"`
 }
 
+type iamUser struct {
+	ID             string     `json:"id"`
+	Username       string     `json:"username"`
+	Roles          []string   `json:"roles"`
+	TenantID       string     `json:"tenant_id"`
+	MembershipID   string     `json:"membership_id"`
+	EffectiveFrom  time.Time  `json:"effective_from"`
+	EffectiveUntil *time.Time `json:"effective_until,omitempty"`
+}
+
 func NewIAMHandler() *IAMHandler {
 	return &IAMHandler{notifier: notification.NewEmailStubProvider()}
 }
@@ -215,6 +225,18 @@ func (h *IAMHandler) Invites(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *IAMHandler) Users(w http.ResponseWriter, r *http.Request) {
+	session, ok := mustSession(r, w)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+	h.listUsers(w, session)
+}
+
 func (h *IAMHandler) listGroups(w http.ResponseWriter, session authSession) {
 	iamGroupsMu.RLock()
 	defer iamGroupsMu.RUnlock()
@@ -251,6 +273,49 @@ func (h *IAMHandler) listMemberships(w http.ResponseWriter, session authSession)
 		out = append(out, seed)
 	}
 	_ = writeJSON(w, http.StatusOK, map[string]any{"memberships": out})
+}
+
+func (h *IAMHandler) listUsers(w http.ResponseWriter, session authSession) {
+	iamMembershipsMu.Lock()
+	defer iamMembershipsMu.Unlock()
+
+	memberships := make([]iamMembership, 0)
+	for _, membership := range iamMemberships {
+		if membership.TenantID == session.ActiveTenantID {
+			memberships = append(memberships, membership)
+		}
+	}
+	if len(memberships) == 0 {
+		seed := iamMembership{
+			ID:            "mbr-" + session.User.ID + "-" + session.ActiveTenantID,
+			TenantID:      session.ActiveTenantID,
+			UserID:        session.User.ID,
+			UserLabel:     session.User.Username,
+			GroupIDs:      []string{},
+			EffectiveFrom: time.Now().UTC().Add(-24 * time.Hour),
+		}
+		iamMemberships[seed.ID] = seed
+		memberships = append(memberships, seed)
+	}
+
+	users := make([]iamUser, 0, len(memberships))
+	for _, membership := range memberships {
+		roles := []string{"viewer"}
+		if membership.UserID == session.User.ID {
+			roles = append([]string{}, session.User.Roles...)
+		}
+		users = append(users, iamUser{
+			ID:             membership.UserID,
+			Username:       membership.UserLabel,
+			Roles:          roles,
+			TenantID:       membership.TenantID,
+			MembershipID:   membership.ID,
+			EffectiveFrom:  membership.EffectiveFrom,
+			EffectiveUntil: membership.EffectiveUntil,
+		})
+	}
+
+	_ = writeJSON(w, http.StatusOK, map[string]any{"users": users})
 }
 
 func (h *IAMHandler) createGroup(w http.ResponseWriter, r *http.Request, session authSession) {

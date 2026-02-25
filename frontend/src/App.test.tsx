@@ -760,6 +760,24 @@ describe('App', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
+      if (url.endsWith('/api/iam/users')) {
+        return new Response(
+          JSON.stringify({
+            users: [
+              {
+                id: 'u-1',
+                username: 'admin',
+                roles: ['admin'],
+                tenant_id: 'tenant-dev',
+                membership_id: 'mbr-u1-tenant-dev',
+                effective_from: '2026-02-25T00:00:00Z',
+                effective_until: '',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
       if (url.endsWith('/api/iam/invites')) {
         return new Response(
           JSON.stringify({
@@ -800,6 +818,7 @@ describe('App', () => {
     expect(await screen.findByRole('dialog', { name: 'Access Control' })).toBeTruthy();
     expect(await screen.findByText('admins')).toBeTruthy();
     expect(await screen.findByText('iam:read (platform)')).toBeTruthy();
+    expect(await screen.findByText('Users')).toBeTruthy();
     expect(await screen.findByText('Memberships')).toBeTruthy();
     expect(await screen.findByText('Invites')).toBeTruthy();
     expect(await screen.findByText('user@example.com')).toBeTruthy();

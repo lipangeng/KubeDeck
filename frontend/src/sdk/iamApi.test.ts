@@ -5,6 +5,7 @@ import {
   parseInvitesResponse,
   parseMembershipsResponse,
   parsePermissionsResponse,
+  parseUsersResponse,
 } from './iamApi';
 
 describe('iamApi', () => {
@@ -83,5 +84,23 @@ describe('iamApi', () => {
     });
     expect(invites).toHaveLength(1);
     expect(invites[0]?.inviteLink).toContain('/accept-invite');
+  });
+
+  it('parses users response', () => {
+    const users = parseUsersResponse({
+      users: [
+        {
+          id: 'u1',
+          username: 'admin',
+          roles: ['admin'],
+          tenant_id: 'tenant-dev',
+          membership_id: 'm1',
+          effective_from: '2026-02-25T00:00:00Z',
+          effective_until: '',
+        },
+      ],
+    });
+    expect(users).toHaveLength(1);
+    expect(users[0]?.roles).toEqual(['admin']);
   });
 });
