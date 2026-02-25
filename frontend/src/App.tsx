@@ -3,6 +3,10 @@ import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
@@ -23,7 +27,7 @@ import {
   parseMenusResponse,
   parseRegistryResponse,
 } from './sdk/metaApi';
-import type { ApplyResultItem, MenuItem } from './sdk/types';
+import type { ApplyResultItem, MenuItem, RegistryResourceType } from './sdk/types';
 import { ALL_NAMESPACES, resolveCreateDefaultNamespace } from './state/namespaceFilter';
 import type { ThemePreference } from './themeMode';
 
@@ -64,6 +68,13 @@ function statusColor(status: ProbeStatus): 'success' | 'warning' | 'error' {
     return 'warning';
   }
   return 'error';
+}
+
+function countYamlDocuments(yaml: string): number {
+  return yaml
+    .split(/^---\s*$/m)
+    .map((doc) => doc.trim())
+    .filter((doc) => doc.length > 0).length;
 }
 
 function MenuSection({
@@ -108,7 +119,8 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const [applyResults, setApplyResults] = useState<ApplyResultItem[]>([]);
   const [clusters, setClusters] = useState<string[]>(['default']);
   const [menus, setMenus] = useState<MenuItem[]>([]);
-  const [resourceTypeCount, setResourceTypeCount] = useState(0);
+  const [resourceTypes, setResourceTypes] = useState<RegistryResourceType[]>([]);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<ProbeStatus>('checking');
@@ -195,7 +207,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
       setLoading(true);
       setError(null);
       setMenus([]);
-      setResourceTypeCount(0);
+      setResourceTypes([]);
       try {
         const [menusResponse, registryResponse] = await Promise.all([
           fetch(`/api/meta/menus?cluster=${encodeURIComponent(activeCluster)}`),
@@ -211,7 +223,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
         const registryPayload = parseRegistryResponse(await registryResponse.json());
         if (active) {
           setMenus(menusPayload.menus);
-          setResourceTypeCount(registryPayload.resourceTypes.length);
+          setResourceTypes(registryPayload.resourceTypes);
         }
       } catch (e) {
         if (active) {
@@ -290,6 +302,11 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
           .filter(Boolean)
           .join('; ')
       : 'none';
+  const resourceTypeCount = resourceTypes.length;
+  const namespacedResourceCount = resourceTypes.filter((item) => item.namespaced).length;
+  const clusterScopedResourceCount = resourceTypeCount - namespacedResourceCount;
+  const dynamicMenuCount = groupedMenus.dynamic.length;
+  const yamlDocumentCount = countYamlDocuments(yamlInput);
 
   return (
     <Box
@@ -319,11 +336,11 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
           <Paper
             variant="outlined"
             sx={{
-              px: 1.2,
-              py: 0.9,
+              px: 1,
+              py: 0.5,
               display: 'flex',
               alignItems: 'center',
-              gap: 1,
+              gap: 0.8,
               flexWrap: 'wrap',
               borderRadius: 2,
               bgcolor: 'background.paper',
@@ -344,8 +361,8 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
               variant="filled"
               label={`readyz: ${readyStatus}`}
             />
-            <Typography variant="caption" color="text.secondary">
-              Last checked: {lastCheckedAt ?? 'never'}
+            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+              Checked: {lastCheckedAt ?? 'never'}
             </Typography>
           </Paper>
 
@@ -367,6 +384,9 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
               <option value="dark">Dark</option>
             </Select>
           </FormControl>
+          <Button variant="contained" onClick={() => setCreateDialogOpen(true)}>
+            Create Resources
+          </Button>
         </Toolbar>
       </AppBar>
 
@@ -468,6 +488,39 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             </Paper>
             <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
               <Typography variant="caption" color="text.secondary">
+                Namespaced Types
+              </Typography>
+              <Typography variant="h4" sx={{ fontWeight: 700 }} data-testid="namespaced-resource-type-count">
+                {namespacedResourceCount}
+              </Typography>
+            </Paper>
+            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary">
+                Cluster-Scoped Types
+              </Typography>
+              <Typography variant="h4" sx={{ fontWeight: 700 }} data-testid="cluster-scoped-resource-type-count">
+                {clusterScopedResourceCount}
+              </Typography>
+            </Paper>
+          </Box>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' },
+              gap: 1.5,
+            }}
+          >
+            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary">
+                Dynamic CRD Menus
+              </Typography>
+              <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                {dynamicMenuCount}
+              </Typography>
+            </Paper>
+            <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary">
                 Health Endpoint
               </Typography>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -493,66 +546,75 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             </Typography>
           </Paper>
 
-          <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-              Create Resources
-            </Typography>
-            <Stack spacing={1.2}>
-              <FormControl size="small" sx={{ maxWidth: 260 }}>
-                <InputLabel htmlFor="create-namespace-select">Create Namespace</InputLabel>
-                <Select
-                  native
-                  value={createNamespace}
-                  onChange={(event) => {
-                    setCreateNamespace(event.target.value);
-                    setLastUsedNamespace(event.target.value);
-                  }}
-                  label="Create Namespace"
-                  inputProps={{ id: 'create-namespace-select' }}
-                >
-                  <option value="default">default</option>
-                  <option value="kube-system">kube-system</option>
-                  <option value="dev">dev</option>
-                </Select>
-              </FormControl>
-
-              <TextField
-                label="YAML (multi-document supported)"
-                multiline
-                minRows={8}
-                value={yamlInput}
-                onChange={(event) => setYamlInput(event.target.value)}
-              />
-              <Box>
-                <Button variant="contained" onClick={() => void applyResources()}>
-                  Apply YAML
-                </Button>
-              </Box>
-
-              {applyStatus ? (
-                <Typography
-                  variant="body2"
-                  color={applyStatus === 'success' ? 'success.main' : applyStatus === 'partial' ? 'warning.main' : 'error'}
-                >
-                  Apply status: {applyStatus}
-                </Typography>
-              ) : null}
-              {applyResults.length > 0 ? (
-                <List dense sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                  {applyResults.map((result) => (
-                    <ListItem key={`${result.index}-${result.name}-${result.kind}`} disableGutters sx={{ px: 1 }}>
-                      <ListItemText
-                        primary={`#${result.index} ${result.kind || 'Unknown'} ${result.name || '-'} (${result.namespace || '-'})`}
-                        secondary={result.status === 'failed' ? `failed: ${result.reason ?? 'unknown'}` : 'succeeded'}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              ) : null}
-            </Stack>
-          </Paper>
         </Stack>
       </Box>
+
+      <Dialog
+        open={createDialogOpen}
+        onClose={() => setCreateDialogOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Create Resources</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.2} sx={{ pt: 0.4 }}>
+            <FormControl size="small" sx={{ maxWidth: 280 }}>
+              <InputLabel htmlFor="create-namespace-select">Create Namespace</InputLabel>
+              <Select
+                native
+                value={createNamespace}
+                onChange={(event) => {
+                  setCreateNamespace(event.target.value);
+                  setLastUsedNamespace(event.target.value);
+                }}
+                label="Create Namespace"
+                inputProps={{ id: 'create-namespace-select' }}
+              >
+                <option value="default">default</option>
+                <option value="kube-system">kube-system</option>
+                <option value="dev">dev</option>
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary">
+              YAML documents: {yamlDocumentCount}
+            </Typography>
+            <TextField
+              label="YAML (multi-document supported)"
+              multiline
+              minRows={10}
+              value={yamlInput}
+              onChange={(event) => setYamlInput(event.target.value)}
+            />
+
+            {applyStatus ? (
+              <Typography
+                variant="body2"
+                color={applyStatus === 'success' ? 'success.main' : applyStatus === 'partial' ? 'warning.main' : 'error'}
+              >
+                Apply status: {applyStatus}
+              </Typography>
+            ) : null}
+            {applyResults.length > 0 ? (
+              <List dense sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                {applyResults.map((result) => (
+                  <ListItem key={`${result.index}-${result.name}-${result.kind}`} disableGutters sx={{ px: 1 }}>
+                    <ListItemText
+                      primary={`#${result.index} ${result.kind || 'Unknown'} ${result.name || '-'} (${result.namespace || '-'})`}
+                      secondary={result.status === 'failed' ? `failed: ${result.reason ?? 'unknown'}` : 'succeeded'}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateDialogOpen(false)}>Close</Button>
+          <Button variant="contained" onClick={() => void applyResources()}>
+            Apply YAML
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -153,8 +153,12 @@ describe('App', () => {
     expect(await screen.findByText('healthz: ok')).toBeTruthy();
     expect(await screen.findByText('readyz: ok')).toBeTruthy();
     expect(await screen.findByText('Registry Resource Types')).toBeTruthy();
+    expect(await screen.findByText('Namespaced Types')).toBeTruthy();
+    expect(await screen.findByText('Cluster-Scoped Types')).toBeTruthy();
     expect(screen.getByTestId('registry-resource-type-count').textContent).toBe('2');
-    expect(await screen.findByText(/Last checked:/)).toBeTruthy();
+    expect(screen.getByTestId('namespaced-resource-type-count').textContent).toBe('2');
+    expect(screen.getByTestId('cluster-scoped-resource-type-count').textContent).toBe('0');
+    expect(await screen.findByText(/Checked:/)).toBeTruthy();
     expect(await screen.findByText('Failure summary: none')).toBeTruthy();
 
     expect(await screen.findByText('Workloads')).toBeTruthy();
@@ -321,7 +325,8 @@ describe('App', () => {
       />,
     );
 
-    expect(await screen.findByText('Create Resources')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Create Resources' }));
+    expect(await screen.findByRole('dialog', { name: 'Create Resources' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Create Namespace'), {
       target: { value: 'dev' },
     });
