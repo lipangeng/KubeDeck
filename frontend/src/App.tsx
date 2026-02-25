@@ -22,6 +22,7 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { composeMenus } from './core/menuComposer';
 import { groupMenusByGroup } from './core/menuGrouping';
+import { translate, type Locale } from './i18n';
 import {
   parseApplyResponse,
   parseClustersResponse,
@@ -35,6 +36,8 @@ import type { ThemePreference } from './themeMode';
 type ProbeStatus = 'checking' | 'ok' | 'error';
 
 interface AppProps {
+  locale: Locale;
+  onLocaleChange: (next: Locale) => void;
   themePreference: ThemePreference;
   onThemePreferenceChange: (next: ThemePreference) => void;
 }
@@ -96,9 +99,11 @@ function normalizeResourceGroupName(name: string): string {
 function MenuGroupSection({
   title,
   items,
+  locale,
 }: {
   title: string;
   items: MenuItem[];
+  locale: Locale;
 }) {
   return (
     <Box>
@@ -108,7 +113,10 @@ function MenuGroupSection({
       <List dense sx={{ pt: 0 }}>
         {items.length === 0 ? (
           <ListItem disablePadding>
-            <ListItemText primary="No entries" primaryTypographyProps={{ color: 'text.disabled' }} />
+            <ListItemText
+              primary={translate(locale, 'noEntries')}
+              primaryTypographyProps={{ color: 'text.disabled' }}
+            />
           </ListItem>
         ) : (
           items.map((menu) => (
@@ -125,9 +133,11 @@ function MenuGroupSection({
 function ResourceCatalogSection({
   groupName,
   items,
+  locale,
 }: {
   groupName: string;
   items: RegistryResourceType[];
+  locale: Locale;
 }) {
   return (
     <Box>
@@ -139,7 +149,7 @@ function ResourceCatalogSection({
           <ListItem key={resource.id} disablePadding>
             <ListItemText
               primary={resource.kind}
-              secondary={`${resource.namespaced ? 'Namespaced' : 'Cluster'} · ${resource.source}`}
+              secondary={`${resource.namespaced ? translate(locale, 'namespaced') : translate(locale, 'clusterScoped')} · ${resource.source}`}
             />
           </ListItem>
         ))}
@@ -148,8 +158,15 @@ function ResourceCatalogSection({
   );
 }
 
-function App({ themePreference, onThemePreferenceChange }: AppProps) {
+function App({
+  locale,
+  onLocaleChange,
+  themePreference,
+  onThemePreferenceChange,
+}: AppProps) {
   const apiTargetHint = resolveApiTargetHint();
+  const t = (key: Parameters<typeof translate>[1], vars?: Record<string, string>) =>
+    translate(locale, key, vars);
   const [activeCluster, setActiveCluster] = useState('default');
   const [listFilterNamespace, setListFilterNamespace] = useState(ALL_NAMESPACES);
   const [lastUsedNamespace, setLastUsedNamespace] = useState<string | undefined>();
@@ -400,7 +417,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
               size="small"
               color={statusColor(runtimeStatus)}
               variant="outlined"
-              label={`Runtime: ${runtimeStatus}`}
+              label={`${t('runtime')}: ${runtimeStatus}`}
               sx={{
                 borderRadius: 999,
                 fontWeight: 600,
@@ -409,29 +426,42 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             />
           </Tooltip>
           <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-            Updated {checkedAtLabel}
+            {t('checked', { time: checkedAtLabel })}
           </Typography>
 
           <Box sx={{ flexGrow: 1 }} />
 
           <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel htmlFor="theme-select">Theme</InputLabel>
+            <InputLabel htmlFor="theme-select">{t('theme')}</InputLabel>
             <Select
               native
               value={themePreference}
               onChange={(event) =>
                 onThemePreferenceChange(event.target.value as ThemePreference)
               }
-              label="Theme"
+              label={t('theme')}
               inputProps={{ id: 'theme-select' }}
             >
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
+              <option value="system">{t('system')}</option>
+              <option value="light">{t('light')}</option>
+              <option value="dark">{t('dark')}</option>
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel htmlFor="language-select">{t('language')}</InputLabel>
+            <Select
+              native
+              value={locale}
+              onChange={(event) => onLocaleChange(event.target.value as Locale)}
+              label={t('language')}
+              inputProps={{ id: 'language-select' }}
+            >
+              <option value="en">{t('english')}</option>
+              <option value="zh">{t('chinese')}</option>
             </Select>
           </FormControl>
           <Button variant="contained" onClick={() => setCreateDialogOpen(true)}>
-            Create Resources
+            {t('createResources')}
           </Button>
         </Toolbar>
       </AppBar>
@@ -456,16 +486,16 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
           }}
         >
           <Stack spacing={2}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              Navigation
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              {t('navigation')}
             </Typography>
             <FormControl size="small" fullWidth>
-              <InputLabel htmlFor="cluster-select">Cluster</InputLabel>
+              <InputLabel htmlFor="cluster-select">{t('cluster')}</InputLabel>
               <Select
                 native
                 value={activeCluster}
                 onChange={(event) => setActiveCluster(event.target.value)}
-                label="Cluster"
+                label={t('cluster')}
                 inputProps={{ id: 'cluster-select' }}
               >
                 {clusters.map((clusterId) => (
@@ -477,12 +507,12 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             </FormControl>
 
             <FormControl size="small" fullWidth>
-              <InputLabel htmlFor="namespace-filter-select">Namespace Filter</InputLabel>
+              <InputLabel htmlFor="namespace-filter-select">{t('namespaceFilter')}</InputLabel>
               <Select
                 native
                 value={listFilterNamespace}
                 onChange={(event) => setListFilterNamespace(event.target.value)}
-                label="Namespace Filter"
+                label={t('namespaceFilter')}
                 inputProps={{ id: 'namespace-filter-select' }}
               >
                 <option value={ALL_NAMESPACES}>{ALL_NAMESPACES}</option>
@@ -494,33 +524,34 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
 
             <Divider />
 
-            {loading ? <Typography>Loading menus...</Typography> : null}
+            {loading ? <Typography>{t('loadingMenus')}</Typography> : null}
             {error ? (
-              <Typography color="error">Failed to load menus: {error}</Typography>
+              <Typography color="error">{t('failedMenus', { error })}</Typography>
             ) : null}
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              Configured Menus
+              {t('configuredMenus')}
             </Typography>
             {groupedMenus.length === 0 ? (
-              <Typography color="text.secondary">No configured menus.</Typography>
+              <Typography color="text.secondary">{t('noConfiguredMenus')}</Typography>
             ) : (
               groupedMenus.map((group) => (
-                <MenuGroupSection key={group.name} title={group.name} items={group.items} />
+                <MenuGroupSection key={group.name} title={group.name} items={group.items} locale={locale} />
               ))
             )}
 
             <Divider />
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              Resource Catalog (for menu config)
+              {t('resourceCatalog')}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Built-in resources + discovered CRDs from current cluster.
+              {t('resourceCatalogDesc')}
             </Typography>
             {resourceCatalogGroups.map((group) => (
               <ResourceCatalogSection
                 key={group.groupName}
                 groupName={group.groupName}
                 items={group.items}
+                locale={locale}
               />
             ))}
           </Stack>
@@ -538,15 +569,15 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             }}
           >
             <Typography variant="overline" color="primary.main" sx={{ letterSpacing: 1.1 }}>
-              Kubernetes Dashboard
+              {t('controlPlane')}
             </Typography>
             <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.8 }}>
-              Cluster {activeCluster} Overview
+              {t('clusterOverview', { cluster: activeCluster })}
             </Typography>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
-              <Typography color="text.secondary">API target ({apiTargetHint})</Typography>
-              <Chip size="small" label={`Health: ${healthStatus}`} color={statusColor(healthStatus)} />
-              <Chip size="small" label={`Ready: ${readyStatus}`} color={statusColor(readyStatus)} />
+              <Typography color="text.secondary">{t('apiTarget', { target: apiTargetHint })}</Typography>
+              <Chip size="small" label={`${t('health')}: ${healthStatus}`} color={statusColor(healthStatus)} />
+              <Chip size="small" label={`${t('ready')}: ${readyStatus}`} color={statusColor(readyStatus)} />
             </Stack>
           </Paper>
 
@@ -559,7 +590,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
           >
             <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider', borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary">
-                Registry Resource Types
+                {t('registryResourceTypes')}
               </Typography>
               <Typography variant="h4" sx={{ fontWeight: 700 }} data-testid="registry-resource-type-count">
                 {resourceTypeCount}
@@ -567,7 +598,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             </Paper>
             <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider', borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary">
-                Namespaced Types
+                {t('namespacedTypes')}
               </Typography>
               <Typography variant="h4" sx={{ fontWeight: 700 }} data-testid="namespaced-resource-type-count">
                 {namespacedResourceCount}
@@ -575,7 +606,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             </Paper>
             <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider', borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary">
-                Cluster-Scoped Types
+                {t('clusterScopedTypes')}
               </Typography>
               <Typography variant="h4" sx={{ fontWeight: 700 }} data-testid="cluster-scoped-resource-type-count">
                 {clusterScopedResourceCount}
@@ -583,7 +614,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             </Paper>
             <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider', borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary">
-                Resource Catalog Groups
+                {t('resourceCatalogGroups')}
               </Typography>
               <Typography variant="h4" sx={{ fontWeight: 700 }}>
                 {dynamicMenuCount}
@@ -593,10 +624,10 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
 
           <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider', borderRadius: 2 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.4 }}>
-              Failure summary
+              {t('failureSummary')}
             </Typography>
             <Typography variant="body2" color={failureSummary === 'none' ? 'text.secondary' : 'error'}>
-              Failure summary: {failureSummary}
+              {t('failureSummaryText', { summary: failureSummary })}
             </Typography>
           </Paper>
         </Stack>
@@ -608,11 +639,11 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
         fullWidth
         maxWidth="md"
       >
-        <DialogTitle>Create Resources</DialogTitle>
+        <DialogTitle>{t('createResources')}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.2} sx={{ pt: 0.4 }}>
             <FormControl size="small" sx={{ maxWidth: 280 }}>
-              <InputLabel htmlFor="create-namespace-select">Create Namespace</InputLabel>
+              <InputLabel htmlFor="create-namespace-select">{t('createNamespace')}</InputLabel>
               <Select
                 native
                 value={createNamespace}
@@ -620,7 +651,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                   setCreateNamespace(event.target.value);
                   setLastUsedNamespace(event.target.value);
                 }}
-                label="Create Namespace"
+                label={t('createNamespace')}
                 inputProps={{ id: 'create-namespace-select' }}
               >
                 <option value="default">default</option>
@@ -629,10 +660,10 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
               </Select>
             </FormControl>
             <Typography variant="caption" color="text.secondary">
-              YAML documents: {yamlDocumentCount}
+              {t('yamlDocuments', { count: String(yamlDocumentCount) })}
             </Typography>
             <TextField
-              label="YAML (multi-document supported)"
+              label={t('yamlLabel')}
               multiline
               minRows={10}
               value={yamlInput}
@@ -644,16 +675,16 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                 variant="body2"
                 color={applyStatus === 'success' ? 'success.main' : applyStatus === 'partial' ? 'warning.main' : 'error'}
               >
-                Apply status: {applyStatus}
-              </Typography>
-            ) : null}
+                  {t('applyStatus', { status: applyStatus })}
+                </Typography>
+              ) : null}
             {applyResults.length > 0 ? (
               <List dense sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}>
                 {applyResults.map((result) => (
                   <ListItem key={`${result.index}-${result.name}-${result.kind}`} disableGutters sx={{ px: 1 }}>
                     <ListItemText
-                      primary={`#${result.index} ${result.kind || 'Unknown'} ${result.name || '-'} (${result.namespace || '-'})`}
-                      secondary={result.status === 'failed' ? `failed: ${result.reason ?? 'unknown'}` : 'succeeded'}
+                      primary={`#${result.index} ${result.kind || t('unknown')} ${result.name || '-'} (${result.namespace || '-'})`}
+                      secondary={result.status === 'failed' ? `${t('failed')}: ${result.reason ?? t('unknown')}` : t('succeeded')}
                     />
                   </ListItem>
                 ))}
@@ -662,9 +693,9 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)}>Close</Button>
+          <Button onClick={() => setCreateDialogOpen(false)}>{t('close')}</Button>
           <Button variant="contained" onClick={() => void applyResources()}>
-            Apply YAML
+            {t('applyYaml')}
           </Button>
         </DialogActions>
       </Dialog>

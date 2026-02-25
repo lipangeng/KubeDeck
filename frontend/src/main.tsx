@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 import App from './App';
+import { readStoredLocale, type Locale, writeStoredLocale } from './i18n';
 import { createAppTheme } from './theme';
 import {
   getSystemPrefersDark,
@@ -13,6 +14,7 @@ import {
 } from './themeMode';
 
 function Root() {
+  const [locale, setLocale] = useState<Locale>(() => readStoredLocale());
   const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
     readStoredThemePreference(),
   );
@@ -42,11 +44,17 @@ function Root() {
     setThemePreference(next);
     writeStoredThemePreference(next);
   };
+  const handleLocaleChange = (next: Locale) => {
+    setLocale(next);
+    writeStoredLocale(next);
+  };
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <App
+        locale={locale}
+        onLocaleChange={handleLocaleChange}
         themePreference={themePreference}
         onThemePreferenceChange={handleThemePreferenceChange}
       />

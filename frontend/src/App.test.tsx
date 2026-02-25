@@ -124,10 +124,13 @@ describe('App', () => {
     });
 
     const onThemePreferenceChange = vi.fn();
+    const onLocaleChange = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
     render(
       <App
+        locale="en"
+        onLocaleChange={onLocaleChange}
         themePreference="system"
         onThemePreferenceChange={onThemePreferenceChange}
       />,
@@ -136,6 +139,7 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'KubeDeck' })).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Primary Sidebar' })).toBeTruthy();
     expect(screen.getByLabelText('Theme')).toBeTruthy();
+    expect(screen.getByLabelText('Language')).toBeTruthy();
     expect(screen.getByText('Configured Menus')).toBeTruthy();
     expect(screen.getByText('Resource Catalog (for menu config)')).toBeTruthy();
     expect(screen.getByText('API target (test: http://127.0.0.1:8080)')).toBeTruthy();
@@ -164,8 +168,12 @@ describe('App', () => {
     fireEvent.change(screen.getByLabelText('Theme'), {
       target: { value: 'dark' },
     });
+    fireEvent.change(screen.getByLabelText('Language'), {
+      target: { value: 'zh' },
+    });
 
     expect(onThemePreferenceChange).toHaveBeenCalledWith('dark');
+    expect(onLocaleChange).toHaveBeenCalledWith('zh');
     expect(await screen.findByText('Dev Workloads')).toBeTruthy();
     await waitFor(() => {
       expect(screen.getByTestId('registry-resource-type-count').textContent).toBe('1');
@@ -232,6 +240,8 @@ describe('App', () => {
 
     render(
       <App
+        locale="en"
+        onLocaleChange={vi.fn()}
         themePreference="system"
         onThemePreferenceChange={vi.fn()}
       />,
@@ -314,6 +324,8 @@ describe('App', () => {
 
     render(
       <App
+        locale="en"
+        onLocaleChange={vi.fn()}
         themePreference="system"
         onThemePreferenceChange={vi.fn()}
       />,
