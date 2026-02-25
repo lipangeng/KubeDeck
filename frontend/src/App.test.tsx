@@ -17,10 +17,14 @@ describe('App', () => {
       if (url.includes('cluster=dev')) {
         return new Response(
           JSON.stringify({
+            cluster: 'dev',
             menus: [
               {
                 id: 'dev-workloads',
+                group: 'system',
                 title: 'Dev Workloads',
+                targetType: 'page',
+                targetRef: '/workloads',
                 source: 'system',
                 order: 10,
                 visible: true,
@@ -33,24 +37,34 @@ describe('App', () => {
 
       return new Response(
         JSON.stringify({
+          cluster: 'default',
           menus: [
             {
               id: 'workloads',
+              group: 'system',
               title: 'Workloads',
+              targetType: 'page',
+              targetRef: '/workloads',
               source: 'system',
               order: 10,
               visible: true,
             },
             {
               id: 'favorites',
+              group: 'user',
               title: 'Favorites',
+              targetType: 'page',
+              targetRef: '/favorites',
               source: 'user',
               order: 20,
               visible: true,
             },
             {
               id: 'crd-dynamic',
+              group: 'dynamic',
               title: 'Custom Resources',
+              targetType: 'resource',
+              targetRef: '/resources/custom',
               source: 'dynamic',
               order: 30,
               visible: true,
@@ -116,10 +130,14 @@ describe('App', () => {
       }
       return new Response(
         JSON.stringify({
+          cluster: 'default',
           menus: [
             {
               id: 'workloads',
+              group: 'system',
               title: 'Workloads',
+              targetType: 'page',
+              targetRef: '/workloads',
               source: 'system',
               order: 10,
               visible: true,

@@ -11,6 +11,27 @@ export interface MenuItem {
   visible: boolean;
 }
 
+export interface MenusResponse {
+  cluster: string;
+  menus: MenuItem[];
+}
+
+export interface RegistryResourceType {
+  id: string;
+  group: string;
+  version: string;
+  kind: string;
+  plural: string;
+  namespaced: boolean;
+  preferredVersion: string;
+  source: string;
+}
+
+export interface RegistryResponse {
+  cluster: string;
+  resourceTypes: RegistryResourceType[];
+}
+
 export interface PageContribution {
   pageId: string;
   route: string;

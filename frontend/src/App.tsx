@@ -16,12 +16,9 @@ import Typography from '@mui/material/Typography';
 import { ListPageShell } from './components/page-shell/ResourcePageShell';
 import { composeMenus } from './core/menuComposer';
 import { groupMenusBySource } from './core/menuGrouping';
-import type { MenuItem, MenuSource } from './sdk/types';
+import { parseMenusResponse } from './sdk/metaApi';
+import type { MenuItem } from './sdk/types';
 import type { ThemePreference } from './themeMode';
-
-interface MenusResponse {
-  menus: Array<Record<string, unknown>>;
-}
 
 type ProbeStatus = 'checking' | 'ok' | 'error';
 
@@ -50,30 +47,6 @@ function resolveApiTargetHint(): string {
 
 function resolveProbePath(path: '/healthz' | '/readyz'): string {
   return `/api${path}`;
-}
-
-function normalizeMenuSource(source: unknown): MenuSource {
-  if (source === 'system' || source === 'user' || source === 'dynamic') {
-    return source;
-  }
-  return 'system';
-}
-
-function normalizeMenu(record: Record<string, unknown>): MenuItem {
-  const id = typeof record.id === 'string' ? record.id : 'unknown';
-  const title = typeof record.title === 'string' ? record.title : id;
-  const targetType = record.targetType === 'resource' ? 'resource' : 'page';
-
-  return {
-    id,
-    title,
-    group: typeof record.group === 'string' ? record.group : 'default',
-    source: normalizeMenuSource(record.source),
-    order: typeof record.order === 'number' ? record.order : 0,
-    visible: typeof record.visible === 'boolean' ? record.visible : true,
-    targetType,
-    targetRef: typeof record.targetRef === 'string' ? record.targetRef : `/${id}`,
-  };
 }
 
 function MenuSection({
@@ -139,9 +112,9 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
           throw new Error(`menus request failed: ${response.status}`);
         }
 
-        const payload = (await response.json()) as MenusResponse;
+        const payload = parseMenusResponse(await response.json());
         if (active) {
-          setMenus((payload.menus ?? []).map(normalizeMenu));
+          setMenus(payload.menus);
         }
       } catch (e) {
         if (active) {
