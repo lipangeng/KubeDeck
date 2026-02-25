@@ -22,32 +22,36 @@ KubeDeck is a multi-cluster, plugin-extensible Kubernetes web control plane.
 
 Completed and merged:
 - Backend module skeleton (`api/auth/core/plugins/registry/storage/webui`)
-- Multi-database storage abstraction contracts (default sqlite, mysql/postgres stubs)
+- Multi-database IAM persistence (default sqlite, mysql/postgres implemented in storage repository)
 - Metadata/resource stub APIs and health probes (`/api/healthz`, `/api/readyz`)
 - Local auth session APIs (`login/me/logout/switch-tenant`) with `tenant_code` targeting
 - Membership validity domain model (`effective_from/effective_to`) and validation hooks
 - Tenant-scoped IAM APIs (group CRUD, permission binding, membership-group binding)
 - Invite onboarding APIs (`create/list/accept`) with notification provider abstraction
 - Structured audit pipeline and tenant-scoped audit events API
+- Backend-sensitive write endpoint authz enforcement (`/api/resources/apply`)
 - Frontend shell baseline with MUI
 - Theme preference (`system/light/dark`) with persistence
 - Sidebar menu composition and grouped rendering (`system/user/dynamic`)
 - Reusable page shell components (`ListPageShell`, `DetailPageShell`)
 - Plugin templates and manifest validation tests
 - Single-executable backend mode (embedded static + optional `--static-dir` override)
+- Runtime persistence flags (`--db-driver`, `--db-dsn`, `--disable-persist`)
+- Storage regression tests for IAM persistence (dialect placeholders + sqlite round-trip)
 
 ## 4. Next Priority (Phase 1 continuation)
 
-- Persist IAM domain from in-memory state to sqlite repositories
-- Add auth middleware protection for sensitive API groups by default
-- Implement tenant/member/group/invite storage queries with unique constraints
-- Add frontend IAM bootstrap (session-aware startup and tenant switch UX)
-- Add invite link entry/accept flow in UI
+- Replace API-level in-memory maps with repository-first read/write flow end-to-end
+- Add production migrations strategy for mysql/postgres IAM schema evolution
+- Add auth middleware abstraction and route policy table (instead of per-handler checks)
+- Add OAuth provider integration and RBAC administration UI
+- Expand invite delivery providers (email production adapter + SMS adapter)
 
 ## 5. Canonical Documents
 
 - Architecture design: `docs/plans/2026-02-25-kubedeck-architecture-design.md`
 - Implementation plan: `docs/plans/2026-02-25-kubedeck-microkernel-baseline-implementation.md`
+- Runtime persistence guide: `docs/runbooks/backend-persistence.md`
 
 ## 6. Execution Rule
 
