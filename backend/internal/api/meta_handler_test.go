@@ -461,6 +461,116 @@ func TestAuthMeReloadsSessionFromPersistenceWhenCacheMiss(t *testing.T) {
 	}
 }
 
+func TestIAMGroupsReloadFromPersistenceWhenCacheMiss(t *testing.T) {
+	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		resetIAMPersistenceForTest()
+	})
+	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
+	t.Setenv("KUBEDECK_SQLITE_DSN", filepath.Join(t.TempDir(), "groups-reload.sqlite"))
+
+	resetAuthSessions()
+	resetGroups()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader([]byte(`{"name":"ops","description":"Ops Team"}`)))
+	createReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusCreated {
+		t.Fatalf("expected create status %d, got %d body=%s", http.StatusCreated, createResp.Code, createResp.Body.String())
+	}
+
+	resetGroups()
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/iam/groups", nil)
+	listReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	listResp := httptest.NewRecorder()
+	router.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected list status %d, got %d body=%s", http.StatusOK, listResp.Code, listResp.Body.String())
+	}
+	var listBody struct {
+		Groups []iamGroup `json:"groups"`
+	}
+	if err := json.Unmarshal(listResp.Body.Bytes(), &listBody); err != nil {
+		t.Fatalf("expected list JSON body, got error: %v", err)
+	}
+	if len(listBody.Groups) == 0 || listBody.Groups[0].Name != "ops" {
+		t.Fatalf("expected persisted groups after reload, body=%s", listResp.Body.String())
+	}
+}
+
+func TestIAMTenantMembersReloadFromPersistenceWhenCacheMiss(t *testing.T) {
+	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		resetIAMPersistenceForTest()
+	})
+	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
+	t.Setenv("KUBEDECK_SQLITE_DSN", filepath.Join(t.TempDir(), "members-reload.sqlite"))
+
+	resetAuthSessions()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+
+	createMemberReq := httptest.NewRequest(http.MethodPost, "/api/iam/tenants/tenant-dev/members", bytes.NewReader([]byte(`{"user_id":"u-9","user_label":"user-nine","effective_from":"2026-02-25T00:00:00Z"}`)))
+	createMemberReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createMemberResp := httptest.NewRecorder()
+	router.ServeHTTP(createMemberResp, createMemberReq)
+	if createMemberResp.Code != http.StatusCreated {
+		t.Fatalf("expected member create status %d, got %d body=%s", http.StatusCreated, createMemberResp.Code, createMemberResp.Body.String())
+	}
+
+	resetMemberships()
+
+	listMembersReq := httptest.NewRequest(http.MethodGet, "/api/iam/tenants/tenant-dev/members", nil)
+	listMembersReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	listMembersResp := httptest.NewRecorder()
+	router.ServeHTTP(listMembersResp, listMembersReq)
+	if listMembersResp.Code != http.StatusOK {
+		t.Fatalf("expected list members status %d, got %d body=%s", http.StatusOK, listMembersResp.Code, listMembersResp.Body.String())
+	}
+	var membersBody struct {
+		Members []iamMembership `json:"members"`
+	}
+	if err := json.Unmarshal(listMembersResp.Body.Bytes(), &membersBody); err != nil {
+		t.Fatalf("expected members JSON body, got error: %v", err)
+	}
+	if len(membersBody.Members) == 0 || membersBody.Members[0].UserID != "u-9" {
+		t.Fatalf("expected persisted tenant members after reload, body=%s", listMembersResp.Body.String())
+	}
+}
+
 func TestAuthLoginTenantCodeDeniedWhenUnknown(t *testing.T) {
 	resetAuthSessions()
 	resetAuditWriter()

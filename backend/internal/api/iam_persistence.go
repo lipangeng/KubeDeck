@@ -174,6 +174,14 @@ func reloadAuthSessionsFromPersistence() error {
 	return nil
 }
 
+func reloadIAMStateFromPersistence() error {
+	ensureIAMPersistence()
+	if iamPersistenceRepo == nil {
+		return nil
+	}
+	return loadIAMPersistentState(iamPersistenceRepo)
+}
+
 func decodeAuthSessions(records []storage.AuthSessionRecord) (map[string]authSession, error) {
 	loadSessions := map[string]authSession{}
 	for _, item := range records {

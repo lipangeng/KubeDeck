@@ -330,28 +330,12 @@ func (h *IAMHandler) TenantMembers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *IAMHandler) listGroups(w http.ResponseWriter, session authSession) {
-	iamGroupsMu.RLock()
-	defer iamGroupsMu.RUnlock()
-
-	out := make([]iamGroup, 0)
-	for _, group := range iamGroups {
-		if group.TenantID == session.ActiveTenantID {
-			out = append(out, group)
-		}
-	}
+	out := groupsByTenant(session.ActiveTenantID)
 	_ = writeJSON(w, http.StatusOK, map[string]any{"groups": out})
 }
 
 func (h *IAMHandler) listMemberships(w http.ResponseWriter, session authSession) {
-	iamMembershipsMu.Lock()
-	defer iamMembershipsMu.Unlock()
-
-	out := make([]iamMembership, 0)
-	for _, membership := range iamMemberships {
-		if membership.TenantID == session.ActiveTenantID {
-			out = append(out, membership)
-		}
-	}
+	out := membershipsByTenant(session.ActiveTenantID)
 	if len(out) == 0 {
 		seed := iamMembership{
 			ID:            "mbr-" + session.User.ID + "-" + session.ActiveTenantID,
@@ -362,21 +346,17 @@ func (h *IAMHandler) listMemberships(w http.ResponseWriter, session authSession)
 			EffectiveFrom: time.Now().UTC().Add(-24 * time.Hour),
 		}
 		iamMemberships[seed.ID] = seed
+		iamMembershipsMu.Unlock()
+		persistIAMMemberships()
 		out = append(out, seed)
+	} else {
+		iamMembershipsMu.Unlock()
 	}
 	_ = writeJSON(w, http.StatusOK, map[string]any{"memberships": out})
 }
 
 func (h *IAMHandler) listUsers(w http.ResponseWriter, session authSession) {
-	iamMembershipsMu.Lock()
-	defer iamMembershipsMu.Unlock()
-
-	memberships := make([]iamMembership, 0)
-	for _, membership := range iamMemberships {
-		if membership.TenantID == session.ActiveTenantID {
-			memberships = append(memberships, membership)
-		}
-	}
+	memberships := membershipsByTenant(session.ActiveTenantID)
 	if len(memberships) == 0 {
 		seed := iamMembership{
 			ID:            "mbr-" + session.User.ID + "-" + session.ActiveTenantID,
@@ -387,7 +367,11 @@ func (h *IAMHandler) listUsers(w http.ResponseWriter, session authSession) {
 			EffectiveFrom: time.Now().UTC().Add(-24 * time.Hour),
 		}
 		iamMemberships[seed.ID] = seed
+		iamMembershipsMu.Unlock()
+		persistIAMMemberships()
 		memberships = append(memberships, seed)
+	} else {
+		iamMembershipsMu.Unlock()
 	}
 
 	users := make([]iamUser, 0, len(memberships))
@@ -419,14 +403,8 @@ func (h *IAMHandler) listTenantMembers(
 		writeJSONError(w, http.StatusNotFound, "tenant_not_found")
 		return
 	}
-	iamMembershipsMu.Lock()
-	defer iamMembershipsMu.Unlock()
-	out := make([]iamMembership, 0)
-	for _, membership := range iamMemberships {
-		if membership.TenantID == tenantID {
-			out = append(out, membership)
-		}
-	}
+	out := membershipsByTenant(tenantID)
+	iamMembershipsMu.Unlock()
 	_ = writeJSON(w, http.StatusOK, map[string]any{"members": out})
 }
 
@@ -483,15 +461,10 @@ func (h *IAMHandler) createTenantMember(
 	if userLabel == "" {
 		userLabel = req.UserID
 	}
-	iamMembershipsMu.RLock()
-	for _, existing := range iamMemberships {
-		if existing.TenantID == tenantID && strings.EqualFold(existing.UserID, req.UserID) {
-			iamMembershipsMu.RUnlock()
-			writeJSONError(w, http.StatusConflict, "membership_exists")
-			return
-		}
+	if membershipExistsByTenantUser(tenantID, req.UserID) {
+		writeJSONError(w, http.StatusConflict, "membership_exists")
+		return
 	}
-	iamMembershipsMu.RUnlock()
 	membership := iamMembership{
 		ID:             "mbr-" + strings.ToLower(strings.ReplaceAll(req.UserID, " ", "-")) + "-" + tenantID,
 		TenantID:       tenantID,
@@ -533,6 +506,12 @@ func (h *IAMHandler) deleteTenantMember(
 	}
 	iamMembershipsMu.Lock()
 	membership, ok := iamMemberships[membershipID]
+	if !ok {
+		iamMembershipsMu.Unlock()
+		_ = reloadIAMStateFromPersistence()
+		iamMembershipsMu.Lock()
+		membership, ok = iamMemberships[membershipID]
+	}
 	if !ok || membership.TenantID != tenantID {
 		iamMembershipsMu.Unlock()
 		writeJSONError(w, http.StatusNotFound, "membership_not_found")
@@ -561,6 +540,104 @@ func tenantVisibleToSession(session authSession, tenantID string) bool {
 	return false
 }
 
+func groupsByTenant(tenantID string) []iamGroup {
+	load := func() []iamGroup {
+		out := make([]iamGroup, 0)
+		for _, group := range iamGroups {
+			if group.TenantID == tenantID {
+				out = append(out, group)
+			}
+		}
+		return out
+	}
+	iamGroupsMu.RLock()
+	out := load()
+	iamGroupsMu.RUnlock()
+	if len(out) > 0 {
+		return out
+	}
+	_ = reloadIAMStateFromPersistence()
+	iamGroupsMu.RLock()
+	out = load()
+	iamGroupsMu.RUnlock()
+	return out
+}
+
+func membershipsByTenant(tenantID string) []iamMembership {
+	load := func() []iamMembership {
+		out := make([]iamMembership, 0)
+		for _, membership := range iamMemberships {
+			if membership.TenantID == tenantID {
+				out = append(out, membership)
+			}
+		}
+		return out
+	}
+	iamMembershipsMu.Lock()
+	out := load()
+	if len(out) > 0 {
+		return out
+	}
+	iamMembershipsMu.Unlock()
+	_ = reloadIAMStateFromPersistence()
+	iamMembershipsMu.Lock()
+	return load()
+}
+
+func membershipExistsByTenantUser(tenantID string, userID string) bool {
+	iamMembershipsMu.RLock()
+	for _, existing := range iamMemberships {
+		if existing.TenantID == tenantID && strings.EqualFold(existing.UserID, userID) {
+			iamMembershipsMu.RUnlock()
+			return true
+		}
+	}
+	iamMembershipsMu.RUnlock()
+	_ = reloadIAMStateFromPersistence()
+	iamMembershipsMu.RLock()
+	defer iamMembershipsMu.RUnlock()
+	for _, existing := range iamMemberships {
+		if existing.TenantID == tenantID && strings.EqualFold(existing.UserID, userID) {
+			return true
+		}
+	}
+	return false
+}
+
+func groupNameExistsByTenant(tenantID string, groupName string) bool {
+	iamGroupsMu.RLock()
+	for _, existing := range iamGroups {
+		if existing.TenantID == tenantID && strings.EqualFold(existing.Name, groupName) {
+			iamGroupsMu.RUnlock()
+			return true
+		}
+	}
+	iamGroupsMu.RUnlock()
+	_ = reloadIAMStateFromPersistence()
+	iamGroupsMu.RLock()
+	defer iamGroupsMu.RUnlock()
+	for _, existing := range iamGroups {
+		if existing.TenantID == tenantID && strings.EqualFold(existing.Name, groupName) {
+			return true
+		}
+	}
+	return false
+}
+
+func groupByID(groupID string) (iamGroup, bool) {
+	iamGroupsMu.RLock()
+	group, ok := iamGroups[groupID]
+	iamGroupsMu.RUnlock()
+	if ok {
+		return group, true
+	}
+	_ = reloadIAMStateFromPersistence()
+	iamGroupsMu.RLock()
+	defer iamGroupsMu.RUnlock()
+	group, ok = iamGroups[groupID]
+	return group, ok
+}
+
 func (h *IAMHandler) createGroup(w http.ResponseWriter, r *http.Request, session authSession) {
 	var req struct {
 		Name        string `json:"name"`
@@ -575,15 +652,10 @@ func (h *IAMHandler) createGroup(w http.ResponseWriter, r *http.Request, session
 		return
 	}
 	normalizedName := strings.TrimSpace(req.Name)
-	iamGroupsMu.RLock()
-	for _, existing := range iamGroups {
-		if existing.TenantID == session.ActiveTenantID && strings.EqualFold(existing.Name, normalizedName) {
-			iamGroupsMu.RUnlock()
-			writeJSONError(w, http.StatusConflict, "group_exists")
-			return
-		}
+	if groupNameExistsByTenant(session.ActiveTenantID, normalizedName) {
+		writeJSONError(w, http.StatusConflict, "group_exists")
+		return
 	}
-	iamGroupsMu.RUnlock()
 	id := "grp-" + strings.ToLower(strings.ReplaceAll(req.Name, " ", "-"))
 	group := iamGroup{
 		ID:          id,
@@ -623,6 +695,12 @@ func (h *IAMHandler) patchGroup(
 	}
 	iamGroupsMu.Lock()
 	group, ok := iamGroups[groupID]
+	if !ok {
+		iamGroupsMu.Unlock()
+		_ = reloadIAMStateFromPersistence()
+		iamGroupsMu.Lock()
+		group, ok = iamGroups[groupID]
+	}
 	if !ok || group.TenantID != session.ActiveTenantID {
 		iamGroupsMu.Unlock()
 		writeJSONError(w, http.StatusNotFound, "group_not_found")
@@ -651,6 +729,12 @@ func (h *IAMHandler) patchGroup(
 func (h *IAMHandler) deleteGroup(w http.ResponseWriter, session authSession, groupID string) {
 	iamGroupsMu.Lock()
 	group, ok := iamGroups[groupID]
+	if !ok {
+		iamGroupsMu.Unlock()
+		_ = reloadIAMStateFromPersistence()
+		iamGroupsMu.Lock()
+		group, ok = iamGroups[groupID]
+	}
 	if !ok || group.TenantID != session.ActiveTenantID {
 		iamGroupsMu.Unlock()
 		writeJSONError(w, http.StatusNotFound, "group_not_found")
@@ -707,6 +791,12 @@ func (h *IAMHandler) replaceGroupPermissions(
 	}
 	iamGroupsMu.Lock()
 	group, ok := iamGroups[groupID]
+	if !ok {
+		iamGroupsMu.Unlock()
+		_ = reloadIAMStateFromPersistence()
+		iamGroupsMu.Lock()
+		group, ok = iamGroups[groupID]
+	}
 	if !ok || group.TenantID != session.ActiveTenantID {
 		iamGroupsMu.Unlock()
 		writeJSONError(w, http.StatusNotFound, "group_not_found")
@@ -740,19 +830,22 @@ func (h *IAMHandler) replaceMembershipGroups(
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	iamGroupsMu.RLock()
 	for _, groupID := range req.GroupIDs {
-		group, ok := iamGroups[groupID]
+		group, ok := groupByID(groupID)
 		if !ok || group.TenantID != session.ActiveTenantID {
-			iamGroupsMu.RUnlock()
 			writeJSONError(w, http.StatusBadRequest, "unknown_group_ids")
 			return
 		}
 	}
-	iamGroupsMu.RUnlock()
 
 	iamMembershipsMu.Lock()
 	membership, ok := iamMemberships[membershipID]
+	if !ok {
+		iamMembershipsMu.Unlock()
+		_ = reloadIAMStateFromPersistence()
+		iamMembershipsMu.Lock()
+		membership, ok = iamMemberships[membershipID]
+	}
 	if !ok {
 		iamMembershipsMu.Unlock()
 		writeJSONError(w, http.StatusNotFound, "membership_not_found")
@@ -814,6 +907,12 @@ func (h *IAMHandler) replaceMembershipValidity(
 
 	iamMembershipsMu.Lock()
 	membership, ok := iamMemberships[membershipID]
+	if !ok {
+		iamMembershipsMu.Unlock()
+		_ = reloadIAMStateFromPersistence()
+		iamMembershipsMu.Lock()
+		membership, ok = iamMemberships[membershipID]
+	}
 	if !ok || membership.TenantID != session.ActiveTenantID {
 		iamMembershipsMu.Unlock()
 		writeJSONError(w, http.StatusNotFound, "membership_not_found")
