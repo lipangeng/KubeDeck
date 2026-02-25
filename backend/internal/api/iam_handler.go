@@ -309,8 +309,12 @@ func (h *IAMHandler) replaceGroupPermissions(
 }
 
 func mustSession(r *http.Request, w http.ResponseWriter) (authSession, bool) {
-	session, ok := currentSessionFromRequest(r)
+	_, session, ok, reason := currentValidSessionFromRequest(r)
 	if !ok {
+		if reason == "membership_expired" {
+			writeJSONError(w, http.StatusForbidden, "membership_expired")
+			return authSession{}, false
+		}
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return authSession{}, false
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"kubedeck/backend/internal/auth"
 	"kubedeck/backend/internal/core/audit"
 )
 
@@ -350,6 +351,65 @@ func TestAuthLoginTenantCodeDeniedWhenUnknown(t *testing.T) {
 	router.ServeHTTP(loginResp, loginReq)
 	if loginResp.Code != http.StatusForbidden {
 		t.Fatalf("expected login status 403, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+}
+
+func TestSessionExpiredAfterLoginIsDeniedOnProtectedAPIs(t *testing.T) {
+	resetAuthSessions()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"alice","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status 200, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login response: %v", err)
+	}
+	if loginBody.Token == "" {
+		t.Fatalf("expected token in login response")
+	}
+
+	authSessionsMu.Lock()
+	s := authSessions[loginBody.Token]
+	s.User.Memberships = []auth.TenantMembership{
+		{
+			TenantID:      s.ActiveTenantID,
+			UserID:        s.User.ID,
+			EffectiveFrom: time.Now().UTC().Add(-48 * time.Hour),
+			EffectiveUntil: func() *time.Time {
+				v := time.Now().UTC().Add(-1 * time.Hour)
+				return &v
+			}(),
+		},
+	}
+	authSessions[loginBody.Token] = s
+	authSessionsMu.Unlock()
+
+	meReq := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	meReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	meResp := httptest.NewRecorder()
+	router.ServeHTTP(meResp, meReq)
+	if meResp.Code != http.StatusForbidden {
+		t.Fatalf("expected me status 403 after membership expired, got %d body=%s", meResp.Code, meResp.Body.String())
+	}
+	if !strings.Contains(meResp.Body.String(), "membership_expired") {
+		t.Fatalf("expected membership_expired body, got %s", meResp.Body.String())
+	}
+
+	iamReq := httptest.NewRequest(http.MethodGet, "/api/iam/groups", nil)
+	iamReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	iamResp := httptest.NewRecorder()
+	router.ServeHTTP(iamResp, iamReq)
+	if iamResp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected iam status 401 after expired session cleanup, got %d body=%s", iamResp.Code, iamResp.Body.String())
 	}
 }
 

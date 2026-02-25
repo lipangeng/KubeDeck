@@ -104,8 +104,12 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, ok := currentSessionFromRequest(r)
+	_, session, ok, reason := currentValidSessionFromRequest(r)
 	if !ok {
+		if reason == "membership_expired" {
+			writeJSONError(w, http.StatusForbidden, "membership_expired")
+			return
+		}
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -127,8 +131,12 @@ func (h *AuthHandler) SwitchTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, session, ok := currentSessionWithToken(r)
+	token, session, ok, reason := currentValidSessionFromRequest(r)
 	if !ok {
+		if reason == "membership_expired" {
+			writeJSONError(w, http.StatusForbidden, "membership_expired")
+			return
+		}
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -319,6 +327,20 @@ func currentSessionWithToken(r *http.Request) (string, authSession, bool) {
 	session, ok := authSessions[token]
 	authSessionsMu.RUnlock()
 	return token, session, ok
+}
+
+func currentValidSessionFromRequest(r *http.Request) (string, authSession, bool, string) {
+	token, session, ok := currentSessionWithToken(r)
+	if !ok {
+		return "", authSession{}, false, "unauthorized"
+	}
+	if !isMembershipActiveForTenant(session.User.Memberships, session.ActiveTenantID, time.Now().UTC()) {
+		authSessionsMu.Lock()
+		delete(authSessions, token)
+		authSessionsMu.Unlock()
+		return "", authSession{}, false, "membership_expired"
+	}
+	return token, session, true, ""
 }
 
 func newToken() string {
