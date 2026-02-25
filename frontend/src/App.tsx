@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
@@ -13,15 +13,13 @@ import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
+import { composeMenus } from './core/menuComposer';
+import { groupMenusBySource } from './core/menuGrouping';
+import type { MenuItem, MenuSource } from './sdk/types';
 import type { ThemePreference } from './themeMode';
 
-interface MenuEntry {
-  id: string;
-  title: string;
-}
-
 interface MenusResponse {
-  menus: MenuEntry[];
+  menus: Array<Record<string, unknown>>;
 }
 
 type ProbeStatus = 'checking' | 'ok' | 'error';
@@ -53,10 +51,63 @@ function resolveProbePath(path: '/healthz' | '/readyz'): string {
   return `/api${path}`;
 }
 
+function normalizeMenuSource(source: unknown): MenuSource {
+  if (source === 'system' || source === 'user' || source === 'dynamic') {
+    return source;
+  }
+  return 'system';
+}
+
+function normalizeMenu(record: Record<string, unknown>): MenuItem {
+  const id = typeof record.id === 'string' ? record.id : 'unknown';
+  const title = typeof record.title === 'string' ? record.title : id;
+  const targetType = record.targetType === 'resource' ? 'resource' : 'page';
+
+  return {
+    id,
+    title,
+    group: typeof record.group === 'string' ? record.group : 'default',
+    source: normalizeMenuSource(record.source),
+    order: typeof record.order === 'number' ? record.order : 0,
+    visible: typeof record.visible === 'boolean' ? record.visible : true,
+    targetType,
+    targetRef: typeof record.targetRef === 'string' ? record.targetRef : `/${id}`,
+  };
+}
+
+function MenuSection({
+  title,
+  items,
+}: {
+  title: string;
+  items: MenuItem[];
+}) {
+  return (
+    <Box>
+      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
+        {title}
+      </Typography>
+      <List dense sx={{ pt: 0 }}>
+        {items.length === 0 ? (
+          <ListItem disablePadding>
+            <ListItemText primary="No entries" primaryTypographyProps={{ color: 'text.disabled' }} />
+          </ListItem>
+        ) : (
+          items.map((menu) => (
+            <ListItem key={menu.id} disablePadding>
+              <ListItemText primary={menu.title} />
+            </ListItem>
+          ))
+        )}
+      </List>
+    </Box>
+  );
+}
+
 function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const apiTargetHint = resolveApiTargetHint();
   const [activeCluster, setActiveCluster] = useState('default');
-  const [menus, setMenus] = useState<MenuEntry[]>([]);
+  const [menus, setMenus] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<ProbeStatus>('checking');
@@ -64,6 +115,14 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const [healthError, setHealthError] = useState<string | null>(null);
   const [readyError, setReadyError] = useState<string | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
+
+  const groupedMenus = useMemo(() => {
+    const systemMenus = menus.filter((menu) => menu.source === 'system');
+    const userMenus = menus.filter((menu) => menu.source === 'user');
+    const dynamicMenus = menus.filter((menu) => menu.source === 'dynamic');
+    const merged = composeMenus(systemMenus, userMenus, dynamicMenus);
+    return groupMenusBySource(merged);
+  }, [menus]);
 
   useEffect(() => {
     let active = true;
@@ -81,11 +140,12 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
 
         const payload = (await response.json()) as MenusResponse;
         if (active) {
-          setMenus(payload.menus ?? []);
+          setMenus((payload.menus ?? []).map(normalizeMenu));
         }
       } catch (e) {
         if (active) {
           setError(e instanceof Error ? e.message : 'unknown error');
+          setMenus([]);
         }
       } finally {
         if (active) {
@@ -212,20 +272,13 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
 
             <Divider />
 
-            <Typography variant="subtitle2" color="text.secondary">
-              Menu Items
-            </Typography>
             {loading ? <Typography>Loading menus...</Typography> : null}
             {error ? (
               <Typography color="error">Failed to load menus: {error}</Typography>
             ) : null}
-            <List aria-label="Menu Items" dense>
-              {menus.map((menu) => (
-                <ListItem key={menu.id} disablePadding>
-                  <ListItemText primary={menu.title} />
-                </ListItem>
-              ))}
-            </List>
+            <MenuSection title="System Menus" items={groupedMenus.system} />
+            <MenuSection title="User Menus" items={groupedMenus.user} />
+            <MenuSection title="Dynamic Menus" items={groupedMenus.dynamic} />
           </Stack>
         </Paper>
 

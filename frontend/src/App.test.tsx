@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 describe('App', () => {
-  it('renders shell layout, theme control, runtime checks, and reloads menus when cluster changes', async () => {
+  it('renders grouped menus, theme control, runtime checks, and reloads menus when cluster changes', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
@@ -17,7 +17,15 @@ describe('App', () => {
       if (url.includes('cluster=dev')) {
         return new Response(
           JSON.stringify({
-            menus: [{ id: 'dev-workloads', title: 'Dev Workloads' }],
+            menus: [
+              {
+                id: 'dev-workloads',
+                title: 'Dev Workloads',
+                source: 'system',
+                order: 10,
+                visible: true,
+              },
+            ],
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
@@ -26,8 +34,27 @@ describe('App', () => {
       return new Response(
         JSON.stringify({
           menus: [
-            { id: 'workloads', title: 'Workloads' },
-            { id: 'crd-dynamic', title: 'Custom Resources' },
+            {
+              id: 'workloads',
+              title: 'Workloads',
+              source: 'system',
+              order: 10,
+              visible: true,
+            },
+            {
+              id: 'favorites',
+              title: 'Favorites',
+              source: 'user',
+              order: 20,
+              visible: true,
+            },
+            {
+              id: 'crd-dynamic',
+              title: 'Custom Resources',
+              source: 'dynamic',
+              order: 30,
+              visible: true,
+            },
           ],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -47,6 +74,9 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'KubeDeck' })).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Primary Sidebar' })).toBeTruthy();
     expect(screen.getByLabelText('Theme')).toBeTruthy();
+    expect(screen.getByText('System Menus')).toBeTruthy();
+    expect(screen.getByText('User Menus')).toBeTruthy();
+    expect(screen.getByText('Dynamic Menus')).toBeTruthy();
     expect(screen.getByText('API target (test: http://127.0.0.1:8080)')).toBeTruthy();
     expect(await screen.findByText('healthz: ok')).toBeTruthy();
     expect(await screen.findByText('readyz: ok')).toBeTruthy();
@@ -54,6 +84,7 @@ describe('App', () => {
     expect(await screen.findByText('Failure summary: none')).toBeTruthy();
 
     expect(await screen.findByText('Workloads')).toBeTruthy();
+    expect(await screen.findByText('Favorites')).toBeTruthy();
     expect(await screen.findByText('Custom Resources')).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Cluster'), {
@@ -85,7 +116,15 @@ describe('App', () => {
       }
       return new Response(
         JSON.stringify({
-          menus: [{ id: 'workloads', title: 'Workloads' }],
+          menus: [
+            {
+              id: 'workloads',
+              title: 'Workloads',
+              source: 'system',
+              order: 10,
+              visible: true,
+            },
+          ],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
