@@ -23,3 +23,35 @@ func (s *postgresStore) UserPreferences() UserPreferenceRepo {
 func (s *postgresStore) PluginConfigs() PluginConfigRepo {
 	return defaultPluginConfigRepo
 }
+
+func (s *postgresStore) Users() UserRepo {
+	return defaultUserRepo
+}
+
+func (s *postgresStore) Tenants() TenantRepo {
+	return defaultTenantRepo
+}
+
+func (s *postgresStore) TenantMemberships() TenantMembershipRepo {
+	return defaultTenantMembershipRepo
+}
+
+func (s *postgresStore) Groups() GroupRepo {
+	return defaultGroupRepo
+}
+
+func (s *postgresStore) Permissions() PermissionRepo {
+	return defaultPermissionRepo
+}
+
+func (s *postgresStore) Sessions() SessionRepo {
+	return defaultSessionRepo
+}
+
+func (s *postgresStore) Invites() InviteRepo {
+	return defaultInviteRepo
+}
+
+func (s *postgresStore) AuditEvents() AuditEventRepo {
+	return defaultAuditEventRepo
+}

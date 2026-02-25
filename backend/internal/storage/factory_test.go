@@ -4,10 +4,10 @@ import "testing"
 
 func TestNewStore(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		driver     string
 		wantDriver string
-		wantErr   bool
+		wantErr    bool
 	}{
 		{name: "sqlite", driver: "sqlite", wantDriver: "sqlite"},
 		{name: "empty defaults to sqlite", driver: "", wantDriver: "sqlite"},
@@ -45,6 +45,30 @@ func TestNewStore(t *testing.T) {
 			}
 			if store.PluginConfigs() == nil {
 				t.Fatal("expected non-nil plugin config repo")
+			}
+			if store.Users() == nil {
+				t.Fatal("expected non-nil users repo")
+			}
+			if store.Tenants() == nil {
+				t.Fatal("expected non-nil tenants repo")
+			}
+			if store.TenantMemberships() == nil {
+				t.Fatal("expected non-nil tenant memberships repo")
+			}
+			if store.Groups() == nil {
+				t.Fatal("expected non-nil groups repo")
+			}
+			if store.Permissions() == nil {
+				t.Fatal("expected non-nil permissions repo")
+			}
+			if store.Sessions() == nil {
+				t.Fatal("expected non-nil sessions repo")
+			}
+			if store.Invites() == nil {
+				t.Fatal("expected non-nil invites repo")
+			}
+			if store.AuditEvents() == nil {
+				t.Fatal("expected non-nil audit events repo")
 			}
 		})
 	}

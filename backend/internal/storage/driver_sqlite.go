@@ -23,3 +23,35 @@ func (s *sqliteStore) UserPreferences() UserPreferenceRepo {
 func (s *sqliteStore) PluginConfigs() PluginConfigRepo {
 	return defaultPluginConfigRepo
 }
+
+func (s *sqliteStore) Users() UserRepo {
+	return defaultUserRepo
+}
+
+func (s *sqliteStore) Tenants() TenantRepo {
+	return defaultTenantRepo
+}
+
+func (s *sqliteStore) TenantMemberships() TenantMembershipRepo {
+	return defaultTenantMembershipRepo
+}
+
+func (s *sqliteStore) Groups() GroupRepo {
+	return defaultGroupRepo
+}
+
+func (s *sqliteStore) Permissions() PermissionRepo {
+	return defaultPermissionRepo
+}
+
+func (s *sqliteStore) Sessions() SessionRepo {
+	return defaultSessionRepo
+}
+
+func (s *sqliteStore) Invites() InviteRepo {
+	return defaultInviteRepo
+}
+
+func (s *sqliteStore) AuditEvents() AuditEventRepo {
+	return defaultAuditEventRepo
+}
