@@ -306,6 +306,8 @@ describe('App', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Login' }));
     const dialog = await screen.findByRole('dialog', { name: 'Login' });
     expect(within(dialog).getByTestId('login-visual-panel')).toBeTruthy();
+    expect((within(dialog).getByLabelText('Username') as HTMLInputElement).value).toBe('');
+    expect((within(dialog).getByLabelText('Password') as HTMLInputElement).value).toBe('');
   });
 
   it('applies multi-yaml payload with namespace default linkage', async () => {

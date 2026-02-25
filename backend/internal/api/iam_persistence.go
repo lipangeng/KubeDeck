@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"kubedeck/backend/internal/storage"
 )
@@ -117,7 +118,7 @@ func loadIAMPersistentState(repo storage.IAMPersistence) error {
 	loadInvites := map[string]iamInvite{}
 	for _, item := range snapshot.Invites {
 		loadInvites[item.Token] = iamInvite{
-			Token:        item.Token,
+			Token:        "",
 			ID:           item.ID,
 			TenantID:     item.TenantID,
 			TenantCode:   item.TenantCode,
@@ -194,6 +195,10 @@ func decodeAuthSessions(records []storage.AuthSessionRecord) (map[string]authSes
 		}
 		session.Token = item.Token
 		session.ActiveTenantID = item.ActiveTenantID
+		session.ExpiresAt = item.ExpiresAt.UTC()
+		if session.ExpiresAt.IsZero() {
+			session.ExpiresAt = time.Now().UTC().Add(authSessionTTL())
+		}
 		loadSessions[item.Token] = session
 	}
 	return loadSessions, nil
@@ -252,9 +257,13 @@ func persistIAMInvites() {
 	}
 	invitesMu.RLock()
 	snapshot := make([]storage.IAMInviteRecord, 0, len(invites))
-	for _, item := range invites {
+	for tokenKey, item := range invites {
+		token := strings.TrimSpace(item.Token)
+		if token == "" {
+			token = tokenKey
+		}
 		snapshot = append(snapshot, storage.IAMInviteRecord{
-			Token:        item.Token,
+			Token:        token,
 			ID:           item.ID,
 			TenantID:     item.TenantID,
 			TenantCode:   item.TenantCode,
@@ -288,6 +297,7 @@ func persistAuthSessions() {
 			UserJSON:       string(userJSON),
 			AvailableJSON:  string(availableJSON),
 			ActiveTenantID: item.ActiveTenantID,
+			ExpiresAt:      item.ExpiresAt.UTC(),
 		})
 	}
 	authSessionsMu.RUnlock()

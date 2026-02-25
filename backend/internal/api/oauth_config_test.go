@@ -116,3 +116,28 @@ func TestOAuthConfigEndpoint_OIDCModeReportsMissingFields(t *testing.T) {
 		t.Fatalf("unexpected oidc existence flags: %+v", body.OIDC)
 	}
 }
+
+func TestOAuthConfigEndpoint_ProductionReturnsNotFound(t *testing.T) {
+	t.Setenv("KUBEDECK_ENV", "production")
+	t.Setenv("KUBEDECK_OAUTH_MODE", "oidc")
+
+	router := NewRouter()
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/oauth/config", nil)
+	resp := httptest.NewRecorder()
+
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusNotFound, resp.Code, resp.Body.String())
+	}
+
+	var body struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected JSON body, got error: %v", err)
+	}
+	if body.Error != "not_found" {
+		t.Fatalf("expected error not_found, got %q", body.Error)
+	}
+}

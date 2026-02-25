@@ -54,6 +54,12 @@ func iamMigrationsForDialect(_ string) []sqlMigration {
 				`CREATE UNIQUE INDEX IF NOT EXISTS idx_iam_memberships_tenant_user ON iam_memberships(tenant_id, user_id);`,
 			},
 		},
+		{
+			version: "20260225_002_auth_session_ttl",
+			statements: []string{
+				`ALTER TABLE auth_sessions ADD COLUMN expires_at VARCHAR(64) NOT NULL DEFAULT '';`,
+			},
+		},
 	}
 }
 

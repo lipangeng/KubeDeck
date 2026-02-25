@@ -371,8 +371,8 @@ function App({
   const [authTenants, setAuthTenants] = useState<AuthTenant[]>([]);
   const [activeTenantID, setActiveTenantID] = useState<string>('');
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
-  const [loginUsername, setLoginUsername] = useState('admin');
-  const [loginPassword, setLoginPassword] = useState('admin');
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [loginTenantCode, setLoginTenantCode] = useState('dev');
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);

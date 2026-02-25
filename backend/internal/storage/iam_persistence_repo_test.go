@@ -1,7 +1,9 @@
 package storage
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"path/filepath"
 	"testing"
 	"time"
@@ -87,6 +89,7 @@ func TestSQLiteIAMPersistenceRoundTrip(t *testing.T) {
 			UserJSON:       `{"id":"u-1"}`,
 			AvailableJSON:  `[{"id":"tenant-dev","code":"dev","name":"Development"}]`,
 			ActiveTenantID: "tenant-dev",
+			ExpiresAt:      until,
 		},
 	}
 
@@ -113,11 +116,16 @@ func TestSQLiteIAMPersistenceRoundTrip(t *testing.T) {
 	if len(snapshot.Memberships) != 1 || snapshot.Memberships[0].UserID != "u-1" {
 		t.Fatalf("unexpected memberships snapshot: %+v", snapshot.Memberships)
 	}
-	if len(snapshot.Invites) != 1 || snapshot.Invites[0].Token != "tok-1" {
+	expectedInviteTokenHash := sha256.Sum256([]byte("tok-1"))
+	if len(snapshot.Invites) != 1 || snapshot.Invites[0].Token != hex.EncodeToString(expectedInviteTokenHash[:]) {
 		t.Fatalf("unexpected invites snapshot: %+v", snapshot.Invites)
 	}
-	if len(snapshot.Sessions) != 1 || snapshot.Sessions[0].Token != "sess-1" {
+	expectedSessionTokenHash := sha256.Sum256([]byte("sess-1"))
+	if len(snapshot.Sessions) != 1 || snapshot.Sessions[0].Token != hex.EncodeToString(expectedSessionTokenHash[:]) {
 		t.Fatalf("unexpected sessions snapshot: %+v", snapshot.Sessions)
+	}
+	if !snapshot.Sessions[0].ExpiresAt.Equal(until.UTC()) {
+		t.Fatalf("unexpected session expires_at: %+v", snapshot.Sessions[0].ExpiresAt)
 	}
 }
 

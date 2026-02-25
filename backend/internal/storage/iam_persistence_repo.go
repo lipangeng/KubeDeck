@@ -1,7 +1,9 @@
 package storage
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -49,6 +51,7 @@ type AuthSessionRecord struct {
 	UserJSON       string
 	AvailableJSON  string
 	ActiveTenantID string
+	ExpiresAt      time.Time
 }
 
 type IAMStateSnapshot struct {
@@ -220,15 +223,25 @@ func (p *sqlIAMPersistence) Load() (IAMStateSnapshot, error) {
 	}
 	inviteRows.Close()
 
-	sessionRows, err := p.db.Query(`SELECT token, user_json, available_json, active_tenant_id FROM auth_sessions`)
+	sessionRows, err := p.db.Query(`SELECT token, user_json, available_json, active_tenant_id, expires_at FROM auth_sessions`)
 	if err != nil {
 		return out, err
 	}
 	for sessionRows.Next() {
 		var record AuthSessionRecord
-		if err := sessionRows.Scan(&record.Token, &record.UserJSON, &record.AvailableJSON, &record.ActiveTenantID); err != nil {
+		var expiresAt string
+		if err := sessionRows.Scan(&record.Token, &record.UserJSON, &record.AvailableJSON, &record.ActiveTenantID, &expiresAt); err != nil {
 			sessionRows.Close()
 			return out, err
+		}
+		trimmed := strings.TrimSpace(expiresAt)
+		if trimmed != "" {
+			parsedExpiresAt, err := time.Parse(time.RFC3339, trimmed)
+			if err != nil {
+				sessionRows.Close()
+				return out, err
+			}
+			record.ExpiresAt = parsedExpiresAt.UTC()
 		}
 		out.Sessions = append(out.Sessions, record)
 	}
@@ -296,7 +309,7 @@ func (p *sqlIAMPersistence) ReplaceInvites(records []IAMInviteRecord) error {
 	}
 	query := insertQuery(p.dialect, "iam_invites", []string{"token", "id", "tenant_id", "tenant_code", "invitee_email", "invitee_phone", "role_hint", "invite_link", "created_at", "expires_at", "status"})
 	for _, record := range records {
-		if _, err := tx.Exec(query, record.Token, record.ID, record.TenantID, record.TenantCode, record.InviteeEmail, record.InviteePhone, record.RoleHint, record.InviteLink, record.CreatedAt.UTC().Format(time.RFC3339), record.ExpiresAt.UTC().Format(time.RFC3339), record.Status); err != nil {
+		if _, err := tx.Exec(query, tokenForStorage(record.Token), record.ID, record.TenantID, record.TenantCode, record.InviteeEmail, record.InviteePhone, record.RoleHint, record.InviteLink, record.CreatedAt.UTC().Format(time.RFC3339), record.ExpiresAt.UTC().Format(time.RFC3339), record.Status); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
@@ -313,14 +326,43 @@ func (p *sqlIAMPersistence) ReplaceSessions(records []AuthSessionRecord) error {
 		_ = tx.Rollback()
 		return err
 	}
-	query := insertQuery(p.dialect, "auth_sessions", []string{"token", "user_json", "available_json", "active_tenant_id"})
+	query := insertQuery(p.dialect, "auth_sessions", []string{"token", "user_json", "available_json", "active_tenant_id", "expires_at"})
 	for _, record := range records {
-		if _, err := tx.Exec(query, record.Token, record.UserJSON, record.AvailableJSON, record.ActiveTenantID); err != nil {
+		expiresAt := ""
+		if !record.ExpiresAt.IsZero() {
+			expiresAt = record.ExpiresAt.UTC().Format(time.RFC3339)
+		}
+		if _, err := tx.Exec(query, tokenForStorage(record.Token), record.UserJSON, record.AvailableJSON, record.ActiveTenantID, expiresAt); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
 	}
 	return tx.Commit()
+}
+
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(token)))
+	return hex.EncodeToString(sum[:])
+}
+
+func tokenForStorage(token string) string {
+	trimmed := strings.TrimSpace(token)
+	if isSHA256Hex(trimmed) {
+		return trimmed
+	}
+	return hashToken(trimmed)
+}
+
+func isSHA256Hex(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, r := range value {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func insertQuery(dialect string, table string, columns []string) string {

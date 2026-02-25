@@ -11,11 +11,17 @@ import (
 
 var ErrOAuthNotImplemented = errors.New("oauth provider not implemented")
 var ErrOAuthInvalidCode = errors.New("oauth invalid code")
+var ErrOAuthProviderUnavailable = errors.New("oauth provider unavailable")
 
 // OAuthProviderStub keeps oauth integration points available for later wiring.
 type OAuthProviderStub struct {
 	provider string
 	baseURL  string
+}
+
+type OAuthUnavailableProvider struct {
+	provider string
+	initErr  error
 }
 
 func NewOAuthProvider(provider string, baseURL string) *OAuthProviderStub {
@@ -31,7 +37,24 @@ func NewOAuthProvider(provider string, baseURL string) *OAuthProviderStub {
 	}
 }
 
+func NewOAuthUnavailableProvider(provider string, initErr error) *OAuthUnavailableProvider {
+	if strings.TrimSpace(provider) == "" {
+		provider = "oidc"
+	}
+	if initErr == nil {
+		initErr = errors.New("oauth provider init failed")
+	}
+	return &OAuthUnavailableProvider{
+		provider: strings.TrimSpace(provider),
+		initErr:  initErr,
+	}
+}
+
 func (p *OAuthProviderStub) Name() string {
+	return p.provider
+}
+
+func (p *OAuthUnavailableProvider) Name() string {
 	return p.provider
 }
 
@@ -40,6 +63,10 @@ func (p *OAuthProviderStub) BeginAuthURL(state string) string {
 	values.Set("provider", p.provider)
 	values.Set("state", state)
 	return fmt.Sprintf("%s?%s", p.baseURL, values.Encode())
+}
+
+func (p *OAuthUnavailableProvider) BeginAuthURL(_ string) string {
+	return ""
 }
 
 func (p *OAuthProviderStub) ExchangeCode(code string) (User, error) {
@@ -78,12 +105,28 @@ func (p *OAuthProviderStub) ExchangeCode(code string) (User, error) {
 	}
 }
 
+func (p *OAuthUnavailableProvider) ExchangeCode(_ string) (User, error) {
+	return User{}, fmt.Errorf("%w: %v", ErrOAuthProviderUnavailable, p.initErr)
+}
+
+func OAuthProviderInitError(provider OAuthProvider) error {
+	unavailableProvider, ok := provider.(*OAuthUnavailableProvider)
+	if !ok {
+		return nil
+	}
+	return unavailableProvider.initErr
+}
+
 func NewOAuthProviderFromEnv() OAuthProvider {
 	mode := strings.ToLower(strings.TrimSpace(os.Getenv("KUBEDECK_OAUTH_MODE")))
 	if mode == "oidc" {
 		provider, err := NewOIDCProviderFromEnv()
 		if err != nil {
-			log.Printf("oauth oidc init failed, fallback to stub: %v", err)
+			if IsProductionRuntime() {
+				log.Printf("oauth oidc init failed in production mode: %v", err)
+				return NewOAuthUnavailableProvider("oidc", err)
+			}
+			log.Printf("oauth oidc init failed, fallback to stub in non-production mode: %v", err)
 			return NewOAuthProvider("oauth", "https://example.com/oauth/authorize")
 		}
 		return provider

@@ -684,6 +684,67 @@ func TestOAuthCallbackRejectsInvalidState(t *testing.T) {
 	}
 }
 
+func TestOAuthURLReturnsErrorWhenOIDCInitFailsInProduction(t *testing.T) {
+	resetAuthSessions()
+	resetAuditWriter()
+	t.Setenv("KUBEDECK_OAUTH_MODE", "oidc")
+	t.Setenv("KUBEDECK_ENV", "production")
+	t.Setenv("KUBEDECK_OIDC_ISSUER", "")
+	t.Setenv("KUBEDECK_OIDC_CLIENT_ID", "")
+	t.Setenv("KUBEDECK_OIDC_CLIENT_SECRET", "")
+	t.Setenv("KUBEDECK_OIDC_REDIRECT_URL", "")
+
+	router := NewRouter()
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/oauth/url", nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusServiceUnavailable, resp.Code, resp.Body.String())
+	}
+
+	var body struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected JSON body, got %v", err)
+	}
+	if body.Error != "oauth_provider_unavailable" {
+		t.Fatalf("expected oauth_provider_unavailable, got %q", body.Error)
+	}
+}
+
+func TestOAuthCallbackReturnsErrorWhenOIDCInitFailsInProduction(t *testing.T) {
+	resetAuthSessions()
+	resetAuditWriter()
+	t.Setenv("KUBEDECK_OAUTH_MODE", "oidc")
+	t.Setenv("KUBEDECK_ENV", "production")
+	t.Setenv("KUBEDECK_OIDC_ISSUER", "")
+	t.Setenv("KUBEDECK_OIDC_CLIENT_ID", "")
+	t.Setenv("KUBEDECK_OIDC_CLIENT_SECRET", "")
+	t.Setenv("KUBEDECK_OIDC_REDIRECT_URL", "")
+
+	router := NewRouter()
+	payload := []byte(`{"code":"oauth-admin","tenant_code":"dev","state":"any-state"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/callback", bytes.NewReader(payload))
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusServiceUnavailable, resp.Code, resp.Body.String())
+	}
+
+	var body struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected JSON body, got %v", err)
+	}
+	if body.Error != "oauth_provider_unavailable" {
+		t.Fatalf("expected oauth_provider_unavailable, got %q", body.Error)
+	}
+}
+
 func TestAuthMeReloadsSessionFromPersistenceWhenCacheMiss(t *testing.T) {
 	resetIAMPersistenceForTest()
 	t.Cleanup(func() {

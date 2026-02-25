@@ -47,6 +47,10 @@ Completed and merged:
 - OIDC provider foundation via open-source libraries (`go-oidc` + `oauth2`) with state validation
 - OIDC claim mapping configurability (subject/username/roles claims + role map/default role)
 - OIDC role allowlist mode with optional strict deny-on-empty behavior
+- OAuth config diagnostics API (`/api/auth/oauth/config`) with non-sensitive payload only
+- Local auth hardening baseline (production default disabled + fixed-credential validation)
+- Session/invite token persistence hardening (hashed token storage + auth session TTL/expiry)
+- Login UX diagnostics panel in dev/test mode and visual polish baseline
 
 ## 4. Next Priority (Phase 1 continuation)
 
@@ -54,8 +58,6 @@ Completed and merged:
 - (Completed for IAM MVP) auth middleware abstraction and route policy table (instead of per-handler checks)
 - (Completed for IAM MVP) production migration strategy baseline (runbook + migration runner foundation)
 - Add OAuth provider integration for production IdPs and RBAC administration UI
-- Add OAuth config diagnostic endpoint (`GET /api/auth/oauth/config`) for operations troubleshooting
-  - Security boundary: return effective non-sensitive config only; never return raw `client_secret`
 - Expand invite delivery providers (email production adapter + SMS adapter)
 
 ## 5. Canonical Documents
@@ -66,6 +68,7 @@ Completed and merged:
 - IAM migration strategy (mysql/postgres): `docs/runbooks/iam-migrations-mysql-postgres.md`
 - Notification provider guide: `docs/runbooks/notification-provider.md`
 - OIDC provider guide: `docs/runbooks/oidc-provider.md`
+- UI polish plan: `docs/runbooks/ui-polish-plan.md`
 
 ## 6. Execution Rule
 

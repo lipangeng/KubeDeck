@@ -2,9 +2,12 @@ package api
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +32,7 @@ type authSession struct {
 	User           auth.User
 	Available      []tenantInfo
 	ActiveTenantID string
+	ExpiresAt      time.Time
 }
 
 var (
@@ -202,7 +206,12 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	invitesMu.Lock()
-	current, ok := invites[req.Token]
+	storageKey := req.Token
+	current, ok := invites[storageKey]
+	if !ok {
+		storageKey = hashToken(req.Token)
+		current, ok = invites[storageKey]
+	}
 	if !ok {
 		invitesMu.Unlock()
 		writeJSONError(w, http.StatusNotFound, "invite_not_found")
@@ -216,7 +225,7 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	if !time.Now().UTC().Before(invite.ExpiresAt) {
 		invite.Status = "expired"
-		invites[req.Token] = invite
+		invites[storageKey] = invite
 		invitesMu.Unlock()
 		persistIAMInvites()
 		_ = defaultAuditWriter.Write(audit.Event{TenantID: invite.TenantID, Action: "auth.accept_invite", TargetType: "invite", TargetID: invite.ID, Result: "denied", Reason: "invite_expired"})
@@ -224,7 +233,7 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	invite.Status = "accepted"
-	invites[req.Token] = invite
+	invites[storageKey] = invite
 	invitesMu.Unlock()
 	persistIAMInvites()
 	_ = defaultAuditWriter.Write(audit.Event{TenantID: invite.TenantID, Action: "auth.accept_invite", TargetType: "invite", TargetID: invite.ID, Result: "allowed"})
@@ -241,6 +250,10 @@ func (h *AuthHandler) OAuthURL(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w, http.MethodGet)
 		return
 	}
+	if auth.OAuthProviderInitError(h.oauthProvider) != nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "oauth_provider_unavailable")
+		return
+	}
 	state := issueOAuthState()
 	_ = writeJSON(w, http.StatusOK, map[string]any{
 		"provider": h.oauthProvider.Name(),
@@ -252,6 +265,10 @@ func (h *AuthHandler) OAuthURL(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) OAuthConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+	if auth.IsProductionRuntime() {
+		writeJSONError(w, http.StatusNotFound, "not_found")
 		return
 	}
 
@@ -273,6 +290,10 @@ func (h *AuthHandler) OAuthConfig(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w, http.MethodPost)
+		return
+	}
+	if auth.OAuthProviderInitError(h.oauthProvider) != nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "oauth_provider_unavailable")
 		return
 	}
 
@@ -323,12 +344,14 @@ func (h *AuthHandler) loginWithResolvedUser(
 	user.Memberships = memberships
 	user.ActiveTenantID = activeTenantID
 	token := newToken()
+	expiresAt := time.Now().UTC().Add(authSessionTTL())
 
 	saveAuthSession(token, authSession{
 		Token:          token,
 		User:           user,
 		Available:      tenants,
 		ActiveTenantID: activeTenantID,
+		ExpiresAt:      expiresAt,
 	})
 	_ = defaultAuditWriter.Write(audit.Event{ActorID: user.ID, TenantID: activeTenantID, Action: auditAction, TargetType: "session", TargetID: token, Result: "allowed"})
 
@@ -337,6 +360,7 @@ func (h *AuthHandler) loginWithResolvedUser(
 		"user":             map[string]any{"id": user.ID, "username": user.Username, "roles": user.Roles},
 		"tenants":          tenants,
 		"active_tenant_id": activeTenantID,
+		"expires_at":       expiresAt,
 	})
 }
 
@@ -411,8 +435,12 @@ func currentSessionWithToken(r *http.Request) (string, authSession, bool) {
 	if token == "" {
 		return "", authSession{}, false
 	}
+	hashedToken := hashToken(token)
 	authSessionsMu.RLock()
 	session, ok := authSessions[token]
+	if !ok {
+		session, ok = authSessions[hashedToken]
+	}
 	authSessionsMu.RUnlock()
 	if ok {
 		return token, session, true
@@ -422,6 +450,9 @@ func currentSessionWithToken(r *http.Request) (string, authSession, bool) {
 	}
 	authSessionsMu.RLock()
 	session, ok = authSessions[token]
+	if !ok {
+		session, ok = authSessions[hashedToken]
+	}
 	authSessionsMu.RUnlock()
 	return token, session, ok
 }
@@ -430,6 +461,10 @@ func currentValidSessionFromRequest(r *http.Request) (string, authSession, bool,
 	token, session, ok := currentSessionWithToken(r)
 	if !ok {
 		return "", authSession{}, false, "unauthorized"
+	}
+	if !session.ExpiresAt.IsZero() && !time.Now().UTC().Before(session.ExpiresAt) {
+		deleteAuthSession(token)
+		return "", authSession{}, false, "session_expired"
 	}
 	if !isMembershipActiveForTenant(session.User.Memberships, session.ActiveTenantID, time.Now().UTC()) {
 		deleteAuthSession(token)
@@ -446,8 +481,10 @@ func saveAuthSession(token string, session authSession) {
 }
 
 func deleteAuthSession(token string) {
+	hashedToken := hashToken(token)
 	authSessionsMu.Lock()
 	delete(authSessions, token)
+	delete(authSessions, hashedToken)
 	authSessionsMu.Unlock()
 	persistAuthSessions()
 }
@@ -493,4 +530,22 @@ func consumeOAuthState(state string) bool {
 		return false
 	}
 	return now.Before(expiry)
+}
+
+func authSessionTTL() time.Duration {
+	const defaultTTL = 24 * time.Hour
+	raw := strings.TrimSpace(os.Getenv("KUBEDECK_AUTH_SESSION_TTL_HOURS"))
+	if raw == "" {
+		return defaultTTL
+	}
+	hours, err := strconv.Atoi(raw)
+	if err != nil || hours <= 0 {
+		return defaultTTL
+	}
+	return time.Duration(hours) * time.Hour
+}
+
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(token)))
+	return hex.EncodeToString(sum[:])
 }

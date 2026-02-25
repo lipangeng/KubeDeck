@@ -1179,8 +1179,12 @@ func invitesByTenant(tenantID string) []iamInvite {
 }
 
 func inviteByToken(token string) (iamInvite, bool) {
+	hashedToken := hashToken(token)
 	invitesMu.RLock()
 	invite, ok := invites[token]
+	if !ok {
+		invite, ok = invites[hashedToken]
+	}
 	invitesMu.RUnlock()
 	if ok {
 		return invite, true
@@ -1189,6 +1193,9 @@ func inviteByToken(token string) (iamInvite, bool) {
 	invitesMu.RLock()
 	defer invitesMu.RUnlock()
 	invite, ok = invites[token]
+	if !ok {
+		invite, ok = invites[hashedToken]
+	}
 	return invite, ok
 }
 
