@@ -3,7 +3,7 @@ package api
 import "net/http"
 
 type routePolicy struct {
-	requireSession          bool
+	requireSession         bool
 	requiredAnyPermissions []string
 	methodPermissions      map[string][]string
 }

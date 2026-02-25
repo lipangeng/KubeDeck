@@ -27,7 +27,7 @@ func NewRouter() http.Handler {
 			pattern: "/api/auth/switch-tenant",
 			handler: authHandler.SwitchTenant,
 			policy: routePolicy{
-				requireSession:          true,
+				requireSession:         true,
 				requiredAnyPermissions: []string{"cluster:switch"},
 			},
 		},
@@ -37,7 +37,7 @@ func NewRouter() http.Handler {
 			pattern: "/api/iam/permissions",
 			handler: iam.Permissions,
 			policy: routePolicy{
-				requireSession:          true,
+				requireSession:         true,
 				requiredAnyPermissions: []string{"iam:read"},
 			},
 		},
@@ -68,7 +68,7 @@ func NewRouter() http.Handler {
 			pattern: "/api/iam/users",
 			handler: iam.Users,
 			policy: routePolicy{
-				requireSession:          true,
+				requireSession:         true,
 				requiredAnyPermissions: []string{"iam:read"},
 			},
 		},
@@ -76,7 +76,7 @@ func NewRouter() http.Handler {
 			pattern: "/api/iam/tenants",
 			handler: iam.Tenants,
 			policy: routePolicy{
-				requireSession:          true,
+				requireSession:         true,
 				requiredAnyPermissions: []string{"tenant:read"},
 			},
 		},
@@ -96,7 +96,7 @@ func NewRouter() http.Handler {
 			pattern: "/api/iam/memberships",
 			handler: iam.Memberships,
 			policy: routePolicy{
-				requireSession:          true,
+				requireSession:         true,
 				requiredAnyPermissions: []string{"iam:read"},
 			},
 		},
@@ -135,7 +135,7 @@ func NewRouter() http.Handler {
 			pattern: "/api/audit/events",
 			handler: audit.Events,
 			policy: routePolicy{
-				requireSession:          true,
+				requireSession:         true,
 				requiredAnyPermissions: []string{"audit:read"},
 			},
 		},
@@ -143,7 +143,7 @@ func NewRouter() http.Handler {
 			pattern: "/api/resources/apply",
 			handler: resources.Apply,
 			policy: routePolicy{
-				requireSession:          true,
+				requireSession:         true,
 				requiredAnyPermissions: []string{"resource:apply"},
 			},
 		},

@@ -398,6 +398,110 @@ func TestRoutePolicyRequiresPermissionForAuditEvents(t *testing.T) {
 	}
 }
 
+func TestRoutePolicyAllowsAuditReadViaMembershipGroupPermission(t *testing.T) {
+	resetAuthSessions()
+	resetGroups()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"viewer","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+
+	iamGroupsMu.Lock()
+	iamGroups["grp-audit"] = iamGroup{
+		ID:          "grp-audit",
+		TenantID:    "tenant-dev",
+		Name:        "audit-reader",
+		Permissions: []string{"audit:read"},
+	}
+	iamGroupsMu.Unlock()
+	iamMembershipsMu.Lock()
+	iamMemberships["mbr-local-test-user-tenant-dev"] = iamMembership{
+		ID:            "mbr-local-test-user-tenant-dev",
+		TenantID:      "tenant-dev",
+		UserID:        "local-test-user",
+		UserLabel:     "viewer",
+		GroupIDs:      []string{"grp-audit"},
+		EffectiveFrom: time.Now().UTC().Add(-1 * time.Hour),
+	}
+	iamMembershipsMu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audit/events", nil)
+	req.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, resp.Code, resp.Body.String())
+	}
+}
+
+func TestIAMGroupsSeedsDefaultTenantGroups(t *testing.T) {
+	resetAuthSessions()
+	resetGroups()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"viewer","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/iam/groups", nil)
+	req.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, resp.Code, resp.Body.String())
+	}
+	var payload struct {
+		Groups []iamGroup `json:"groups"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected JSON response, got error: %v", err)
+	}
+	if !containsGroupName(payload.Groups, "tenant-owner") {
+		t.Fatalf("expected tenant-owner group in payload, got %v", payload.Groups)
+	}
+	if !containsGroupName(payload.Groups, "tenant-admin") {
+		t.Fatalf("expected tenant-admin group in payload, got %v", payload.Groups)
+	}
+	if !containsGroupName(payload.Groups, "tenant-viewer") {
+		t.Fatalf("expected tenant-viewer group in payload, got %v", payload.Groups)
+	}
+}
+
+func containsGroupName(groups []iamGroup, name string) bool {
+	for _, group := range groups {
+		if group.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 func TestAuthLoginMeSwitchLogoutFlow(t *testing.T) {
 	resetAuthSessions()
 	resetAuditWriter()

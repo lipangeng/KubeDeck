@@ -338,6 +338,7 @@ func (h *IAMHandler) TenantMembers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *IAMHandler) listGroups(w http.ResponseWriter, session authSession) {
+	ensureDefaultTenantGroups(session.ActiveTenantID)
 	out := groupsByTenant(session.ActiveTenantID)
 	_ = writeJSON(w, http.StatusOK, map[string]any{"groups": out})
 }
@@ -549,6 +550,7 @@ func tenantVisibleToSession(session authSession, tenantID string) bool {
 }
 
 func groupsByTenant(tenantID string) []iamGroup {
+	ensureDefaultTenantGroups(tenantID)
 	load := func() []iamGroup {
 		out := make([]iamGroup, 0)
 		for _, group := range iamGroups {
@@ -569,6 +571,56 @@ func groupsByTenant(tenantID string) []iamGroup {
 	out = load()
 	iamGroupsMu.RUnlock()
 	return out
+}
+
+func ensureDefaultTenantGroups(tenantID string) {
+	defaults := []iamGroup{
+		{
+			ID:          "grp-" + tenantID + "-owner",
+			TenantID:    tenantID,
+			Name:        "tenant-owner",
+			Description: "Tenant owner group",
+			Permissions: []string{"*"},
+		},
+		{
+			ID:          "grp-" + tenantID + "-admin",
+			TenantID:    tenantID,
+			Name:        "tenant-admin",
+			Description: "Tenant admin group",
+			Permissions: []string{"iam:write", "iam:read", "tenant:write", "tenant:read", "audit:read", "resource:apply", "resource:write", "resource:read"},
+		},
+		{
+			ID:          "grp-" + tenantID + "-viewer",
+			TenantID:    tenantID,
+			Name:        "tenant-viewer",
+			Description: "Tenant viewer group",
+			Permissions: []string{"iam:read", "tenant:read", "menu:read", "resource:read", "cluster:switch"},
+		},
+	}
+
+	changed := false
+	iamGroupsMu.Lock()
+	for _, group := range defaults {
+		existing, ok := iamGroups[group.ID]
+		if ok {
+			if existing.TenantID == tenantID && len(existing.Permissions) == 0 {
+				existing.Permissions = append([]string{}, group.Permissions...)
+				if strings.TrimSpace(existing.Description) == "" {
+					existing.Description = group.Description
+				}
+				iamGroups[group.ID] = existing
+				changed = true
+			}
+			continue
+		}
+		iamGroups[group.ID] = group
+		changed = true
+	}
+	iamGroupsMu.Unlock()
+
+	if changed {
+		persistIAMGroups()
+	}
 }
 
 func membershipsByTenant(tenantID string) []iamMembership {
@@ -956,12 +1008,7 @@ func mustSession(r *http.Request, w http.ResponseWriter) (authSession, bool) {
 }
 
 func hasIAMWrite(roles []string) bool {
-	for _, role := range roles {
-		if role == "admin" || role == "owner" {
-			return true
-		}
-	}
-	return false
+	return rolesHavePermission(roles, "iam:write")
 }
 
 func (h *IAMHandler) listInvites(w http.ResponseWriter, session authSession) {

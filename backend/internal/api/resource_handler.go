@@ -169,12 +169,7 @@ func (h *ResourceHandler) Apply(w http.ResponseWriter, r *http.Request) {
 }
 
 func hasResourceApplyWrite(roles []string) bool {
-	for _, role := range roles {
-		if role == "admin" || role == "owner" {
-			return true
-		}
-	}
-	return false
+	return rolesHavePermission(roles, "resource:apply")
 }
 
 func splitYAMLDocuments(raw []byte) [][]byte {
