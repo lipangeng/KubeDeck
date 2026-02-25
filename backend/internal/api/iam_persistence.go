@@ -18,6 +18,15 @@ var (
 	iamPersistenceErr  error
 )
 
+func resetIAMPersistenceForTest() {
+	if iamPersistenceDB != nil {
+		_ = iamPersistenceDB.Close()
+	}
+	iamPersistenceDB = nil
+	iamPersistenceErr = nil
+	iamPersistenceOnce = sync.Once{}
+}
+
 func ensureIAMPersistence() {
 	iamPersistenceOnce.Do(func() {
 		if !iamPersistenceEnabled() {
