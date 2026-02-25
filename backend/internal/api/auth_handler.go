@@ -214,17 +214,27 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	invitesMu.Lock()
-	invite, ok := invites[req.Token]
+	invite, ok := inviteByToken(req.Token)
 	if !ok {
-		invitesMu.Unlock()
 		_ = defaultAuditWriter.Write(audit.Event{Action: "auth.accept_invite", TargetType: "invite", Result: "denied", Reason: "invite_not_found"})
 		writeJSONError(w, http.StatusNotFound, "invite_not_found")
 		return
 	}
 	if invite.Status != "pending" {
-		invitesMu.Unlock()
 		_ = defaultAuditWriter.Write(audit.Event{TenantID: invite.TenantID, Action: "auth.accept_invite", TargetType: "invite", TargetID: invite.ID, Result: "denied", Reason: "invite_not_pending"})
+		writeJSONError(w, http.StatusConflict, "invite_not_pending")
+		return
+	}
+	invitesMu.Lock()
+	current, ok := invites[req.Token]
+	if !ok {
+		invitesMu.Unlock()
+		writeJSONError(w, http.StatusNotFound, "invite_not_found")
+		return
+	}
+	invite = current
+	if invite.Status != "pending" {
+		invitesMu.Unlock()
 		writeJSONError(w, http.StatusConflict, "invite_not_pending")
 		return
 	}

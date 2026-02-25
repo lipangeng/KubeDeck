@@ -571,6 +571,115 @@ func TestIAMTenantMembersReloadFromPersistenceWhenCacheMiss(t *testing.T) {
 	}
 }
 
+func TestIAMInvitesReloadFromPersistenceWhenCacheMiss(t *testing.T) {
+	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		resetIAMPersistenceForTest()
+	})
+	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
+	t.Setenv("KUBEDECK_SQLITE_DSN", filepath.Join(t.TempDir(), "invites-reload.sqlite"))
+
+	resetAuthSessions()
+	resetInvites()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+
+	createInviteReq := httptest.NewRequest(http.MethodPost, "/api/iam/invites", bytes.NewReader([]byte(`{"email":"user@example.com","role_hint":"member","expires_in_hours":2}`)))
+	createInviteReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createInviteResp := httptest.NewRecorder()
+	router.ServeHTTP(createInviteResp, createInviteReq)
+	if createInviteResp.Code != http.StatusCreated {
+		t.Fatalf("expected create invite status %d, got %d body=%s", http.StatusCreated, createInviteResp.Code, createInviteResp.Body.String())
+	}
+
+	resetInvites()
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/iam/invites", nil)
+	listReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	listResp := httptest.NewRecorder()
+	router.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected list invites status %d, got %d body=%s", http.StatusOK, listResp.Code, listResp.Body.String())
+	}
+	var listBody struct {
+		Invites []iamInvite `json:"invites"`
+	}
+	if err := json.Unmarshal(listResp.Body.Bytes(), &listBody); err != nil {
+		t.Fatalf("expected invites JSON body, got error: %v", err)
+	}
+	if len(listBody.Invites) == 0 || listBody.Invites[0].InviteeEmail != "user@example.com" {
+		t.Fatalf("expected persisted invite after reload, body=%s", listResp.Body.String())
+	}
+}
+
+func TestAuthAcceptInviteReloadsFromPersistenceWhenCacheMiss(t *testing.T) {
+	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		resetIAMPersistenceForTest()
+	})
+	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
+	t.Setenv("KUBEDECK_SQLITE_DSN", filepath.Join(t.TempDir(), "accept-invite-reload.sqlite"))
+
+	resetAuthSessions()
+	resetInvites()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+
+	createInviteReq := httptest.NewRequest(http.MethodPost, "/api/iam/invites", bytes.NewReader([]byte(`{"email":"user2@example.com","role_hint":"member","expires_in_hours":2}`)))
+	createInviteReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createInviteResp := httptest.NewRecorder()
+	router.ServeHTTP(createInviteResp, createInviteReq)
+	if createInviteResp.Code != http.StatusCreated {
+		t.Fatalf("expected create invite status %d, got %d body=%s", http.StatusCreated, createInviteResp.Code, createInviteResp.Body.String())
+	}
+	var inviteBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(createInviteResp.Body.Bytes(), &inviteBody); err != nil {
+		t.Fatalf("expected invite JSON body, got error: %v", err)
+	}
+	if inviteBody.Token == "" {
+		t.Fatalf("expected invite token")
+	}
+
+	resetInvites()
+
+	acceptReq := httptest.NewRequest(http.MethodPost, "/api/auth/accept-invite", bytes.NewReader([]byte(`{"token":"`+inviteBody.Token+`","username":"new-user","password":"pw"}`)))
+	acceptResp := httptest.NewRecorder()
+	router.ServeHTTP(acceptResp, acceptReq)
+	if acceptResp.Code != http.StatusOK {
+		t.Fatalf("expected accept invite status %d, got %d body=%s", http.StatusOK, acceptResp.Code, acceptResp.Body.String())
+	}
+}
+
 func TestAuthLoginTenantCodeDeniedWhenUnknown(t *testing.T) {
 	resetAuthSessions()
 	resetAuditWriter()

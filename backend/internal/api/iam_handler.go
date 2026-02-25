@@ -957,14 +957,7 @@ func hasIAMWrite(roles []string) bool {
 }
 
 func (h *IAMHandler) listInvites(w http.ResponseWriter, session authSession) {
-	invitesMu.RLock()
-	defer invitesMu.RUnlock()
-	out := make([]iamInvite, 0)
-	for _, invite := range invites {
-		if invite.TenantID == session.ActiveTenantID {
-			out = append(out, invite)
-		}
-	}
+	out := invitesByTenant(session.ActiveTenantID)
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].CreatedAt.Equal(out[j].CreatedAt) {
 			return out[i].ID > out[j].ID
@@ -1072,7 +1065,76 @@ func (h *IAMHandler) revokeInvite(w http.ResponseWriter, session authSession, in
 		return
 	}
 	invitesMu.Unlock()
+	_ = reloadIAMStateFromPersistence()
+	invitesMu.Lock()
+	for token, invite := range invites {
+		if invite.ID != inviteID {
+			continue
+		}
+		if invite.TenantID != session.ActiveTenantID {
+			invitesMu.Unlock()
+			writeJSONError(w, http.StatusNotFound, "invite_not_found")
+			return
+		}
+		if invite.Status != "pending" {
+			invitesMu.Unlock()
+			writeJSONError(w, http.StatusConflict, "invite_not_pending")
+			return
+		}
+		invite.Status = "revoked"
+		invites[token] = invite
+		invitesMu.Unlock()
+		persistIAMInvites()
+		_ = defaultAuditWriter.Write(audit.Event{
+			TenantID:   session.ActiveTenantID,
+			ActorID:    session.User.ID,
+			Action:     "iam.invite.revoke",
+			TargetType: "invite",
+			TargetID:   invite.ID,
+			Result:     "allowed",
+		})
+		_ = writeJSON(w, http.StatusOK, invite)
+		return
+	}
+	invitesMu.Unlock()
 	writeJSONError(w, http.StatusNotFound, "invite_not_found")
+}
+
+func invitesByTenant(tenantID string) []iamInvite {
+	load := func() []iamInvite {
+		out := make([]iamInvite, 0)
+		for _, invite := range invites {
+			if invite.TenantID == tenantID {
+				out = append(out, invite)
+			}
+		}
+		return out
+	}
+	invitesMu.RLock()
+	out := load()
+	invitesMu.RUnlock()
+	if len(out) > 0 {
+		return out
+	}
+	_ = reloadIAMStateFromPersistence()
+	invitesMu.RLock()
+	out = load()
+	invitesMu.RUnlock()
+	return out
+}
+
+func inviteByToken(token string) (iamInvite, bool) {
+	invitesMu.RLock()
+	invite, ok := invites[token]
+	invitesMu.RUnlock()
+	if ok {
+		return invite, true
+	}
+	_ = reloadIAMStateFromPersistence()
+	invitesMu.RLock()
+	defer invitesMu.RUnlock()
+	invite, ok = invites[token]
+	return invite, ok
 }
 
 func newInviteToken() string {
