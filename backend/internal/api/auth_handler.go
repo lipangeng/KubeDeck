@@ -249,6 +249,27 @@ func (h *AuthHandler) OAuthURL(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *AuthHandler) OAuthConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+
+	diagnostics := auth.OAuthConfigDiagnosticsFromEnv()
+	_ = writeJSON(w, http.StatusOK, map[string]any{
+		"mode":     diagnostics.Mode,
+		"provider": h.oauthProvider.Name(),
+		"ready":    diagnostics.Ready,
+		"missing":  diagnostics.Missing,
+		"oidc": map[string]bool{
+			"issuer_exists":        diagnostics.OIDC.IssuerExists,
+			"client_id_exists":     diagnostics.OIDC.ClientIDExists,
+			"client_secret_exists": diagnostics.OIDC.ClientSecretExists,
+			"redirect_url_exists":  diagnostics.OIDC.RedirectURLExists,
+		},
+	})
+}
+
 func (h *AuthHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w, http.MethodPost)

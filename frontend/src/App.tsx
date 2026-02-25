@@ -41,6 +41,7 @@ import {
   clearAuthToken,
   login,
   me,
+  oauthConfig,
   oauthURL,
   oauthCallback,
   readAuthToken,
@@ -98,6 +99,13 @@ interface AuthUserState {
   username: string;
 }
 
+interface OAuthConfigDiagnosticsState {
+  mode: string;
+  provider: string;
+  ready: boolean | null;
+  missingFields: string[];
+}
+
 function resolveApiTarget(): string {
   const configured = import.meta.env.VITE_BACKEND_TARGET as string | undefined;
   if (configured && configured.trim() !== '') {
@@ -114,6 +122,10 @@ function resolveApiTargetHint(): string {
   }
 
   return mode;
+}
+
+export function shouldShowOAuthConfigDiagnostics(mode: string = import.meta.env.MODE): boolean {
+  return mode === 'development' || mode === 'test';
 }
 
 function resolveProbePath(path: '/healthz' | '/readyz'): string {
@@ -318,6 +330,7 @@ function App({
   onThemePreferenceChange,
 }: AppProps) {
   const apiTargetHint = resolveApiTargetHint();
+  const showOAuthConfigDiagnostics = shouldShowOAuthConfigDiagnostics();
   const t = (key: Parameters<typeof translate>[1], vars?: Record<string, string>) =>
     translate(locale, key, vars);
   const [activeCluster, setActiveCluster] = useState('default');
@@ -363,6 +376,9 @@ function App({
   const [loginTenantCode, setLoginTenantCode] = useState('dev');
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [oauthConfigDiagnostics, setOAuthConfigDiagnostics] =
+    useState<OAuthConfigDiagnosticsState | null>(null);
+  const [oauthConfigError, setOAuthConfigError] = useState<string | null>(null);
   const [tenantBusy, setTenantBusy] = useState(false);
   const [iamDialogOpen, setIamDialogOpen] = useState(false);
   const [iamLoading, setIamLoading] = useState(false);
@@ -834,6 +850,40 @@ function App({
       setAuthBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!authDialogOpen || !showOAuthConfigDiagnostics) {
+      setOAuthConfigDiagnostics(null);
+      setOAuthConfigError(null);
+      return;
+    }
+    let active = true;
+    async function loadOAuthConfigDiagnostics() {
+      try {
+        const oauth = await oauthConfig();
+        if (!active) {
+          return;
+        }
+        setOAuthConfigDiagnostics({
+          mode: oauth.mode?.trim() ?? '',
+          provider: oauth.provider.trim(),
+          ready: typeof oauth.ready === 'boolean' ? oauth.ready : null,
+          missingFields: oauth.missing ?? [],
+        });
+        setOAuthConfigError(null);
+      } catch (e) {
+        if (!active) {
+          return;
+        }
+        setOAuthConfigDiagnostics(null);
+        setOAuthConfigError(e instanceof Error ? e.message : 'oauth url failed');
+      }
+    }
+    void loadOAuthConfigDiagnostics();
+    return () => {
+      active = false;
+    };
+  }, [authDialogOpen, showOAuthConfigDiagnostics]);
 
   async function submitOAuthLogin() {
     setAuthBusy(true);
@@ -2509,6 +2559,40 @@ function App({
               value={loginTenantCode}
               onChange={(event) => setLoginTenantCode(event.target.value)}
             />
+            {showOAuthConfigDiagnostics && oauthConfigDiagnostics ? (
+              <Stack spacing={0.2}>
+                <Typography variant="subtitle2">{t('oauthConfig')}</Typography>
+                <Typography variant="caption">
+                  {t('oauthConfigMode', { value: oauthConfigDiagnostics.mode || t('unknown') })}
+                </Typography>
+                <Typography variant="caption">
+                  {t('oauthConfigProvider', { value: oauthConfigDiagnostics.provider || t('unknown') })}
+                </Typography>
+                <Typography variant="caption">
+                  {t('oauthConfigReady', {
+                    value:
+                      oauthConfigDiagnostics.ready === null
+                        ? t('unknown')
+                        : oauthConfigDiagnostics.ready
+                          ? t('yes')
+                          : t('no'),
+                  })}
+                </Typography>
+                <Typography variant="caption">
+                  {t('oauthConfigMissingFields', {
+                    value:
+                      oauthConfigDiagnostics.missingFields.length === 0
+                        ? t('none')
+                        : oauthConfigDiagnostics.missingFields.join(', '),
+                  })}
+                </Typography>
+              </Stack>
+            ) : null}
+            {showOAuthConfigDiagnostics && oauthConfigError ? (
+              <Typography variant="body2" color="error">
+                {t('oauthConfigLoadError', { error: oauthConfigError })}
+              </Typography>
+            ) : null}
             {authError ? (
               <Typography variant="body2" color="error">
                 {t('authError', { error: authError })}

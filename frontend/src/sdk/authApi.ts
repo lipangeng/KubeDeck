@@ -32,6 +32,19 @@ export interface OAuthURLResponse {
   auth_url: string;
 }
 
+export interface OAuthConfigResponse {
+  mode: string;
+  provider: string;
+  ready: boolean;
+  missing: string[];
+  oidc: {
+    issuer_exists: boolean;
+    client_id_exists: boolean;
+    client_secret_exists: boolean;
+    redirect_url_exists: boolean;
+  };
+}
+
 export const AUTH_TOKEN_KEY = 'kubedeck.auth.token';
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -161,6 +174,32 @@ export async function oauthURL(): Promise<OAuthURLResponse> {
     provider: String(payload.provider ?? ''),
     state: String(payload.state ?? ''),
     auth_url: payload.auth_url,
+  };
+}
+
+export async function oauthConfig(): Promise<OAuthConfigResponse> {
+  const response = await fetch('/api/auth/oauth/config');
+  if (!response.ok) {
+    throw new Error(`oauth config failed: ${response.status}`);
+  }
+  const payload = await response.json();
+  if (!isObject(payload)) {
+    throw new Error('invalid oauth config response');
+  }
+  const oidcPayload = isObject(payload.oidc) ? payload.oidc : {};
+  return {
+    mode: String(payload.mode ?? ''),
+    provider: String(payload.provider ?? ''),
+    ready: Boolean(payload.ready),
+    missing: Array.isArray(payload.missing)
+      ? payload.missing.map((field) => String(field).trim()).filter((field) => field !== '')
+      : [],
+    oidc: {
+      issuer_exists: Boolean(oidcPayload.issuer_exists),
+      client_id_exists: Boolean(oidcPayload.client_id_exists),
+      client_secret_exists: Boolean(oidcPayload.client_secret_exists),
+      redirect_url_exists: Boolean(oidcPayload.redirect_url_exists),
+    },
   };
 }
 

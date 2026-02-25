@@ -30,6 +30,10 @@ Optional:
 
 ## API Flow
 
+0. `GET /api/auth/oauth/config` (diagnostic)
+   - Returns effective OAuth/OIDC runtime config for troubleshooting.
+   - Intended for checking env wiring and frontend/backend callback alignment.
+   - Must only expose non-sensitive fields.
 1. `GET /api/auth/oauth/url`
    - Returns `auth_url` and one-time `state`.
 2. Browser redirects to IdP authorize URL.
@@ -44,9 +48,32 @@ Frontend behavior:
 - Clicking OAuth login requests `/api/auth/oauth/url` and redirects to returned `auth_url`.
 - After IdP redirects back with `?code=...&state=...`, frontend auto-completes callback and clears query parameters.
 
+`GET /api/auth/oauth/config` example (OIDC mode):
+
+```json
+{
+  "mode": "oidc",
+  "provider": "oidc",
+  "ready": false,
+  "missing": [
+    "KUBEDECK_OIDC_CLIENT_SECRET",
+    "KUBEDECK_OIDC_REDIRECT_URL"
+  ],
+  "oidc": {
+    "issuer_exists": true,
+    "client_id_exists": true,
+    "client_secret_exists": false,
+    "redirect_url_exists": false
+  }
+}
+```
+
 ## Security Notes
 
 - `state` is one-time and expires in 10 minutes.
 - Invalid or replayed `state` is rejected with `invalid_state`.
 - OIDC claim mapping is configurable by env; if no role claims are present, `KUBEDECK_OIDC_DEFAULT_ROLE` is applied.
 - When role allowlist is configured, only allowed mapped roles are kept; strict mode can deny logins with no allowed roles.
+- `/api/auth/oauth/config` is a diagnostic surface, not a secret distribution API.
+- Never return `KUBEDECK_OIDC_CLIENT_SECRET` (or any token/credential material) in this endpoint.
+- If needed, expose secret status as a boolean only (for example `client_secret_configured: true/false`).

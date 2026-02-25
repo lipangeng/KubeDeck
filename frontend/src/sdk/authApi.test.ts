@@ -6,6 +6,7 @@ import {
   login,
   me,
   oauthCallback,
+  oauthConfig,
   oauthURL,
   readAuthToken,
   switchTenant,
@@ -134,6 +135,36 @@ describe('authApi', () => {
     expect(payload.provider).toBe('github');
     expect(payload.state).toBe('state-token');
     expect(payload.auth_url).toContain('state=state-token');
+  });
+
+  it('parses oauth config diagnostics payload fields', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          mode: 'oidc',
+          provider: 'corp-sso',
+          ready: false,
+          missing: ['KUBEDECK_OIDC_CLIENT_ID', 'KUBEDECK_OIDC_CLIENT_SECRET'],
+          oidc: {
+            issuer_exists: true,
+            client_id_exists: false,
+            client_secret_exists: false,
+            redirect_url_exists: true,
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const payload = await oauthConfig();
+
+    expect(payload.mode).toBe('oidc');
+    expect(payload.ready).toBe(false);
+    expect(payload.provider).toBe('corp-sso');
+    expect(payload.missing).toEqual(['KUBEDECK_OIDC_CLIENT_ID', 'KUBEDECK_OIDC_CLIENT_SECRET']);
+    expect(payload.oidc.client_id_exists).toBe(false);
+    expect(payload.oidc.issuer_exists).toBe(true);
   });
 
   it('calls oauth callback with code and tenant_code', async () => {

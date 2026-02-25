@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import App from './App';
+import App, { shouldShowOAuthConfigDiagnostics } from './App';
 
 afterEach(() => {
   cleanup();
@@ -10,6 +10,12 @@ afterEach(() => {
 });
 
 describe('App', () => {
+  it('shows oauth config diagnostics only for development and test modes', () => {
+    expect(shouldShowOAuthConfigDiagnostics('test')).toBe(true);
+    expect(shouldShowOAuthConfigDiagnostics('development')).toBe(true);
+    expect(shouldShowOAuthConfigDiagnostics('production')).toBe(false);
+  });
+
   it('renders grouped menus, theme control, runtime checks, and reloads menus when cluster changes', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -675,6 +681,74 @@ describe('App', () => {
 
     expect(await screen.findByRole('dialog', { name: 'Login' })).toBeTruthy();
     expect(window.localStorage.getItem('kubedeck.auth.token')).toBeNull();
+  });
+
+  it('shows oauth config diagnostics in login dialog under test mode', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/oauth/config')) {
+        return new Response(
+          JSON.stringify({
+            mode: 'oidc',
+            ready: false,
+            provider: 'corp-sso',
+            missing: ['KUBEDECK_OIDC_CLIENT_ID', 'KUBEDECK_OIDC_CLIENT_SECRET'],
+            oidc: {
+              issuer_exists: true,
+              client_id_exists: false,
+              client_secret_exists: false,
+              redirect_url_exists: true,
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
+        return new Response('ok', { status: 200 });
+      }
+      if (url.endsWith('/api/meta/clusters')) {
+        return new Response(JSON.stringify({ clusters: ['default'] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/api/meta/registry?cluster=default')) {
+        return new Response(JSON.stringify({ cluster: 'default', resourceTypes: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/api/meta/menus?cluster=default')) {
+        return new Response(JSON.stringify({ cluster: 'default', menus: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        locale="en"
+        onLocaleChange={vi.fn()}
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Login' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Login' });
+
+    expect(await within(dialog).findByText('OAuth Config')).toBeTruthy();
+    expect(await within(dialog).findByText('Mode: oidc')).toBeTruthy();
+    expect(await within(dialog).findByText('Provider: corp-sso')).toBeTruthy();
+    expect(await within(dialog).findByText('Ready: no')).toBeTruthy();
+    expect(
+      await within(dialog).findByText(
+        'Missing Fields: KUBEDECK_OIDC_CLIENT_ID, KUBEDECK_OIDC_CLIENT_SECRET',
+      ),
+    ).toBeTruthy();
   });
 
   it('completes oauth callback from query params and clears url search', async () => {

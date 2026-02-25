@@ -54,6 +54,8 @@ Completed and merged:
 - (Completed for IAM MVP) auth middleware abstraction and route policy table (instead of per-handler checks)
 - (Completed for IAM MVP) production migration strategy baseline (runbook + migration runner foundation)
 - Add OAuth provider integration for production IdPs and RBAC administration UI
+- Add OAuth config diagnostic endpoint (`GET /api/auth/oauth/config`) for operations troubleshooting
+  - Security boundary: return effective non-sensitive config only; never return raw `client_secret`
 - Expand invite delivery providers (email production adapter + SMS adapter)
 
 ## 5. Canonical Documents
