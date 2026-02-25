@@ -39,12 +39,14 @@ Completed and merged:
 - Runtime persistence flags (`--db-driver`, `--db-dsn`, `--disable-persist`)
 - Storage regression tests for IAM persistence (dialect placeholders + sqlite round-trip)
 - IAM repo-first fallback chain for auth/groups/memberships/invites (cache miss -> persistence reload)
+- Route-policy auth middleware table with per-method permission requirements
+- Group-aware authorization (membership-group permission inheritance) and default tenant groups (`tenant-owner/admin/viewer`)
 
 ## 4. Next Priority (Phase 1 continuation)
 
 - (Completed for IAM MVP) repository-first fallback chain for IAM auth/group/member/invite/users flows
+- (Completed for IAM MVP) auth middleware abstraction and route policy table (instead of per-handler checks)
 - Add production migrations strategy for mysql/postgres IAM schema evolution
-- Add auth middleware abstraction and route policy table (instead of per-handler checks)
 - Add OAuth provider integration and RBAC administration UI
 - Expand invite delivery providers (email production adapter + SMS adapter)
 
@@ -53,6 +55,7 @@ Completed and merged:
 - Architecture design: `docs/plans/2026-02-25-kubedeck-architecture-design.md`
 - Implementation plan: `docs/plans/2026-02-25-kubedeck-microkernel-baseline-implementation.md`
 - Runtime persistence guide: `docs/runbooks/backend-persistence.md`
+- IAM migration strategy (mysql/postgres): `docs/runbooks/iam-migrations-mysql-postgres.md`
 
 ## 6. Execution Rule
 
