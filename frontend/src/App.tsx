@@ -29,13 +29,8 @@ function resolveApiTargetHint(): string {
   return mode;
 }
 
-function resolveProbeUrl(path: '/healthz' | '/readyz'): string {
-  const mode = import.meta.env.MODE;
-  if (mode === 'development' || mode === 'test') {
-    return `${resolveApiTarget()}${path}`;
-  }
-
-  return path;
+function resolveProbePath(path: '/healthz' | '/readyz'): string {
+  return `/api${path}`;
 }
 
 function App() {
@@ -46,6 +41,9 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<ProbeStatus>('checking');
   const [readyStatus, setReadyStatus] = useState<ProbeStatus>('checking');
+  const [healthError, setHealthError] = useState<string | null>(null);
+  const [readyError, setReadyError] = useState<string | null>(null);
+  const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -88,20 +86,18 @@ function App() {
 
     async function checkEndpoint(
       path: '/healthz' | '/readyz',
-      setStatus: (status: ProbeStatus) => void,
-    ) {
+    ): Promise<{ status: ProbeStatus; error: string | null }> {
       try {
-        const response = await fetch(resolveProbeUrl(path));
+        const response = await fetch(resolveProbePath(path));
         if (!response.ok) {
           throw new Error(`status ${response.status}`);
         }
-        if (active) {
-          setStatus('ok');
+        return { status: 'ok', error: null };
+      } catch (e) {
+        if (e instanceof Error) {
+          return { status: 'error', error: e.message };
         }
-      } catch {
-        if (active) {
-          setStatus('error');
-        }
+        return { status: 'error', error: 'network error' };
       }
     }
 
@@ -109,11 +105,20 @@ function App() {
       if (active) {
         setHealthStatus('checking');
         setReadyStatus('checking');
+        setHealthError(null);
+        setReadyError(null);
       }
-      await Promise.all([
-        checkEndpoint('/healthz', setHealthStatus),
-        checkEndpoint('/readyz', setReadyStatus),
+      const [healthResult, readyResult] = await Promise.all([
+        checkEndpoint('/healthz'),
+        checkEndpoint('/readyz'),
       ]);
+      if (active) {
+        setHealthStatus(healthResult.status);
+        setReadyStatus(readyResult.status);
+        setHealthError(healthResult.error);
+        setReadyError(readyResult.error);
+        setLastCheckedAt(new Date().toISOString());
+      }
     }
 
     probeRuntime();
@@ -132,6 +137,15 @@ function App() {
       <section aria-label="Runtime Status">
         <p>healthz: {healthStatus}</p>
         <p>readyz: {readyStatus}</p>
+        <p>Last checked: {lastCheckedAt ?? 'never'}</p>
+        <p>
+          Failure summary:{' '}
+          {healthError || readyError
+            ? [healthError ? `healthz: ${healthError}` : null, readyError ? `readyz: ${readyError}` : null]
+                .filter(Boolean)
+                .join('; ')
+            : 'none'}
+        </p>
       </section>
       <label>
         Cluster

@@ -10,7 +10,7 @@ describe('App', () => {
   it('renders menus, runtime checks, and reloads menus when cluster changes', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.endsWith('/healthz') || url.endsWith('/readyz')) {
+      if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
         return new Response('ok', { status: 200 });
       }
       if (url.includes('cluster=dev')) {
@@ -50,6 +50,8 @@ describe('App', () => {
     ).toBeTruthy();
     expect(await screen.findByText('healthz: ok')).toBeTruthy();
     expect(await screen.findByText('readyz: ok')).toBeTruthy();
+    expect(await screen.findByText(/Last checked:/)).toBeTruthy();
+    expect(await screen.findByText('Failure summary: none')).toBeTruthy();
 
     expect(await screen.findByText('Workloads')).toBeTruthy();
     expect(await screen.findByText('Custom Resources')).toBeTruthy();
@@ -63,8 +65,36 @@ describe('App', () => {
         true,
       );
       expect(calledUrls.some((url) => url.includes('cluster=dev'))).toBe(true);
-      expect(calledUrls.some((url) => url.endsWith('/healthz'))).toBe(true);
-      expect(calledUrls.some((url) => url.endsWith('/readyz'))).toBe(true);
+      expect(calledUrls.some((url) => url.endsWith('/api/healthz'))).toBe(true);
+      expect(calledUrls.some((url) => url.endsWith('/api/readyz'))).toBe(true);
     });
+  });
+
+  it('shows failure summary when readiness check fails', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/healthz')) {
+        return new Response('ok', { status: 200 });
+      }
+      if (url.endsWith('/api/readyz')) {
+        return new Response('not ready', { status: 503 });
+      }
+      return new Response(
+        JSON.stringify({
+          menus: [{ id: 'workloads', title: 'Workloads' }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText('healthz: ok')).toBeTruthy();
+    expect(await screen.findByText('readyz: error')).toBeTruthy();
+    expect(
+      await screen.findByText('Failure summary: readyz: status 503'),
+    ).toBeTruthy();
   });
 });
