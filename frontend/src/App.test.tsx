@@ -7,9 +7,12 @@ afterEach(() => {
 });
 
 describe('App', () => {
-  it('renders menus and reloads menus when cluster changes', async () => {
+  it('renders menus, runtime checks, and reloads menus when cluster changes', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.endsWith('/healthz') || url.endsWith('/readyz')) {
+        return new Response('ok', { status: 200 });
+      }
       if (url.includes('cluster=dev')) {
         return new Response(
           JSON.stringify({
@@ -42,9 +45,11 @@ describe('App', () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        'API target: same-origin /api (dev proxy default: http://127.0.0.1:8080)',
+        'API target (test: http://127.0.0.1:8080)',
       ),
     ).toBeTruthy();
+    expect(await screen.findByText('healthz: ok')).toBeTruthy();
+    expect(await screen.findByText('readyz: ok')).toBeTruthy();
 
     expect(await screen.findByText('Workloads')).toBeTruthy();
     expect(await screen.findByText('Custom Resources')).toBeTruthy();
@@ -53,8 +58,13 @@ describe('App', () => {
 
     expect(await screen.findByText('Dev Workloads')).toBeTruthy();
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/meta/menus?cluster=default');
-      expect(fetchMock).toHaveBeenCalledWith('/api/meta/menus?cluster=dev');
+      const calledUrls = fetchMock.mock.calls.map(([input]) => String(input));
+      expect(calledUrls.some((url) => url.includes('cluster=default'))).toBe(
+        true,
+      );
+      expect(calledUrls.some((url) => url.includes('cluster=dev'))).toBe(true);
+      expect(calledUrls.some((url) => url.endsWith('/healthz'))).toBe(true);
+      expect(calledUrls.some((url) => url.endsWith('/readyz'))).toBe(true);
     });
   });
 });

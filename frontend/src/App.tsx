@@ -9,13 +9,33 @@ interface MenusResponse {
   menus: MenuItem[];
 }
 
-function resolveApiTargetHint(): string {
+type ProbeStatus = 'checking' | 'ok' | 'error';
+
+function resolveApiTarget(): string {
   const configured = import.meta.env.VITE_BACKEND_TARGET as string | undefined;
   if (configured && configured.trim() !== '') {
-    return configured;
+    return configured.replace(/\/$/, '');
   }
 
-  return 'same-origin /api (dev proxy default: http://127.0.0.1:8080)';
+  return 'http://127.0.0.1:8080';
+}
+
+function resolveApiTargetHint(): string {
+  const mode = import.meta.env.MODE;
+  if (mode === 'development' || mode === 'test') {
+    return `${mode}: ${resolveApiTarget()}`;
+  }
+
+  return mode;
+}
+
+function resolveProbeUrl(path: '/healthz' | '/readyz'): string {
+  const mode = import.meta.env.MODE;
+  if (mode === 'development' || mode === 'test') {
+    return `${resolveApiTarget()}${path}`;
+  }
+
+  return path;
 }
 
 function App() {
@@ -24,6 +44,8 @@ function App() {
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [healthStatus, setHealthStatus] = useState<ProbeStatus>('checking');
+  const [readyStatus, setReadyStatus] = useState<ProbeStatus>('checking');
 
   useEffect(() => {
     let active = true;
@@ -61,10 +83,56 @@ function App() {
     };
   }, [activeCluster]);
 
+  useEffect(() => {
+    let active = true;
+
+    async function checkEndpoint(
+      path: '/healthz' | '/readyz',
+      setStatus: (status: ProbeStatus) => void,
+    ) {
+      try {
+        const response = await fetch(resolveProbeUrl(path));
+        if (!response.ok) {
+          throw new Error(`status ${response.status}`);
+        }
+        if (active) {
+          setStatus('ok');
+        }
+      } catch {
+        if (active) {
+          setStatus('error');
+        }
+      }
+    }
+
+    async function probeRuntime() {
+      if (active) {
+        setHealthStatus('checking');
+        setReadyStatus('checking');
+      }
+      await Promise.all([
+        checkEndpoint('/healthz', setHealthStatus),
+        checkEndpoint('/readyz', setReadyStatus),
+      ]);
+    }
+
+    probeRuntime();
+    const timer = setInterval(probeRuntime, 10_000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
+
   return (
     <main>
       <h1>KubeDeck</h1>
-      <p>API target: {apiTargetHint}</p>
+      <p>API target ({apiTargetHint})</p>
+      <section aria-label="Runtime Status">
+        <p>healthz: {healthStatus}</p>
+        <p>readyz: {readyStatus}</p>
+      </section>
       <label>
         Cluster
         <select
