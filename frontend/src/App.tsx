@@ -493,11 +493,11 @@ function App({
     setApplyStatus(null);
     setApplyResults([]);
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/resources/apply?cluster=${encodeURIComponent(activeCluster)}&defaultNs=${encodeURIComponent(createNamespace)}`,
         {
           method: 'POST',
-          headers: buildHeaders({ 'Content-Type': 'application/yaml' }),
+          headers: { 'Content-Type': 'application/yaml' },
           body: yamlInput,
         },
       );
@@ -519,9 +519,7 @@ function App({
 
     async function loadClusters() {
       try {
-        const response = await fetch('/api/meta/clusters', {
-          headers: buildHeaders(),
-        });
+        const response = await apiFetch('/api/meta/clusters');
         if (!response.ok) {
           throw new Error(`clusters request failed: ${response.status}`);
         }
@@ -555,12 +553,8 @@ function App({
       setResourceTypes([]);
       try {
         const [menusResponse, registryResponse] = await Promise.all([
-          fetch(`/api/meta/menus?cluster=${encodeURIComponent(activeCluster)}`, {
-            headers: buildHeaders(),
-          }),
-          fetch(`/api/meta/registry?cluster=${encodeURIComponent(activeCluster)}`, {
-            headers: buildHeaders(),
-          }),
+          apiFetch(`/api/meta/menus?cluster=${encodeURIComponent(activeCluster)}`),
+          apiFetch(`/api/meta/registry?cluster=${encodeURIComponent(activeCluster)}`),
         ]);
         if (!menusResponse.ok) {
           throw new Error(`menus request failed: ${menusResponse.status}`);
@@ -692,6 +686,28 @@ function App({
       ...(base ?? {}),
       Authorization: `Bearer ${authToken}`,
     };
+  }
+
+  function handleUnauthorized() {
+    clearAuthToken();
+    setAuthToken(null);
+    setAuthUser(null);
+    setAuthTenants([]);
+    setActiveTenantID('');
+    setAuthError('unauthorized');
+    setAuthDialogOpen(true);
+  }
+
+  async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const response = await fetch(input, {
+      ...init,
+      headers: buildHeaders(init?.headers),
+    });
+    if (response.status === 401) {
+      handleUnauthorized();
+      throw new Error('unauthorized');
+    }
+    return response;
   }
 
   async function submitLogin() {

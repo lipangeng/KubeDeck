@@ -4,6 +4,7 @@ import App from './App';
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   vi.restoreAllMocks();
 });
 
@@ -635,5 +636,43 @@ describe('App', () => {
 
     expect(await screen.findByText('Invite accepted: accepted')).toBeTruthy();
     window.location.hash = originalHash;
+  });
+
+  it('opens login dialog when api returns unauthorized with stale token', async () => {
+    window.localStorage.setItem('kubedeck.auth.token', 'stale-token');
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response('unauthorized', { status: 401 });
+      }
+      if (url.endsWith('/api/meta/clusters')) {
+        return new Response('unauthorized', { status: 401 });
+      }
+      if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
+        return new Response('ok', { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          cluster: 'default',
+          menus: [],
+          resourceTypes: [],
+          clusters: ['default'],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        locale="en"
+        onLocaleChange={vi.fn()}
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByRole('dialog', { name: 'Login' })).toBeTruthy();
+    expect(window.localStorage.getItem('kubedeck.auth.token')).toBeNull();
   });
 });
