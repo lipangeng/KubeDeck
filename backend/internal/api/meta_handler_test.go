@@ -31,6 +31,7 @@ func resetAuthSessions() {
 	authSessionsMu.Lock()
 	authSessions = map[string]authSession{}
 	authSessionsMu.Unlock()
+	resetGroups()
 }
 
 func resetInvites() {
@@ -43,6 +44,12 @@ func resetMemberships() {
 	iamMembershipsMu.Lock()
 	iamMemberships = map[string]iamMembership{}
 	iamMembershipsMu.Unlock()
+}
+
+func resetGroups() {
+	iamGroupsMu.Lock()
+	iamGroups = map[string]iamGroup{}
+	iamGroupsMu.Unlock()
 }
 
 func resetAuditWriter() {
@@ -547,6 +554,42 @@ func TestIAMGroupManagementFlow(t *testing.T) {
 	}
 }
 
+func TestIAMGroupCreateDuplicateRejected(t *testing.T) {
+	resetAuthSessions()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+
+	firstCreateReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader([]byte(`{"name":"ops","description":"Ops Team"}`)))
+	firstCreateReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	firstCreateResp := httptest.NewRecorder()
+	router.ServeHTTP(firstCreateResp, firstCreateReq)
+	if firstCreateResp.Code != http.StatusCreated {
+		t.Fatalf("expected first create status %d, got %d body=%s", http.StatusCreated, firstCreateResp.Code, firstCreateResp.Body.String())
+	}
+
+	secondCreateReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader([]byte(`{"name":"OPS","description":"Duplicate Name"}`)))
+	secondCreateReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	secondCreateResp := httptest.NewRecorder()
+	router.ServeHTTP(secondCreateResp, secondCreateReq)
+	if secondCreateResp.Code != http.StatusConflict {
+		t.Fatalf("expected duplicate create status %d, got %d body=%s", http.StatusConflict, secondCreateResp.Code, secondCreateResp.Body.String())
+	}
+}
+
 func TestMembershipListAndReplaceGroupsFlow(t *testing.T) {
 	resetAuthSessions()
 	resetMemberships()
@@ -895,6 +938,44 @@ func TestIAMTenantsAndTenantMembersFlow(t *testing.T) {
 	router.ServeHTTP(deleteMemberResp, deleteMemberReq)
 	if deleteMemberResp.Code != http.StatusOK {
 		t.Fatalf("expected delete tenant member 200, got %d body=%s", deleteMemberResp.Code, deleteMemberResp.Body.String())
+	}
+}
+
+func TestIAMTenantMemberDuplicateRejected(t *testing.T) {
+	resetAuthSessions()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+
+	memberPayload := []byte(`{"user_id":"u-3","user_label":"user-three","effective_from":"2026-02-25T00:00:00Z"}`)
+	firstCreateReq := httptest.NewRequest(http.MethodPost, "/api/iam/tenants/tenant-dev/members", bytes.NewReader(memberPayload))
+	firstCreateReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	firstCreateResp := httptest.NewRecorder()
+	router.ServeHTTP(firstCreateResp, firstCreateReq)
+	if firstCreateResp.Code != http.StatusCreated {
+		t.Fatalf("expected first member create status %d, got %d body=%s", http.StatusCreated, firstCreateResp.Code, firstCreateResp.Body.String())
+	}
+
+	secondCreateReq := httptest.NewRequest(http.MethodPost, "/api/iam/tenants/tenant-dev/members", bytes.NewReader(memberPayload))
+	secondCreateReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	secondCreateResp := httptest.NewRecorder()
+	router.ServeHTTP(secondCreateResp, secondCreateReq)
+	if secondCreateResp.Code != http.StatusConflict {
+		t.Fatalf("expected duplicate member create status %d, got %d body=%s", http.StatusConflict, secondCreateResp.Code, secondCreateResp.Body.String())
 	}
 }
 

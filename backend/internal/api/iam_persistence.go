@@ -105,6 +105,8 @@ func ensureIAMSchema(db *sql.DB) error {
 			available_json TEXT NOT NULL,
 			active_tenant_id TEXT NOT NULL
 		);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_iam_groups_tenant_name ON iam_groups(tenant_id, name);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_iam_memberships_tenant_user ON iam_memberships(tenant_id, user_id);`,
 	}
 	for _, stmt := range statements {
 		if _, err := db.Exec(stmt); err != nil {

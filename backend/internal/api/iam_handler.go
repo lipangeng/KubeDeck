@@ -483,6 +483,15 @@ func (h *IAMHandler) createTenantMember(
 	if userLabel == "" {
 		userLabel = req.UserID
 	}
+	iamMembershipsMu.RLock()
+	for _, existing := range iamMemberships {
+		if existing.TenantID == tenantID && strings.EqualFold(existing.UserID, req.UserID) {
+			iamMembershipsMu.RUnlock()
+			writeJSONError(w, http.StatusConflict, "membership_exists")
+			return
+		}
+	}
+	iamMembershipsMu.RUnlock()
 	membership := iamMembership{
 		ID:             "mbr-" + strings.ToLower(strings.ReplaceAll(req.UserID, " ", "-")) + "-" + tenantID,
 		TenantID:       tenantID,
@@ -565,11 +574,21 @@ func (h *IAMHandler) createGroup(w http.ResponseWriter, r *http.Request, session
 		writeJSONError(w, http.StatusBadRequest, "name_required")
 		return
 	}
+	normalizedName := strings.TrimSpace(req.Name)
+	iamGroupsMu.RLock()
+	for _, existing := range iamGroups {
+		if existing.TenantID == session.ActiveTenantID && strings.EqualFold(existing.Name, normalizedName) {
+			iamGroupsMu.RUnlock()
+			writeJSONError(w, http.StatusConflict, "group_exists")
+			return
+		}
+	}
+	iamGroupsMu.RUnlock()
 	id := "grp-" + strings.ToLower(strings.ReplaceAll(req.Name, " ", "-"))
 	group := iamGroup{
 		ID:          id,
 		TenantID:    session.ActiveTenantID,
-		Name:        req.Name,
+		Name:        normalizedName,
 		Description: req.Description,
 	}
 	iamGroupsMu.Lock()

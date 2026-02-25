@@ -10,18 +10,15 @@ import (
 	"testing"
 )
 
-func resetGroups() {
-	iamGroupsMu.Lock()
-	iamGroups = map[string]iamGroup{}
-	iamGroupsMu.Unlock()
-}
-
 func TestIAMPersistenceAcrossRouterRebuild(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "iam-persistence.sqlite")
 	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
 	t.Setenv("KUBEDECK_SQLITE_DSN", dbPath)
 
 	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		resetIAMPersistenceForTest()
+	})
 	resetAuthSessions()
 	resetInvites()
 	resetMemberships()
