@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  parseApplyResponse,
   parseClustersResponse,
   parseMenusResponse,
   parseRegistryResponse,
@@ -73,5 +74,38 @@ describe('parseRegistryResponse', () => {
 
     expect(parsed.cluster).toBe('default');
     expect(parsed.resourceTypes[0].kind).toBe('Deployment');
+  });
+});
+
+describe('parseApplyResponse', () => {
+  it('parses apply response with per-document results', () => {
+    const parsed = parseApplyResponse({
+      status: 'partial',
+      cluster: 'dev',
+      defaultNamespace: 'default',
+      total: 2,
+      succeeded: 1,
+      failed: 1,
+      results: [
+        {
+          index: 1,
+          kind: 'ConfigMap',
+          name: 'cm-ok',
+          namespace: 'default',
+          status: 'succeeded',
+        },
+        {
+          index: 2,
+          kind: 'Service',
+          name: 'svc-fail',
+          namespace: 'default',
+          status: 'failed',
+          reason: 'simulated apply failure',
+        },
+      ],
+    });
+
+    expect(parsed.status).toBe('partial');
+    expect(parsed.results).toHaveLength(2);
   });
 });

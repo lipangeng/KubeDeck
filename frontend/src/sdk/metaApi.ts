@@ -1,4 +1,5 @@
 import type {
+  ApplyResponse,
   ClustersResponse,
   MenuItem,
   MenusResponse,
@@ -125,5 +126,80 @@ export function parseRegistryResponse(value: unknown): RegistryResponse {
   return {
     cluster,
     resourceTypes: resourceTypes as RegistryResponse['resourceTypes'],
+  };
+}
+
+export function parseApplyResponse(value: unknown): ApplyResponse {
+  if (!isObject(value)) {
+    throw new Error('invalid apply response: not an object');
+  }
+
+  const {
+    status,
+    cluster,
+    defaultNamespace,
+    total,
+    succeeded,
+    failed,
+    results,
+  } = value;
+
+  if (status !== 'success' && status !== 'partial' && status !== 'failed') {
+    throw new Error('invalid apply response: status is invalid');
+  }
+  if (typeof cluster !== 'string' || cluster === '') {
+    throw new Error('invalid apply response: cluster is required');
+  }
+  if (typeof defaultNamespace !== 'string' || defaultNamespace === '') {
+    throw new Error('invalid apply response: defaultNamespace is required');
+  }
+  if (
+    typeof total !== 'number' ||
+    typeof succeeded !== 'number' ||
+    typeof failed !== 'number'
+  ) {
+    throw new Error('invalid apply response: counters must be numbers');
+  }
+  if (!Array.isArray(results)) {
+    throw new Error('invalid apply response: results must be array');
+  }
+
+  for (const result of results) {
+    if (!isObject(result)) {
+      throw new Error('invalid apply response: result item must be object');
+    }
+    if (
+      typeof result.index !== 'number' ||
+      typeof result.kind !== 'string' ||
+      typeof result.name !== 'string' ||
+      typeof result.namespace !== 'string' ||
+      (result.status !== 'succeeded' && result.status !== 'failed')
+    ) {
+      throw new Error('invalid apply response: malformed result item');
+    }
+    if (
+      result.reason !== undefined &&
+      result.reason !== null &&
+      typeof result.reason !== 'string'
+    ) {
+      throw new Error('invalid apply response: reason must be string when present');
+    }
+  }
+
+  return {
+    status,
+    cluster,
+    defaultNamespace,
+    total,
+    succeeded,
+    failed,
+    results: results.map((result) => ({
+      index: result.index as number,
+      kind: result.kind as string,
+      name: result.name as string,
+      namespace: result.namespace as string,
+      status: result.status as 'succeeded' | 'failed',
+      reason: result.reason as string | undefined,
+    })),
   };
 }

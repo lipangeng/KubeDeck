@@ -244,4 +244,91 @@ describe('App', () => {
     expect(await screen.findByText('readyz: error')).toBeTruthy();
     expect(await screen.findByText('Failure summary: readyz: status 503')).toBeTruthy();
   });
+
+  it('applies multi-yaml payload with namespace default linkage', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
+        return new Response('ok', { status: 200 });
+      }
+      if (url.endsWith('/api/meta/clusters')) {
+        return new Response(
+          JSON.stringify({
+            clusters: ['default', 'dev'],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/meta/registry?cluster=default')) {
+        return new Response(
+          JSON.stringify({
+            cluster: 'default',
+            resourceTypes: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/meta/menus?cluster=default')) {
+        return new Response(
+          JSON.stringify({
+            cluster: 'default',
+            menus: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/resources/apply?')) {
+        expect(url.includes('defaultNs=dev')).toBe(true);
+        expect(init?.method).toBe('POST');
+        return new Response(
+          JSON.stringify({
+            status: 'partial',
+            cluster: 'default',
+            defaultNamespace: 'dev',
+            total: 2,
+            succeeded: 1,
+            failed: 1,
+            results: [
+              {
+                index: 1,
+                kind: 'ConfigMap',
+                name: 'cm-ok',
+                namespace: 'dev',
+                status: 'succeeded',
+              },
+              {
+                index: 2,
+                kind: 'Service',
+                name: 'svc-fail',
+                namespace: 'dev',
+                status: 'failed',
+                reason: 'simulated apply failure',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response('not found', { status: 404 });
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('Create Resources')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Create Namespace'), {
+      target: { value: 'dev' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply YAML' }));
+
+    expect(await screen.findByText('Apply status: partial')).toBeTruthy();
+    expect(await screen.findByText(/#1 ConfigMap cm-ok/)).toBeTruthy();
+    expect(await screen.findByText(/#2 Service svc-fail/)).toBeTruthy();
+  });
 });

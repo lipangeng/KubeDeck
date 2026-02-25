@@ -36,6 +36,25 @@ export interface ClustersResponse {
   clusters: string[];
 }
 
+export interface ApplyResultItem {
+  index: number;
+  kind: string;
+  name: string;
+  namespace: string;
+  status: 'succeeded' | 'failed';
+  reason?: string;
+}
+
+export interface ApplyResponse {
+  status: 'success' | 'partial' | 'failed';
+  cluster: string;
+  defaultNamespace: string;
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: ApplyResultItem[];
+}
+
 export interface PageContribution {
   pageId: string;
   route: string;

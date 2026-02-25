@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -117,7 +118,24 @@ func TestMenusEndpoint(t *testing.T) {
 func TestResourceApplyEndpoint(t *testing.T) {
 	router := NewRouter()
 
-	req := httptest.NewRequest(http.MethodPost, "/api/resources/apply", nil)
+	body := `
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cm-ok
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-fail
+---
+kind: Broken
+`
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/resources/apply?cluster=dev&defaultNs=kube-system",
+		strings.NewReader(body),
+	)
 	resp := httptest.NewRecorder()
 
 	router.ServeHTTP(resp, req)
@@ -126,17 +144,49 @@ func TestResourceApplyEndpoint(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, resp.Code)
 	}
 
-	var body map[string]any
-	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+	var payload struct {
+		Status    string `json:"status"`
+		Cluster   string `json:"cluster"`
+		DefaultNS string `json:"defaultNamespace"`
+		Total     int    `json:"total"`
+		Succeeded int    `json:"succeeded"`
+		Failed    int    `json:"failed"`
+		Results   []struct {
+			Index     int    `json:"index"`
+			Kind      string `json:"kind"`
+			Name      string `json:"name"`
+			Namespace string `json:"namespace"`
+			Status    string `json:"status"`
+			Reason    string `json:"reason"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("expected JSON response, got error: %v", err)
 	}
 
-	if _, ok := body["status"]; !ok {
-		t.Fatalf("expected response to contain status key, body=%s", resp.Body.String())
+	if payload.Status != "partial" {
+		t.Fatalf("expected status partial, got %q body=%s", payload.Status, resp.Body.String())
 	}
-
-	if _, ok := body["message"]; !ok {
-		t.Fatalf("expected response to contain message key, body=%s", resp.Body.String())
+	if payload.Cluster != "dev" {
+		t.Fatalf("expected cluster dev, got %q", payload.Cluster)
+	}
+	if payload.DefaultNS != "kube-system" {
+		t.Fatalf("expected defaultNamespace kube-system, got %q", payload.DefaultNS)
+	}
+	if payload.Total != 3 || payload.Succeeded != 1 || payload.Failed != 2 {
+		t.Fatalf("unexpected counters total=%d succeeded=%d failed=%d", payload.Total, payload.Succeeded, payload.Failed)
+	}
+	if len(payload.Results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(payload.Results))
+	}
+	if payload.Results[0].Namespace != "kube-system" {
+		t.Fatalf("expected default namespace injected, got %q", payload.Results[0].Namespace)
+	}
+	if payload.Results[1].Status != "failed" {
+		t.Fatalf("expected second result failed, got %q", payload.Results[1].Status)
+	}
+	if payload.Results[2].Status != "failed" {
+		t.Fatalf("expected third result failed, got %q", payload.Results[2].Status)
 	}
 }
 

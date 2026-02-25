@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Divider from '@mui/material/Divider';
 import FormControl from '@mui/material/FormControl';
@@ -11,16 +12,19 @@ import ListItemText from '@mui/material/ListItemText';
 import Paper from '@mui/material/Paper';
 import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { composeMenus } from './core/menuComposer';
 import { groupMenusBySource } from './core/menuGrouping';
 import {
+  parseApplyResponse,
   parseClustersResponse,
   parseMenusResponse,
   parseRegistryResponse,
 } from './sdk/metaApi';
-import type { MenuItem } from './sdk/types';
+import type { ApplyResultItem, MenuItem } from './sdk/types';
+import { ALL_NAMESPACES, resolveCreateDefaultNamespace } from './state/namespaceFilter';
 import type { ThemePreference } from './themeMode';
 
 type ProbeStatus = 'checking' | 'ok' | 'error';
@@ -94,6 +98,14 @@ function MenuSection({
 function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const apiTargetHint = resolveApiTargetHint();
   const [activeCluster, setActiveCluster] = useState('default');
+  const [listFilterNamespace, setListFilterNamespace] = useState(ALL_NAMESPACES);
+  const [lastUsedNamespace, setLastUsedNamespace] = useState<string | undefined>();
+  const [createNamespace, setCreateNamespace] = useState('default');
+  const [yamlInput, setYamlInput] = useState(
+    'apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: example-config\n',
+  );
+  const [applyStatus, setApplyStatus] = useState<string | null>(null);
+  const [applyResults, setApplyResults] = useState<ApplyResultItem[]>([]);
   const [clusters, setClusters] = useState<string[]>(['default']);
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [resourceTypeCount, setResourceTypeCount] = useState(0);
@@ -112,6 +124,40 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
     const merged = composeMenus(systemMenus, userMenus, dynamicMenus);
     return groupMenusBySource(merged);
   }, [menus]);
+
+  useEffect(() => {
+    setCreateNamespace(
+      resolveCreateDefaultNamespace({
+        listFilterNamespace,
+        lastUsedNamespace,
+      }),
+    );
+  }, [listFilterNamespace, lastUsedNamespace]);
+
+  async function applyResources() {
+    setApplyStatus(null);
+    setApplyResults([]);
+    try {
+      const response = await fetch(
+        `/api/resources/apply?cluster=${encodeURIComponent(activeCluster)}&defaultNs=${encodeURIComponent(createNamespace)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/yaml' },
+          body: yamlInput,
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`apply request failed: ${response.status}`);
+      }
+      const payload = parseApplyResponse(await response.json());
+      setApplyStatus(payload.status);
+      setApplyResults(payload.results);
+      setLastUsedNamespace(createNamespace);
+    } catch (e) {
+      setApplyStatus(e instanceof Error ? e.message : 'apply failed');
+      setApplyResults([]);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -364,6 +410,22 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
               </Select>
             </FormControl>
 
+            <FormControl size="small" fullWidth>
+              <InputLabel htmlFor="namespace-filter-select">Namespace Filter</InputLabel>
+              <Select
+                native
+                value={listFilterNamespace}
+                onChange={(event) => setListFilterNamespace(event.target.value)}
+                label="Namespace Filter"
+                inputProps={{ id: 'namespace-filter-select' }}
+              >
+                <option value={ALL_NAMESPACES}>{ALL_NAMESPACES}</option>
+                <option value="default">default</option>
+                <option value="kube-system">kube-system</option>
+                <option value="dev">dev</option>
+              </Select>
+            </FormControl>
+
             <Divider />
 
             {loading ? <Typography>Loading menus...</Typography> : null}
@@ -429,6 +491,65 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             <Typography variant="body2" color={failureSummary === 'none' ? 'text.secondary' : 'error'}>
               Failure summary: {failureSummary}
             </Typography>
+          </Paper>
+
+          <Paper elevation={1} sx={{ p: 1.6, border: 1, borderColor: 'divider' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+              Create Resources
+            </Typography>
+            <Stack spacing={1.2}>
+              <FormControl size="small" sx={{ maxWidth: 260 }}>
+                <InputLabel htmlFor="create-namespace-select">Create Namespace</InputLabel>
+                <Select
+                  native
+                  value={createNamespace}
+                  onChange={(event) => {
+                    setCreateNamespace(event.target.value);
+                    setLastUsedNamespace(event.target.value);
+                  }}
+                  label="Create Namespace"
+                  inputProps={{ id: 'create-namespace-select' }}
+                >
+                  <option value="default">default</option>
+                  <option value="kube-system">kube-system</option>
+                  <option value="dev">dev</option>
+                </Select>
+              </FormControl>
+
+              <TextField
+                label="YAML (multi-document supported)"
+                multiline
+                minRows={8}
+                value={yamlInput}
+                onChange={(event) => setYamlInput(event.target.value)}
+              />
+              <Box>
+                <Button variant="contained" onClick={() => void applyResources()}>
+                  Apply YAML
+                </Button>
+              </Box>
+
+              {applyStatus ? (
+                <Typography
+                  variant="body2"
+                  color={applyStatus === 'success' ? 'success.main' : applyStatus === 'partial' ? 'warning.main' : 'error'}
+                >
+                  Apply status: {applyStatus}
+                </Typography>
+              ) : null}
+              {applyResults.length > 0 ? (
+                <List dense sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                  {applyResults.map((result) => (
+                    <ListItem key={`${result.index}-${result.name}-${result.kind}`} disableGutters sx={{ px: 1 }}>
+                      <ListItemText
+                        primary={`#${result.index} ${result.kind || 'Unknown'} ${result.name || '-'} (${result.namespace || '-'})`}
+                        secondary={result.status === 'failed' ? `failed: ${result.reason ?? 'unknown'}` : 'succeeded'}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              ) : null}
+            </Stack>
           </Paper>
         </Stack>
       </Box>
