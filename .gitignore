@@ -582,3 +582,8 @@ cython_debug/
 
 # Git worktrees (local isolated workspaces)
 .worktrees/
+
+# Keep backend embedded web UI placeholder tracked for go:embed builds.
+!backend/internal/webui/dist/
+backend/internal/webui/dist/*
+!backend/internal/webui/dist/index.html
