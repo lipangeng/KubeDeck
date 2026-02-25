@@ -20,6 +20,7 @@ import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
 import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
+import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Toolbar from '@mui/material/Toolbar';
@@ -47,6 +48,7 @@ import type { ThemePreference } from './themeMode';
 type ProbeStatus = 'checking' | 'ok' | 'error';
 const MENU_GROUPS_STORAGE_KEY = 'kubedeck.menu.groups.expanded';
 const USER_FAVORITES_KEY = 'kubedeck.user.favorite.menu.ids';
+const MENU_OVERRIDES_KEY = 'kubedeck.menu.overrides';
 
 interface AppProps {
   locale: Locale;
@@ -138,6 +140,40 @@ function readStoredFavoriteMenuIDs(): string[] {
   }
 }
 
+interface MenuOverride {
+  group?: string;
+  order?: number;
+  visible?: boolean;
+}
+
+function readStoredMenuOverrides(): Record<string, MenuOverride> {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+  const raw = window.localStorage.getItem(MENU_OVERRIDES_KEY);
+  if (!raw) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const next: Record<string, MenuOverride> = {};
+    for (const [id, value] of Object.entries(parsed)) {
+      if (typeof value !== 'object' || value === null) {
+        continue;
+      }
+      const candidate = value as Record<string, unknown>;
+      next[id] = {
+        group: typeof candidate.group === 'string' ? candidate.group : undefined,
+        order: typeof candidate.order === 'number' ? candidate.order : undefined,
+        visible: typeof candidate.visible === 'boolean' ? candidate.visible : undefined,
+      };
+    }
+    return next;
+  } catch {
+    return {};
+  }
+}
+
 function readHashRoute(): string {
   if (typeof window === 'undefined') {
     return '/';
@@ -202,6 +238,7 @@ function App({
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [resourceTypes, setResourceTypes] = useState<RegistryResourceType[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [manageMenusOpen, setManageMenusOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<ProbeStatus>('checking');
@@ -214,15 +251,49 @@ function App({
   const [favoriteMenuIDs, setFavoriteMenuIDs] = useState<string[]>(() =>
     readStoredFavoriteMenuIDs(),
   );
+  const [menuOverrides, setMenuOverrides] = useState<Record<string, MenuOverride>>(
+    () => readStoredMenuOverrides(),
+  );
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
     () => readStoredExpandedGroups(),
   );
 
+  function applyMenuOverride(menu: MenuItem): MenuItem {
+    const override = menuOverrides[menu.id];
+    if (!override) {
+      return menu;
+    }
+    return {
+      ...menu,
+      group: override.group ?? menu.group,
+      order: override.order ?? menu.order,
+      visible: override.visible ?? menu.visible,
+    };
+  }
+
   const configuredMenus = useMemo(() => {
-    const systemMenus = menus.filter((menu) => menu.source === 'system');
-    const userMenus = menus.filter((menu) => menu.source === 'user');
+    const systemMenus = menus
+      .filter((menu) => menu.source === 'system')
+      .map(applyMenuOverride);
+    const userMenus = menus
+      .filter((menu) => menu.source === 'user')
+      .map(applyMenuOverride);
     return composeMenus(systemMenus, userMenus, []);
-  }, [menus]);
+  }, [menus, menuOverrides]);
+  const manageableMenus = useMemo(() => {
+    const systemMenus = menus
+      .filter((menu) => menu.source === 'system')
+      .map(applyMenuOverride);
+    const userMenus = menus
+      .filter((menu) => menu.source === 'user')
+      .map(applyMenuOverride);
+    return [...systemMenus, ...userMenus].sort((a, b) => {
+      if (a.order !== b.order) {
+        return a.order - b.order;
+      }
+      return a.id.localeCompare(b.id);
+    });
+  }, [menus, menuOverrides]);
   const configuredMenuIDSet = useMemo(
     () => new Set(configuredMenus.map((menu) => menu.id)),
     [configuredMenus],
@@ -304,6 +375,13 @@ function App({
   }, [favoriteMenuIDs]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(MENU_OVERRIDES_KEY, JSON.stringify(menuOverrides));
+  }, [menuOverrides]);
+
+  useEffect(() => {
     if (menuIDs.length === 0) {
       if (selectedMenuID !== '') {
         setSelectedMenuID('');
@@ -355,6 +433,16 @@ function App({
         ? previous.filter((menuID) => menuID !== menu.id)
         : [...previous, menu.id],
     );
+  }
+
+  function updateMenuOverride(menu: MenuItem, patch: MenuOverride) {
+    setMenuOverrides((previous) => ({
+      ...previous,
+      [menu.id]: {
+        ...previous[menu.id],
+        ...patch,
+      },
+    }));
   }
 
   async function applyResources() {
@@ -615,6 +703,9 @@ function App({
               <option value="zh">{t('chinese')}</option>
             </Select>
           </FormControl>
+          <Button variant="outlined" onClick={() => setManageMenusOpen(true)}>
+            {t('manageMenus')}
+          </Button>
           <Button variant="contained" onClick={() => setCreateDialogOpen(true)}>
             {t('createResources')}
           </Button>
@@ -898,6 +989,72 @@ function App({
           </Paper>
         </Stack>
       </Box>
+
+      <Dialog
+        open={manageMenusOpen}
+        onClose={() => setManageMenusOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>{t('menuManagement')}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1}>
+            {manageableMenus.map((menu) => (
+              <Paper
+                key={menu.id}
+                variant="outlined"
+                sx={{
+                  p: 1,
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', md: 'minmax(0,1fr) 120px 100px 150px 100px' },
+                  gap: 1,
+                  alignItems: 'center',
+                }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  {menuIcon(menu.group, menu.targetType)}
+                  <Typography variant="body2">{menu.title}</Typography>
+                </Stack>
+                <Typography variant="caption" color="text.secondary">
+                  {menu.source === 'system' ? t('menuSourceSystem') : t('menuSourceUser')}
+                </Typography>
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <Switch
+                    size="small"
+                    checked={menu.visible}
+                    onChange={(event) =>
+                      updateMenuOverride(menu, { visible: event.target.checked })
+                    }
+                    inputProps={{ 'aria-label': `${t('menuVisible')}-${menu.id}` }}
+                  />
+                  <Typography variant="caption">{t('menuVisible')}</Typography>
+                </Stack>
+                <TextField
+                  size="small"
+                  label={t('menuGroup')}
+                  value={menu.group}
+                  onChange={(event) =>
+                    updateMenuOverride(menu, { group: event.target.value })
+                  }
+                />
+                <TextField
+                  size="small"
+                  type="number"
+                  label={t('menuOrder')}
+                  value={menu.order}
+                  onChange={(event) =>
+                    updateMenuOverride(menu, { order: Number(event.target.value) || 0 })
+                  }
+                />
+              </Paper>
+            ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMenuOverrides({})}>{t('resetMenuSettings')}</Button>
+          <Button onClick={() => setManageMenusOpen(false)}>{t('close')}</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={createDialogOpen}

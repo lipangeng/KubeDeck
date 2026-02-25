@@ -403,4 +403,71 @@ describe('App', () => {
     expect(await screen.findByRole('button', { name: 'Remove from favorites' })).toBeTruthy();
     expect((await screen.findAllByText('Workloads')).length).toBeGreaterThan(0);
   });
+
+  it('manages menu visibility from menu management dialog', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
+        return new Response('ok', { status: 200 });
+      }
+      if (url.endsWith('/api/meta/clusters')) {
+        return new Response(
+          JSON.stringify({
+            clusters: ['default'],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/meta/registry?cluster=default')) {
+        return new Response(
+          JSON.stringify({
+            cluster: 'default',
+            resourceTypes: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/meta/menus?cluster=default')) {
+        return new Response(
+          JSON.stringify({
+            cluster: 'default',
+            menus: [
+              {
+                id: 'workloads',
+                group: 'WORKLOAD',
+                title: 'Workloads',
+                targetType: 'page',
+                targetRef: '/workloads',
+                source: 'system',
+                order: 10,
+                visible: true,
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response('not found', { status: 404 });
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        locale="en"
+        onLocaleChange={vi.fn()}
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('Workloads')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Menus' }));
+    fireEvent.click((await screen.findAllByRole('switch'))[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Workloads')).toBeNull();
+    });
+  });
 });
