@@ -48,11 +48,8 @@ describe('App', () => {
 
     expect(await screen.findByText('Dev Workloads')).toBeTruthy();
     await waitFor(() => {
-      const calledUrls = fetchMock.mock.calls.map(([input]) => String(input));
-      expect(calledUrls.some((url) => url.includes('cluster=default'))).toBe(
-        true,
-      );
-      expect(calledUrls.some((url) => url.includes('cluster=dev'))).toBe(true);
+      expect(fetchMock).toHaveBeenCalledWith('/api/meta/menus?cluster=default');
+      expect(fetchMock).toHaveBeenCalledWith('/api/meta/menus?cluster=dev');
     });
   });
 });
