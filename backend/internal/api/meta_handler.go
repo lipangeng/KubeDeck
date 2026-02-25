@@ -8,6 +8,28 @@ import (
 
 type MetaHandler struct{}
 
+type resourceTypeDTO struct {
+	ID               string `json:"id"`
+	Group            string `json:"group"`
+	Version          string `json:"version"`
+	Kind             string `json:"kind"`
+	Plural           string `json:"plural"`
+	Namespaced       bool   `json:"namespaced"`
+	PreferredVersion string `json:"preferredVersion"`
+	Source           string `json:"source"`
+}
+
+type menuItemDTO struct {
+	ID         string `json:"id"`
+	Group      string `json:"group"`
+	Title      string `json:"title"`
+	TargetType string `json:"targetType"`
+	TargetRef  string `json:"targetRef"`
+	Source     string `json:"source"`
+	Order      int    `json:"order"`
+	Visible    bool   `json:"visible"`
+}
+
 func NewMetaHandler() *MetaHandler {
 	return &MetaHandler{}
 }
@@ -24,8 +46,29 @@ func (h *MetaHandler) Registry(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := writeJSON(w, http.StatusOK, map[string]any{
-		"cluster":       cluster,
-		"resourceTypes": []string{"Deployment", "Service", "ConfigMap"},
+		"cluster": cluster,
+		"resourceTypes": []resourceTypeDTO{
+			{
+				ID:               "apps.v1.deployments",
+				Group:            "apps",
+				Version:          "v1",
+				Kind:             "Deployment",
+				Plural:           "deployments",
+				Namespaced:       true,
+				PreferredVersion: "v1",
+				Source:           "system",
+			},
+			{
+				ID:               "v1.services",
+				Group:            "",
+				Version:          "v1",
+				Kind:             "Service",
+				Plural:           "services",
+				Namespaced:       true,
+				PreferredVersion: "v1",
+				Source:           "system",
+			},
+		},
 	}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal server error")
 	}
@@ -57,20 +100,36 @@ func (h *MetaHandler) Menus(w http.ResponseWriter, r *http.Request) {
 
 	if err := writeJSON(w, http.StatusOK, map[string]any{
 		"cluster": cluster,
-		"menus": []map[string]any{
+		"menus": []menuItemDTO{
 			{
-				"id":     "workloads",
-				"group":  "system",
-				"title":  "Workloads",
-				"source": "system",
-				"order":  10,
+				ID:         "workloads",
+				Group:      "system",
+				Title:      "Workloads",
+				TargetType: "page",
+				TargetRef:  "/workloads",
+				Source:     "system",
+				Order:      10,
+				Visible:    true,
 			},
 			{
-				"id":     "crd-dynamic",
-				"group":  "dynamic",
-				"title":  "Custom Resources",
-				"source": "dynamic",
-				"order":  50,
+				ID:         "favorites",
+				Group:      "user",
+				Title:      "Favorites",
+				TargetType: "page",
+				TargetRef:  "/favorites",
+				Source:     "user",
+				Order:      20,
+				Visible:    true,
+			},
+			{
+				ID:         "crd-dynamic",
+				Group:      "dynamic",
+				Title:      "Custom Resources",
+				TargetType: "resource",
+				TargetRef:  "/resources/custom",
+				Source:     "dynamic",
+				Order:      50,
+				Visible:    true,
 			},
 		},
 	}); err != nil {
