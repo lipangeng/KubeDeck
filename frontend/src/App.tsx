@@ -46,6 +46,13 @@ import {
   type AuthTenant,
 } from './sdk/authApi';
 import {
+  parseGroup,
+  parseGroupsResponse,
+  parsePermissionsResponse,
+  type IAMGroup,
+  type IAMPermission,
+} from './sdk/iamApi';
+import {
   parseApplyResponse,
   parseClustersResponse,
   parseMenusResponse,
@@ -296,6 +303,14 @@ function App({
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [tenantBusy, setTenantBusy] = useState(false);
+  const [iamDialogOpen, setIamDialogOpen] = useState(false);
+  const [iamLoading, setIamLoading] = useState(false);
+  const [iamError, setIamError] = useState<string | null>(null);
+  const [iamPermissions, setIamPermissions] = useState<IAMPermission[]>([]);
+  const [iamGroups, setIamGroups] = useState<IAMGroup[]>([]);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDescription, setNewGroupDescription] = useState('');
+  const [groupPermissionDrafts, setGroupPermissionDrafts] = useState<Record<string, string>>({});
   const [inviteUsername, setInviteUsername] = useState('');
   const [invitePassword, setInvitePassword] = useState('');
   const [inviteBusy, setInviteBusy] = useState(false);
@@ -766,6 +781,116 @@ function App({
     }
   }
 
+  function normalizePermissionsDraft(value: string): string[] {
+    return Array.from(
+      new Set(
+        value
+          .split(',')
+          .map((item) => item.trim())
+          .filter((item) => item !== ''),
+      ),
+    );
+  }
+
+  async function loadIAMData() {
+    if (!authUser) {
+      setIamError('auth_required');
+      setIamPermissions([]);
+      setIamGroups([]);
+      return;
+    }
+    setIamLoading(true);
+    setIamError(null);
+    try {
+      const [permissionsResponse, groupsResponse] = await Promise.all([
+        apiFetch('/api/iam/permissions'),
+        apiFetch('/api/iam/groups'),
+      ]);
+      if (!permissionsResponse.ok) {
+        throw new Error(`permissions request failed: ${permissionsResponse.status}`);
+      }
+      if (!groupsResponse.ok) {
+        throw new Error(`groups request failed: ${groupsResponse.status}`);
+      }
+      const permissions = parsePermissionsResponse(await permissionsResponse.json());
+      const groups = parseGroupsResponse(await groupsResponse.json());
+      setIamPermissions(permissions);
+      setIamGroups(groups);
+      setGroupPermissionDrafts(
+        groups.reduce<Record<string, string>>((acc, group) => {
+          acc[group.id] = group.permissions.join(', ');
+          return acc;
+        }, {}),
+      );
+    } catch (e) {
+      setIamError(e instanceof Error ? e.message : 'load iam failed');
+    } finally {
+      setIamLoading(false);
+    }
+  }
+
+  async function createIAMGroup() {
+    if (!authUser) {
+      setIamError('auth_required');
+      return;
+    }
+    if (newGroupName.trim() === '') {
+      setIamError('name_required');
+      return;
+    }
+    setIamError(null);
+    try {
+      const response = await apiFetch('/api/iam/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newGroupName.trim(),
+          description: newGroupDescription.trim(),
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`create group failed: ${response.status}`);
+      }
+      const group = parseGroup((await response.json()) as Record<string, unknown>);
+      setIamGroups((previous) => [...previous, group]);
+      setGroupPermissionDrafts((previous) => ({
+        ...previous,
+        [group.id]: group.permissions.join(', '),
+      }));
+      setNewGroupName('');
+      setNewGroupDescription('');
+    } catch (e) {
+      setIamError(e instanceof Error ? e.message : 'create group failed');
+    }
+  }
+
+  async function saveGroupPermissions(group: IAMGroup) {
+    if (!authUser) {
+      setIamError('auth_required');
+      return;
+    }
+    setIamError(null);
+    try {
+      const permissions = normalizePermissionsDraft(groupPermissionDrafts[group.id] ?? '');
+      const response = await apiFetch(`/api/iam/groups/${encodeURIComponent(group.id)}/permissions`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permissions }),
+      });
+      if (!response.ok) {
+        throw new Error(`save permissions failed: ${response.status}`);
+      }
+      const updated = parseGroup((await response.json()) as Record<string, unknown>);
+      setIamGroups((previous) => previous.map((item) => (item.id === updated.id ? updated : item)));
+      setGroupPermissionDrafts((previous) => ({
+        ...previous,
+        [updated.id]: updated.permissions.join(', '),
+      }));
+    } catch (e) {
+      setIamError(e instanceof Error ? e.message : 'save permissions failed');
+    }
+  }
+
   async function submitAcceptInvite(inviteToken: string) {
     if (inviteToken === '') {
       return;
@@ -805,6 +930,13 @@ function App({
     authTenants.find((tenant) => tenant.id === activeTenantID)?.code || authTenants[0]?.code || '';
   const inviteToken = parseInviteToken(currentRoute);
   const acceptInviteOpen = inviteToken !== '';
+
+  useEffect(() => {
+    if (!iamDialogOpen) {
+      return;
+    }
+    void loadIAMData();
+  }, [iamDialogOpen, authUser?.id, activeTenantID]);
 
   return (
     <Box
@@ -900,6 +1032,9 @@ function App({
           </FormControl>
           <Button variant="outlined" onClick={() => setManageMenusOpen(true)}>
             {t('manageMenus')}
+          </Button>
+          <Button variant="outlined" onClick={() => setIamDialogOpen(true)}>
+            {t('accessControl')}
           </Button>
           {authUser ? (
             <>
@@ -1213,6 +1348,98 @@ function App({
           </Paper>
         </Stack>
       </Box>
+
+      <Dialog
+        open={iamDialogOpen}
+        onClose={() => setIamDialogOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>{t('accessControl')}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.2}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <TextField
+                size="small"
+                label={t('groupName')}
+                value={newGroupName}
+                onChange={(event) => setNewGroupName(event.target.value)}
+              />
+              <TextField
+                size="small"
+                label={t('groupDescription')}
+                value={newGroupDescription}
+                onChange={(event) => setNewGroupDescription(event.target.value)}
+              />
+              <Button variant="contained" onClick={() => void createIAMGroup()}>
+                {t('createGroup')}
+              </Button>
+              <Button onClick={() => void loadIAMData()}>{t('refresh')}</Button>
+            </Stack>
+            {iamLoading ? <Typography>{t('loading')}</Typography> : null}
+            {iamError ? (
+              <Typography color="error">{t('iamLoadError', { error: iamError })}</Typography>
+            ) : null}
+
+            <Paper variant="outlined" sx={{ p: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.8 }}>
+                {t('iamPermissionsCatalog')}
+              </Typography>
+              <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap">
+                {iamPermissions.map((permission) => (
+                  <Chip
+                    key={permission.code}
+                    size="small"
+                    variant="outlined"
+                    label={`${permission.code} (${permission.scope})`}
+                  />
+                ))}
+              </Stack>
+            </Paper>
+
+            <Stack spacing={1}>
+              {iamGroups.map((group) => (
+                <Paper key={group.id} variant="outlined" sx={{ p: 1 }}>
+                  <Typography variant="subtitle2">{group.name}</Typography>
+                  {group.description !== '' ? (
+                    <Typography variant="caption" color="text.secondary">
+                      {group.description}
+                    </Typography>
+                  ) : null}
+                  <TextField
+                    size="small"
+                    fullWidth
+                    sx={{ mt: 1 }}
+                    label={t('groupPermissions')}
+                    value={groupPermissionDrafts[group.id] ?? ''}
+                    onChange={(event) =>
+                      setGroupPermissionDrafts((previous) => ({
+                        ...previous,
+                        [group.id]: event.target.value,
+                      }))
+                    }
+                  />
+                  <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => void saveGroupPermissions(group)}
+                    >
+                      {t('savePermissions')}
+                    </Button>
+                  </Stack>
+                </Paper>
+              ))}
+              {iamGroups.length === 0 && !iamLoading ? (
+                <Typography color="text.secondary">{t('noEntries')}</Typography>
+              ) : null}
+            </Stack>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIamDialogOpen(false)}>{t('close')}</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={acceptInviteOpen}

@@ -675,4 +675,94 @@ describe('App', () => {
     expect(await screen.findByRole('dialog', { name: 'Login' })).toBeTruthy();
     expect(window.localStorage.getItem('kubedeck.auth.token')).toBeNull();
   });
+
+  it('loads iam groups and permissions in access control dialog', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/healthz') || url.endsWith('/api/readyz')) {
+        return new Response('ok', { status: 200 });
+      }
+      if (url.endsWith('/api/meta/clusters')) {
+        return new Response(JSON.stringify({ clusters: ['default'] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/api/meta/registry?cluster=default')) {
+        return new Response(JSON.stringify({ cluster: 'default', resourceTypes: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/api/meta/menus?cluster=default')) {
+        return new Response(JSON.stringify({ cluster: 'default', menus: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/auth/login')) {
+        return new Response(
+          JSON.stringify({
+            token: 'token-abc',
+            user: { id: 'u-1', username: 'admin' },
+            tenants: [{ id: 'tenant-dev', code: 'dev', name: 'Development' }],
+            active_tenant_id: 'tenant-dev',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(
+          JSON.stringify({
+            user: { id: 'u-1', username: 'admin', activeTenantID: 'tenant-dev' },
+            tenants: [{ id: 'tenant-dev', code: 'dev', name: 'Development' }],
+            active_tenant_id: 'tenant-dev',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/iam/permissions')) {
+        return new Response(
+          JSON.stringify({
+            permissions: [{ code: 'iam:read', scope: 'platform' }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/iam/groups')) {
+        return new Response(
+          JSON.stringify({
+            groups: [
+              {
+                id: 'grp-admin',
+                tenant_id: 'tenant-dev',
+                name: 'admins',
+                permissions: ['iam:read'],
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response('not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        locale="en"
+        onLocaleChange={vi.fn()}
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Login' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Login' })).getByRole('button', { name: 'Login' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Access Control' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Access Control' })).toBeTruthy();
+    expect(await screen.findByText('admins')).toBeTruthy();
+    expect(await screen.findByText('iam:read (platform)')).toBeTruthy();
+  });
 });
