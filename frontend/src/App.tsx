@@ -9,7 +9,17 @@ interface MenusResponse {
   menus: MenuItem[];
 }
 
+function resolveApiTargetHint(): string {
+  const configured = import.meta.env.VITE_BACKEND_TARGET as string | undefined;
+  if (configured && configured.trim() !== '') {
+    return configured;
+  }
+
+  return 'same-origin /api (dev proxy default: http://127.0.0.1:8080)';
+}
+
 function App() {
+  const apiTargetHint = resolveApiTargetHint();
   const [activeCluster, setActiveCluster] = useState('default');
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,6 +64,7 @@ function App() {
   return (
     <main>
       <h1>KubeDeck</h1>
+      <p>API target: {apiTargetHint}</p>
       <label>
         Cluster
         <select

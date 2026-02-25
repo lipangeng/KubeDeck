@@ -40,6 +40,11 @@ describe('App', () => {
         name: 'KubeDeck',
       }),
     ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'API target: same-origin /api (dev proxy default: http://127.0.0.1:8080)',
+      ),
+    ).toBeTruthy();
 
     expect(await screen.findByText('Workloads')).toBeTruthy();
     expect(await screen.findByText('Custom Resources')).toBeTruthy();
