@@ -571,6 +571,68 @@ func TestIAMTenantMembersReloadFromPersistenceWhenCacheMiss(t *testing.T) {
 	}
 }
 
+func TestIAMUsersReloadFromPersistenceWhenCacheMiss(t *testing.T) {
+	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		resetIAMPersistenceForTest()
+	})
+	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
+	t.Setenv("KUBEDECK_SQLITE_DSN", filepath.Join(t.TempDir(), "users-reload.sqlite"))
+
+	resetAuthSessions()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginResp.Code)
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("expected login JSON body, got error: %v", err)
+	}
+
+	createMemberReq := httptest.NewRequest(http.MethodPost, "/api/iam/tenants/tenant-dev/members", bytes.NewReader([]byte(`{"user_id":"u-7","user_label":"user-seven","effective_from":"2026-02-25T00:00:00Z"}`)))
+	createMemberReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createMemberResp := httptest.NewRecorder()
+	router.ServeHTTP(createMemberResp, createMemberReq)
+	if createMemberResp.Code != http.StatusCreated {
+		t.Fatalf("expected member create status %d, got %d body=%s", http.StatusCreated, createMemberResp.Code, createMemberResp.Body.String())
+	}
+
+	resetMemberships()
+
+	usersReq := httptest.NewRequest(http.MethodGet, "/api/iam/users", nil)
+	usersReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	usersResp := httptest.NewRecorder()
+	router.ServeHTTP(usersResp, usersReq)
+	if usersResp.Code != http.StatusOK {
+		t.Fatalf("expected users list status %d, got %d body=%s", http.StatusOK, usersResp.Code, usersResp.Body.String())
+	}
+	var usersBody struct {
+		Users []iamUser `json:"users"`
+	}
+	if err := json.Unmarshal(usersResp.Body.Bytes(), &usersBody); err != nil {
+		t.Fatalf("expected users JSON body, got error: %v", err)
+	}
+	found := false
+	for _, user := range usersBody.Users {
+		if user.ID == "u-7" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected persisted user/membership after reload, body=%s", usersResp.Body.String())
+	}
+}
+
 func TestIAMInvitesReloadFromPersistenceWhenCacheMiss(t *testing.T) {
 	resetIAMPersistenceForTest()
 	t.Cleanup(func() {
