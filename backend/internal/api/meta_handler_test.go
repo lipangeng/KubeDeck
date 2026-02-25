@@ -2974,3 +2974,132 @@ func TestSwitchTenantNotFoundWritesDeniedAuditEvent(t *testing.T) {
 		t.Fatalf("expected denied result, got %q", payload.Events[0].Result)
 	}
 }
+
+func TestIAMCreateGroupReturns500OnPersistenceFailure(t *testing.T) {
+	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		ConfigurePersistence(PersistenceConfig{})
+		resetIAMPersistenceForTest()
+	})
+	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
+	ConfigurePersistence(PersistenceConfig{
+		Driver: "not-a-real-driver",
+		DSN:    "ignored",
+	})
+
+	resetAuthSessions()
+	resetGroups()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/iam/groups", bytes.NewReader([]byte(`{"name":"ops","description":"Ops Team"}`)))
+	createReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusInternalServerError {
+		t.Fatalf("expected create group 500 on persistence failure, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), "persistence_failed") {
+		t.Fatalf("expected persistence_failed error, got %s", createResp.Body.String())
+	}
+}
+
+func TestIAMCreateTenantMemberReturns500OnPersistenceFailure(t *testing.T) {
+	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		ConfigurePersistence(PersistenceConfig{})
+		resetIAMPersistenceForTest()
+	})
+	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
+	ConfigurePersistence(PersistenceConfig{
+		Driver: "not-a-real-driver",
+		DSN:    "ignored",
+	})
+
+	resetAuthSessions()
+	resetMemberships()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/iam/tenants/tenant-dev/members", bytes.NewReader([]byte(`{"user_id":"u-11","user_label":"user-eleven","effective_from":"2026-02-25T00:00:00Z"}`)))
+	createReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusInternalServerError {
+		t.Fatalf("expected create tenant member 500 on persistence failure, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), "persistence_failed") {
+		t.Fatalf("expected persistence_failed error, got %s", createResp.Body.String())
+	}
+}
+
+func TestIAMCreateInviteReturns500OnPersistenceFailure(t *testing.T) {
+	resetIAMPersistenceForTest()
+	t.Cleanup(func() {
+		ConfigurePersistence(PersistenceConfig{})
+		resetIAMPersistenceForTest()
+	})
+	t.Setenv("KUBEDECK_IAM_PERSIST_IN_TEST", "1")
+	ConfigurePersistence(PersistenceConfig{
+		Driver: "not-a-real-driver",
+		DSN:    "ignored",
+	})
+
+	resetAuthSessions()
+	resetInvites()
+	resetAuditWriter()
+	router := NewRouter()
+
+	loginPayload := []byte(`{"username":"admin","password":"pw","tenant_code":"dev"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+	var loginBody struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(loginResp.Body.Bytes(), &loginBody); err != nil {
+		t.Fatalf("unmarshal login: %v", err)
+	}
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/iam/invites", bytes.NewReader([]byte(`{"email":"persist-fail@example.com","role_hint":"member","expires_in_hours":2}`)))
+	createReq.Header.Set("Authorization", "Bearer "+loginBody.Token)
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusInternalServerError {
+		t.Fatalf("expected create invite 500 on persistence failure, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+	if !strings.Contains(createResp.Body.String(), "persistence_failed") {
+		t.Fatalf("expected persistence_failed error, got %s", createResp.Body.String())
+	}
+}

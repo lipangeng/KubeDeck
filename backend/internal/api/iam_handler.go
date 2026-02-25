@@ -538,7 +538,10 @@ func (h *IAMHandler) createTenantMember(
 	iamMembershipsMu.Lock()
 	iamMemberships[membership.ID] = membership
 	iamMembershipsMu.Unlock()
-	persistIAMMemberships()
+	if err := persistIAMMembershipsStrict(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "persistence_failed")
+		return
+	}
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   tenantID,
 		ActorID:    session.User.ID,
@@ -580,7 +583,10 @@ func (h *IAMHandler) deleteTenantMember(
 	}
 	delete(iamMemberships, membershipID)
 	iamMembershipsMu.Unlock()
-	persistIAMMemberships()
+	if err := persistIAMMembershipsStrict(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "persistence_failed")
+		return
+	}
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   tenantID,
 		ActorID:    session.User.ID,
@@ -778,7 +784,10 @@ func (h *IAMHandler) createGroup(w http.ResponseWriter, r *http.Request, session
 	iamGroupsMu.Lock()
 	iamGroups[id] = group
 	iamGroupsMu.Unlock()
-	persistIAMGroups()
+	if err := persistIAMGroupsStrict(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "persistence_failed")
+		return
+	}
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -842,7 +851,10 @@ func (h *IAMHandler) patchGroup(
 	}
 	iamGroups[groupID] = group
 	iamGroupsMu.Unlock()
-	persistIAMGroups()
+	if err := persistIAMGroupsStrict(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "persistence_failed")
+		return
+	}
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -1007,7 +1019,10 @@ func (h *IAMHandler) deleteGroup(w http.ResponseWriter, session authSession, gro
 	}
 	delete(iamGroups, groupID)
 	iamGroupsMu.Unlock()
-	persistIAMGroups()
+	if err := persistIAMGroupsStrict(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "persistence_failed")
+		return
+	}
 	// Keep memberships consistent after group deletion by dropping stale group refs.
 	iamMembershipsMu.Lock()
 	for id, membership := range iamMemberships {
@@ -1029,7 +1044,10 @@ func (h *IAMHandler) deleteGroup(w http.ResponseWriter, session authSession, gro
 		}
 	}
 	iamMembershipsMu.Unlock()
-	persistIAMMemberships()
+	if err := persistIAMMembershipsStrict(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "persistence_failed")
+		return
+	}
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -1070,7 +1088,10 @@ func (h *IAMHandler) replaceGroupPermissions(
 	group.Permissions = append([]string{}, req.Permissions...)
 	iamGroups[groupID] = group
 	iamGroupsMu.Unlock()
-	persistIAMGroups()
+	if err := persistIAMGroupsStrict(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "persistence_failed")
+		return
+	}
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -1124,7 +1145,10 @@ func (h *IAMHandler) replaceMembershipGroups(
 	membership.GroupIDs = append([]string{}, req.GroupIDs...)
 	iamMemberships[membershipID] = membership
 	iamMembershipsMu.Unlock()
-	persistIAMMemberships()
+	if err := persistIAMMembershipsStrict(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "persistence_failed")
+		return
+	}
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -1187,7 +1211,10 @@ func (h *IAMHandler) replaceMembershipValidity(
 	membership.EffectiveUntil = effectiveUntilPtr
 	iamMemberships[membershipID] = membership
 	iamMembershipsMu.Unlock()
-	persistIAMMemberships()
+	if err := persistIAMMembershipsStrict(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "persistence_failed")
+		return
+	}
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -1278,7 +1305,10 @@ func (h *IAMHandler) createInvite(w http.ResponseWriter, r *http.Request, sessio
 	invitesMu.Lock()
 	invites[storageKey] = storedInvite
 	invitesMu.Unlock()
-	persistIAMInvites()
+	if err := persistIAMInvitesStrict(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "persistence_failed")
+		return
+	}
 	_ = defaultAuditWriter.Write(audit.Event{
 		TenantID:   session.ActiveTenantID,
 		ActorID:    session.User.ID,
@@ -1317,7 +1347,10 @@ func (h *IAMHandler) revokeInvite(w http.ResponseWriter, session authSession, in
 		invite.Status = "revoked"
 		invites[token] = invite
 		invitesMu.Unlock()
-		persistIAMInvites()
+		if err := persistIAMInvitesStrict(); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "persistence_failed")
+			return
+		}
 		_ = defaultAuditWriter.Write(audit.Event{
 			TenantID:   session.ActiveTenantID,
 			ActorID:    session.User.ID,
@@ -1349,7 +1382,10 @@ func (h *IAMHandler) revokeInvite(w http.ResponseWriter, session authSession, in
 		invite.Status = "revoked"
 		invites[token] = invite
 		invitesMu.Unlock()
-		persistIAMInvites()
+		if err := persistIAMInvitesStrict(); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "persistence_failed")
+			return
+		}
 		_ = defaultAuditWriter.Write(audit.Event{
 			TenantID:   session.ActiveTenantID,
 			ActorID:    session.User.ID,
