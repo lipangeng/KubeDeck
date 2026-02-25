@@ -26,6 +26,12 @@ export interface AuthLoginResponse {
   active_tenant_id: string;
 }
 
+export interface OAuthURLResponse {
+  provider: string;
+  state: string;
+  auth_url: string;
+}
+
 export const AUTH_TOKEN_KEY = 'kubedeck.auth.token';
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -140,6 +146,38 @@ export async function acceptInvite(
     tenant_id: String(payload.tenant_id ?? ''),
     username: String(payload.username ?? ''),
   };
+}
+
+export async function oauthURL(): Promise<OAuthURLResponse> {
+  const response = await fetch('/api/auth/oauth/url');
+  if (!response.ok) {
+    throw new Error(`oauth url failed: ${response.status}`);
+  }
+  const payload = await response.json();
+  if (!isObject(payload) || typeof payload.auth_url !== 'string') {
+    throw new Error('invalid oauth url response');
+  }
+  return {
+    provider: String(payload.provider ?? ''),
+    state: String(payload.state ?? ''),
+    auth_url: payload.auth_url,
+  };
+}
+
+export async function oauthCallback(code: string, tenantCode: string): Promise<AuthLoginResponse> {
+  const response = await fetch('/api/auth/oauth/callback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      code,
+      tenant_code: tenantCode,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`oauth callback failed: ${response.status}`);
+  }
+  const payload = await response.json();
+  return parseAuthLoginResponse(payload);
 }
 
 function parseAuthLoginResponse(value: unknown): AuthLoginResponse {

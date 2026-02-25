@@ -5,6 +5,8 @@ import {
   clearAuthToken,
   login,
   me,
+  oauthCallback,
+  oauthURL,
   readAuthToken,
   switchTenant,
   writeAuthToken,
@@ -112,5 +114,48 @@ describe('authApi', () => {
     const init = (fetchMock.mock.calls[0] as unknown[])[1] as RequestInit;
     expect(init.method).toBe('POST');
     expect(String(init.body)).toContain('"token":"invite-token"');
+  });
+
+  it('loads oauth authorize url payload', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          provider: 'github',
+          state: 'state-token',
+          auth_url: 'https://example.com/oauth/authorize?state=state-token',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const payload = await oauthURL();
+
+    expect(payload.provider).toBe('github');
+    expect(payload.state).toBe('state-token');
+    expect(payload.auth_url).toContain('state=state-token');
+  });
+
+  it('calls oauth callback with code and tenant_code', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          token: 'oauth-token',
+          user: { id: 'u-oauth', username: 'oauth-admin' },
+          tenants: [{ id: 'tenant-dev', code: 'dev', name: 'Development' }],
+          active_tenant_id: 'tenant-dev',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const payload = await oauthCallback('oauth-admin', 'dev');
+
+    expect(payload.token).toBe('oauth-token');
+    const init = (fetchMock.mock.calls[0] as unknown[])[1] as RequestInit;
+    expect(init.method).toBe('POST');
+    expect(String(init.body)).toContain('"code":"oauth-admin"');
+    expect(String(init.body)).toContain('"tenant_code":"dev"');
   });
 });
