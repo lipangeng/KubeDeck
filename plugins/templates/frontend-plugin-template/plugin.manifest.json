@@ -1,0 +1,12 @@
+{
+  "pluginId": "example-frontend-plugin",
+  "version": "0.1.0",
+  "displayName": "Example Frontend Plugin",
+  "contributions": {
+    "pages": [],
+    "extensions": [],
+    "menus": [],
+    "resources": []
+  },
+  "requiredCapabilities": []
+}
