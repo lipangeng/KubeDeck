@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -14,6 +14,7 @@ import InputLabel from '@mui/material/InputLabel';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
+import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Paper from '@mui/material/Paper';
 import Select from '@mui/material/Select';
@@ -22,6 +23,12 @@ import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
+import FavoriteBorderRoundedIcon from '@mui/icons-material/FavoriteBorderRounded';
+import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import WorkspacesOutlineIcon from '@mui/icons-material/WorkspacesOutline';
 import { composeMenus } from './core/menuComposer';
 import { groupMenusByGroup } from './core/menuGrouping';
 import { translate, type Locale } from './i18n';
@@ -125,18 +132,18 @@ function normalizeRoute(route: string): string {
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }
 
-function menuIcon(group: string, targetType: 'page' | 'resource'): string {
+function menuIcon(group: string, targetType: 'page' | 'resource'): ReactNode {
   const normalizedGroup = group.trim().toUpperCase();
   if (normalizedGroup === 'WORKLOAD') {
-    return '◈';
+    return <WorkspacesOutlineIcon fontSize="small" />;
   }
   if (normalizedGroup === 'FAVORITES') {
-    return '★';
+    return <FavoriteBorderRoundedIcon fontSize="small" />;
   }
   if (targetType === 'resource') {
-    return '◉';
+    return <Inventory2OutlinedIcon fontSize="small" />;
   }
-  return '•';
+  return <GridViewRoundedIcon fontSize="small" />;
 }
 
 function countYamlDocuments(yaml: string): number {
@@ -610,7 +617,10 @@ function App({
                         },
                       }}
                     >
-                      <ListItemText primary={`${menuIcon(menu.group, menu.targetType)} ${menu.title}`} />
+                      <ListItemIcon sx={{ minWidth: 30, color: 'inherit' }}>
+                        {menuIcon(menu.group, menu.targetType)}
+                      </ListItemIcon>
+                      <ListItemText primary={menu.title} />
                     </ListItemButton>
                   </ListItem>
                 ))}
@@ -638,8 +648,15 @@ function App({
                       mb: 0.2,
                     }}
                   >
+                    <ListItemIcon sx={{ minWidth: 26, color: 'text.secondary' }}>
+                      {expandedGroups[group.name] ? (
+                        <ExpandMoreRoundedIcon fontSize="small" />
+                      ) : (
+                        <ChevronRightRoundedIcon fontSize="small" />
+                      )}
+                    </ListItemIcon>
                     <ListItemText
-                      primary={`${expandedGroups[group.name] ? '▾' : '▸'} ${group.name}`}
+                      primary={group.name}
                       primaryTypographyProps={{
                         fontWeight: 700,
                         fontSize: 12,
@@ -668,6 +685,9 @@ function App({
                               },
                             }}
                           >
+                            <ListItemIcon sx={{ minWidth: 30, color: 'inherit' }}>
+                              {menuIcon(item.group, item.targetType)}
+                            </ListItemIcon>
                             <ListItemText primary={item.title} />
                           </ListItemButton>
                         </ListItem>
