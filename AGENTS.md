@@ -40,3 +40,24 @@ KubeDeck is now a runnable monorepo with backend, frontend, and plugin templates
 ## Security & Configuration Tips
 - Never commit secrets or private credentials.
 - Backend auth/authorization is authoritative; frontend permission hints are display-only.
+
+## BMAD Workflow Requirement
+- All new feature development must follow the BMAD supervisor workflow in `.agents/bmad-supervisor/`.
+- Default workflow for ongoing work is `workflows/iterative_feature.md`.
+- Prefer multi-agent collaboration by default. When tasks can be split safely, run parallel agents for PM/UX/FE/BE/QA/SEC/OBS tracks and integrate results in the main thread.
+- Single-agent execution is allowed only for tiny or strictly serial changes.
+- Before implementation, define scope and acceptance criteria (PRD/API delta at minimum).
+- During implementation, keep FE/BE/contracts aligned and enforce security/observability deltas for impacted paths.
+- Before completion, provide/update BMAD artifacts under `docs/bmad/<date>-<topic>/` at least:
+  - `PRD.md`
+  - `API_CONTRACT.md` (if API changed)
+  - `TECH_PLAN.md`
+  - `TEST_PLAN.md`
+  - `SECURITY_REVIEW.md`
+  - `OBSERVABILITY_SPEC.md`
+  - `RELEASE_NOTES.md`
+- Each multi-agent iteration must include:
+  - clear ownership per agent,
+  - integration notes in main thread,
+  - final verification after merge of agent outputs.
+- Do not mark a task as done without test evidence and BMAD artifact traceability.
