@@ -5,10 +5,22 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useReducer,
   useState,
 } from 'react';
 import type { FrontendCapabilityModule } from '../sdk';
 import { composeKernelNavigation } from './composeKernelNavigation';
+import {
+  createInitialWorkingContextState,
+  reduceWorkingContext,
+} from './context/reducer';
+import {
+  selectActiveCluster,
+  selectCurrentResource,
+  selectCurrentWorkflowDomain,
+  selectNamespaceScope,
+} from './context/selectors';
+import type { NamespaceScope, ResourceIdentity } from './context/types';
 import type { KernelNavigationGroup } from './menu/types';
 import { createLocalKernelSnapshot } from './createLocalKernelSnapshot';
 import {
@@ -31,6 +43,10 @@ interface KernelRuntimeContextValue {
   activeActions: KernelRegistrySnapshot['actions'];
   activeSummarySlots: KernelRegistrySnapshot['slots'];
   actionSummary: string | null;
+  activeCluster: string;
+  namespaceScope: NamespaceScope;
+  currentWorkflowDomainId: string | null;
+  currentResource: ResourceIdentity | null;
   kernelSource: KernelSource;
   navigation: KernelNavigationGroup[];
   registrySnapshot: KernelRegistrySnapshot;
@@ -53,6 +69,11 @@ export function KernelRuntimeProvider({
   const [runtimeSnapshot, setRuntimeSnapshot] = useState<KernelRegistrySnapshot | null>(null);
   const [kernelSource, setKernelSource] = useState<KernelSource>('loading');
   const [actionSummary, setActionSummary] = useState<string | null>(null);
+  const [workingContext, dispatchWorkingContext] = useReducer(
+    reduceWorkingContext,
+    undefined,
+    createInitialWorkingContextState,
+  );
 
   const localSnapshot = useMemo(() => createLocalKernelSnapshot(pluginModules), [pluginModules]);
 
@@ -98,9 +119,20 @@ export function KernelRuntimeProvider({
     ? resolveWorkflowSlots(activePage.workflowDomainId, registrySnapshot.slots, 'summary')
     : [];
 
-  const navigate = useCallback((route: string) => {
-    setActiveRoute(route);
-  }, []);
+  const navigate = useCallback(
+    (route: string) => {
+      setActiveRoute(route);
+      const nextPage = registrySnapshot.pages.find((page) => page.route === route);
+      if (nextPage) {
+        dispatchWorkingContext({
+          type: 'enter_workflow_domain',
+          workflowDomainId: nextPage.workflowDomainId,
+          route,
+        });
+      }
+    },
+    [registrySnapshot.pages],
+  );
 
   const fetchWorkloadsForDomain = useCallback(
     async (workflowDomainId: string, cluster = 'default') => {
@@ -125,6 +157,10 @@ export function KernelRuntimeProvider({
       activeActions,
       activeSummarySlots,
       actionSummary,
+      activeCluster: selectActiveCluster(workingContext),
+      namespaceScope: selectNamespaceScope(workingContext),
+      currentWorkflowDomainId: selectCurrentWorkflowDomain(workingContext),
+      currentResource: selectCurrentResource(workingContext),
       kernelSource,
       navigation,
       registrySnapshot,
@@ -138,6 +174,7 @@ export function KernelRuntimeProvider({
       activePage,
       activeRoute,
       actionSummary,
+      workingContext,
       executeAction,
       fetchWorkloadsForDomain,
       kernelSource,

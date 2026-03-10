@@ -243,6 +243,22 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'CRDs' }).hasAttribute('disabled')).toBe(true);
   });
 
+  it('keeps working context continuity during menu navigation', async () => {
+    vi.stubGlobal('fetch', createKernelMetadataFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    expect(screen.getByText('Active cluster: default')).toBeTruthy();
+    expect(screen.getByText('Namespace scope: default')).toBeTruthy();
+    expect(screen.getByText('Active workflow: homepage')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Workloads' }));
+
+    expect(screen.getByText('Active cluster: default')).toBeTruthy();
+    expect(screen.getByText('Namespace scope: default')).toBeTruthy();
+    expect(screen.getByText('Active workflow: workloads')).toBeTruthy();
+  });
+
   it('cycles the theme preference', () => {
     vi.stubGlobal('fetch', createKernelMetadataFetchMock());
     const onThemePreferenceChange = vi.fn();
