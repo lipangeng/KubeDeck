@@ -31,7 +31,9 @@ function createPluginMenu(): MenuContribution {
     },
     workflowDomainId: 'ops-console',
     entryKey: 'ops-console',
+    groupKey: 'extensions',
     placement: 'primary',
+    availability: 'enabled',
     route: '/ops-console',
     title: { key: 'opsConsole.title', fallback: 'Operations Console' },
   };
