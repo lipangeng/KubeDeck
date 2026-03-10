@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft approved through brainstorming discussion.
+Current architecture document.
 
 This document defines the target menu model for KubeDeck after the microkernel baseline.
 

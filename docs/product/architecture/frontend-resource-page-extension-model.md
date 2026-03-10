@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft approved through brainstorming discussion.
+Current architecture document.
 
 This document defines the target frontend resource-page extension model for KubeDeck.
 
