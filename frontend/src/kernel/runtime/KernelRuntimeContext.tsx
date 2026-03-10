@@ -7,6 +7,7 @@ import {
   useMemo,
   useState,
 } from 'react';
+import type { FrontendCapabilityModule } from '../sdk';
 import { composeKernelNavigation } from './composeKernelNavigation';
 import { createLocalKernelSnapshot } from './createLocalKernelSnapshot';
 import {
@@ -39,13 +40,20 @@ interface KernelRuntimeContextValue {
 
 const KernelRuntimeContext = createContext<KernelRuntimeContextValue | null>(null);
 
-export function KernelRuntimeProvider({ children }: PropsWithChildren) {
+interface KernelRuntimeProviderProps extends PropsWithChildren {
+  pluginModules?: FrontendCapabilityModule[];
+}
+
+export function KernelRuntimeProvider({
+  children,
+  pluginModules = [],
+}: KernelRuntimeProviderProps) {
   const [activeRoute, setActiveRoute] = useState('/');
   const [runtimeSnapshot, setRuntimeSnapshot] = useState<KernelRegistrySnapshot | null>(null);
   const [kernelSource, setKernelSource] = useState<KernelSource>('loading');
   const [actionSummary, setActionSummary] = useState<string | null>(null);
 
-  const localSnapshot = useMemo(() => createLocalKernelSnapshot(), []);
+  const localSnapshot = useMemo(() => createLocalKernelSnapshot(pluginModules), [pluginModules]);
 
   useEffect(() => {
     let active = true;
