@@ -14,6 +14,7 @@ type CapabilityDescriptor struct {
 	Pages   []PageDescriptor
 	Menus   []MenuDescriptor
 	Actions []ActionDescriptor
+	Slots   []SlotDescriptor
 }
 
 // CapabilityProvider exposes one capability descriptor to the kernel.

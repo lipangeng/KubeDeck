@@ -17,6 +17,7 @@ func NewKernelHandler() *KernelHandler {
 	registry := plugins.NewCapabilityRegistry()
 	_ = registry.Register(builtins.HomepageCapability{})
 	_ = registry.Register(builtins.WorkloadsCapability{})
+	_ = registry.Register(builtins.WorkloadsInsightsCapability{})
 	_ = registry.Register(builtins.OperationsCapability{})
 	return &KernelHandler{registry: registry}
 }
@@ -31,6 +32,10 @@ func (h *KernelHandler) Pages(w http.ResponseWriter, _ *http.Request) {
 
 func (h *KernelHandler) Actions(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, plugins.ComposeActions(h.registry.Descriptors()))
+}
+
+func (h *KernelHandler) Slots(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, plugins.ComposeSlots(h.registry.Descriptors()))
 }
 
 func (h *KernelHandler) Snapshot(w http.ResponseWriter, _ *http.Request) {

@@ -1,9 +1,17 @@
 import type { ActionContribution } from '../contracts/actionContribution';
 import type { MenuContribution } from '../contracts/menuContribution';
 import type { PageContribution } from '../contracts/pageContribution';
+import type { SlotContribution } from '../contracts/slotContribution';
 import { createRemoteCapabilityPage } from './createRemoteCapabilityPage';
+import { createRemoteCapabilitySlot } from './createRemoteCapabilitySlot';
 import type { KernelRegistrySnapshot } from './types';
-import type { RemoteActionDescriptor, RemoteKernelMetadata, RemoteMenuDescriptor, RemotePageDescriptor } from './transport';
+import type {
+  RemoteActionDescriptor,
+  RemoteKernelMetadata,
+  RemoteMenuDescriptor,
+  RemotePageDescriptor,
+  RemoteSlotDescriptor,
+} from './transport';
 
 function toLocalizedText(text: { Key: string; Fallback: string; Description?: string }) {
   return {
@@ -89,6 +97,42 @@ function hydrateActions(remoteActions: RemoteActionDescriptor[]): ActionContribu
   }));
 }
 
+function hydrateSlots(
+  localSlots: SlotContribution[],
+  remoteSlots: RemoteSlotDescriptor[],
+): SlotContribution[] {
+  const localBySlotId = new Map(localSlots.map((slot) => [slot.slotId, slot]));
+  return remoteSlots.map((slot) => {
+    const title = slot.Title ? toLocalizedText(slot.Title) : undefined;
+    const local = localBySlotId.get(slot.SlotID);
+    if (local) {
+      return {
+        ...local,
+        workflowDomainId: slot.WorkflowDomainID,
+        slotId: slot.SlotID,
+        placement: slot.Placement,
+        visible: slot.Visible,
+        title: title ?? local.title,
+      };
+    }
+
+    const remoteSlot: SlotContribution = {
+      identity: {
+        source: 'plugin',
+        capabilityId: `server.${slot.WorkflowDomainID}`,
+        contributionId: slot.ID,
+      },
+      workflowDomainId: slot.WorkflowDomainID,
+      slotId: slot.SlotID,
+      placement: slot.Placement,
+      visible: slot.Visible,
+      title,
+      component: createRemoteCapabilitySlot(title),
+    };
+    return remoteSlot;
+  });
+}
+
 export function hydrateKernelSnapshot(
   localSnapshot: KernelRegistrySnapshot,
   remoteMetadata: RemoteKernelMetadata,
@@ -98,6 +142,6 @@ export function hydrateKernelSnapshot(
     pages: pages.length > 0 ? pages : localSnapshot.pages,
     menus: hydrateMenus(remoteMetadata.menus),
     actions: hydrateActions(remoteMetadata.actions),
-    slots: localSnapshot.slots,
+    slots: hydrateSlots(localSnapshot.slots, remoteMetadata.slots),
   };
 }
