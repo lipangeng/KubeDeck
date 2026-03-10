@@ -1,32 +1,16 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
-import Alert from '@mui/material/Alert';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Card from '@mui/material/Card';
-import CardActionArea from '@mui/material/CardActionArea';
-import CardContent from '@mui/material/CardContent';
-import Chip from '@mui/material/Chip';
-import Divider from '@mui/material/Divider';
-import Drawer from '@mui/material/Drawer';
 import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
-import List from '@mui/material/List';
-import ListItemButton from '@mui/material/ListItemButton';
-import ListItemText from '@mui/material/ListItemText';
-import Paper from '@mui/material/Paper';
 import Select from '@mui/material/Select';
-import Stack from '@mui/material/Stack';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
-import TextField from '@mui/material/TextField';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
-import { ListPageShell } from './components/page-shell/ResourcePageShell';
+import { PrimarySidebar } from './components/app-shell/PrimarySidebar';
 import { composeMenus } from './core/menuComposer';
+import { ActionDrawer } from './features/actions/ActionDrawer';
+import { HomepageView } from './pages/homepage/HomepageView';
+import { WorkloadsPage } from './pages/workloads/WorkloadsPage';
 import {
   parseClustersResponse,
   parseMenusResponse,
@@ -117,70 +101,6 @@ function formatActionLabel(actionType: ActionType | undefined): string {
   return actionType === 'create' ? 'Create' : 'Apply';
 }
 
-function PrimaryEntryCard({
-  title,
-  description,
-  actionLabel,
-  onClick,
-}: {
-  title: string;
-  description: string;
-  actionLabel: string;
-  onClick: () => void;
-}) {
-  return (
-    <Card variant="outlined">
-      <CardActionArea onClick={onClick}>
-        <CardContent>
-          <Stack spacing={1}>
-            <Typography variant="overline" color="primary.main">
-              Primary Workflow
-            </Typography>
-            <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              {title}
-            </Typography>
-            <Typography color="text.secondary">{description}</Typography>
-            <Typography variant="button" color="primary.main">
-              {actionLabel}
-            </Typography>
-          </Stack>
-        </CardContent>
-      </CardActionArea>
-    </Card>
-  );
-}
-
-function AdditionalEntryList({
-  items,
-}: {
-  items: MenuItem[];
-}) {
-  return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
-      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-        Additional Entries
-      </Typography>
-      <List dense sx={{ pt: 0 }}>
-        {items.length === 0 ? (
-          <ListItemText
-            primary="No additional entries yet"
-            primaryTypographyProps={{ color: 'text.disabled' }}
-          />
-        ) : (
-          items.map((menu) => (
-            <ListItemButton key={menu.id} disabled>
-              <ListItemText
-                primary={menu.title}
-                secondary={`${menu.targetType} · available later`}
-              />
-            </ListItemButton>
-          ))
-        )}
-      </List>
-    </Paper>
-  );
-}
-
 function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const apiTargetHint = resolveApiTargetHint();
   const [workContext, dispatchWorkContext] = useReducer(
@@ -245,6 +165,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
   );
   const requestedNamespaceScope =
     namespaceScope.mode === 'all' ? 'all' : resolveSingleNamespace(namespaceScope);
+  const namespaceScopeLabel = describeNamespaceScope(namespaceScope);
 
   const visibleWorkloads = useMemo(
     () => workloadItems.filter((workload) => {
@@ -271,6 +192,17 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
 
     return parts.length > 0 ? parts.join('; ') : null;
   }, [healthError, metadataError, readyError]);
+
+  const workloadsResultBanner = actionResultContext.actionContext.resultSummary
+    ? actionResultContext.actionContext.resultSummary.outcome === 'failure'
+      ? `${formatActionLabel(actionResultContext.actionContext.actionType)} failed: ${actionResultContext.actionContext.resultSummary.failedObjects?.join(', ')}`
+      : `${formatActionLabel(actionResultContext.actionContext.actionType)} accepted: ${actionResultContext.actionContext.resultSummary.affectedObjects?.join(', ')}`
+    : null;
+
+  const workloadsResultSeverity =
+    actionResultContext.actionContext.resultSummary?.outcome === 'failure'
+      ? 'error'
+      : 'success';
 
   useEffect(() => {
     let active = true;
@@ -311,7 +243,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
       setLoadingMetadata(true);
       setMetadataError(null);
       try {
-        const [menusResponse, registryResponse] = await Promise.all([
+        const [menusResponse, workloadsResponse] = await Promise.all([
           fetch(`/api/meta/menus?cluster=${encodeURIComponent(metadataClusterId)}`),
           fetch(
             `/api/resources/workloads?cluster=${encodeURIComponent(metadataClusterId)}&namespace=${encodeURIComponent(requestedNamespaceScope)}`,
@@ -320,18 +252,18 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
         if (!menusResponse.ok) {
           throw new Error(`menus request failed: ${menusResponse.status}`);
         }
-        if (!registryResponse.ok) {
-          throw new Error(`workloads request failed: ${registryResponse.status}`);
+        if (!workloadsResponse.ok) {
+          throw new Error(`workloads request failed: ${workloadsResponse.status}`);
         }
 
         const menusPayload = parseMenusResponse(await menusResponse.json());
-        const workloadsPayload = parseWorkloadsResponse(await registryResponse.json());
+        const workloadPayload = parseWorkloadsResponse(await workloadsResponse.json());
         if (!active) {
           return;
         }
 
         setMenus(menusPayload.menus);
-        setWorkloadItems(workloadsPayload.items);
+        setWorkloadItems(workloadPayload.items);
 
         if (requestedClusterId === metadataClusterId) {
           dispatchWorkContext({
@@ -602,393 +534,77 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
           p: 2,
         }}
       >
-        <Paper
-          component="nav"
-          aria-label="Primary Sidebar"
-          elevation={2}
-          sx={{
-            p: 2,
-            minHeight: { md: 'calc(100vh - 120px)' },
-            border: 1,
-            borderColor: 'divider',
-          }}
-        >
-          <Stack spacing={2}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              Working Context
-            </Typography>
+        <PrimarySidebar
+          clusters={clusters}
+          selectedCluster={visibleClusterValue}
+          namespaceScopeLabel={namespaceScopeLabel}
+          clusterStatus={clusterContext.status}
+          isWorkloadsPage={isWorkloadsPage}
+          secondaryEntries={secondaryEntries}
+          onClusterChange={handleClusterChange}
+          onEnterWorkloads={handleEnterWorkloads}
+        />
 
-            <FormControl size="small" fullWidth>
-              <InputLabel htmlFor="cluster-select">Cluster</InputLabel>
-              <Select
-                native
-                value={visibleClusterValue}
-                onChange={(event) => handleClusterChange(event.target.value)}
-                label="Cluster"
-                inputProps={{ id: 'cluster-select' }}
-              >
-                {clusters.map((clusterId) => (
-                  <option key={clusterId} value={clusterId}>
-                    {clusterId}
-                  </option>
-                ))}
-              </Select>
-            </FormControl>
-
-            <Paper variant="outlined" sx={{ p: 1.5 }}>
-              <Typography variant="caption" color="text.secondary">
-                Active namespace scope
-              </Typography>
-              <Typography sx={{ fontWeight: 700 }}>
-                {describeNamespaceScope(homepageContext.namespaceScope)}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Cluster status: {clusterContext.status}
-              </Typography>
-            </Paper>
-
-            <Divider />
-
-            <Button
-              variant={isWorkloadsPage ? 'contained' : 'outlined'}
-              onClick={handleEnterWorkloads}
-            >
-              Enter Workloads
-            </Button>
-
-            <AdditionalEntryList items={secondaryEntries} />
-          </Stack>
-        </Paper>
-
-        <Stack spacing={2}>
-          {!isWorkloadsPage ? (
-            <>
-              <Paper elevation={3} sx={{ p: 2.2, border: 1, borderColor: 'divider' }}>
-                <Typography variant="overline" color="primary.main" sx={{ letterSpacing: 1.1 }}>
-                  Current Context
-                </Typography>
-                <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.8 }}>
-                  Cluster {homepageContext.activeCluster.id}
-                </Typography>
-                <Typography color="text.secondary">
-                  Namespace scope: {describeNamespaceScope(homepageContext.namespaceScope)}
-                </Typography>
-              </Paper>
-
-              <PrimaryEntryCard
-                title={primaryWorkloadsEntry?.title ?? 'Workloads'}
-                description="Browse workload-capable resources and run your first apply flow in the current cluster context."
-                actionLabel="Enter Workloads"
-                onClick={handleEnterWorkloads}
-              />
-
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                  Default Task
-                </Typography>
-                <Typography color="text.secondary" sx={{ mb: 1.5 }}>
-                  Start in Workloads to inspect supported workload types and continue with apply in the same cluster and namespace context.
-                </Typography>
-                <Button variant="text" onClick={handleEnterWorkloads}>
-                  Continue to Workloads
-                </Button>
-              </Paper>
-
-              {blockingSummary ? (
-                <Alert severity="warning">
-                  Blocking summary: {blockingSummary}
-                </Alert>
-              ) : null}
-
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                  Runtime diagnostics
-                </Typography>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 1 }}>
-                  <Chip
-                    size="small"
-                    color={statusColor(healthStatus)}
-                    label={`healthz: ${healthStatus}`}
-                  />
-                  <Chip
-                    size="small"
-                    color={statusColor(readyStatus)}
-                    label={`readyz: ${readyStatus}`}
-                  />
-                </Stack>
-                <Typography variant="body2" color="text.secondary">
-                  API target ({apiTargetHint}) · Last checked: {lastCheckedAt ?? 'never'}
-                </Typography>
-              </Paper>
-            </>
-          ) : (
-            <ListPageShell
-              title="Workloads"
-              toolbar={
-                <Stack direction="row" spacing={1}>
-                  <Button variant="text" onClick={handleReturnHomepage}>
-                    Homepage
-                  </Button>
-                  <Button variant="outlined" onClick={() => setReloadToken((current) => current + 1)}>
-                    Refresh
-                  </Button>
-                  <Button variant="contained" onClick={() => handleOpenAction('apply')}>
-                    Apply
-                  </Button>
-                  <Button variant="outlined" onClick={() => handleOpenAction('create')}>
-                    Create
-                  </Button>
-                </Stack>
-              }
-            >
-              <Stack spacing={2}>
-                <Paper variant="outlined" sx={{ p: 1.5 }}>
-                  <Stack
-                    direction={{ xs: 'column', md: 'row' }}
-                    spacing={1.5}
-                    alignItems={{ md: 'center' }}
-                    justifyContent="space-between"
-                  >
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                      <Chip
-                        color="primary"
-                        label={`Cluster: ${workloadsContext.activeCluster.id}`}
-                      />
-                      <Chip
-                        variant="outlined"
-                        label={`Namespace scope: ${describeNamespaceScope(workloadsContext.namespaceScope)}`}
-                      />
-                    </Stack>
-                    <FormControl size="small" sx={{ minWidth: 220 }}>
-                      <InputLabel htmlFor="namespace-scope-select">Namespace Scope</InputLabel>
-                      <Select
-                        native
-                        value={
-                          workloadsContext.namespaceScope.mode === 'all'
-                            ? 'all'
-                            : resolveSingleNamespace(workloadsContext.namespaceScope)
-                        }
-                        onChange={(event) => handleNamespaceScopeChange(event.target.value)}
-                        label="Namespace Scope"
-                        inputProps={{ id: 'namespace-scope-select' }}
-                      >
-                        <option value="default">default</option>
-                        <option value="all">All namespaces</option>
-                      </Select>
-                    </FormControl>
-                  </Stack>
-                </Paper>
-
-                <Paper variant="outlined" sx={{ p: 1.5 }}>
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                    <TextField
-                      label="Search workload types"
-                      size="small"
-                      fullWidth
-                      value={workloadsContext.listContext.searchText ?? ''}
-                      onChange={(event) =>
-                        dispatchWorkContext({
-                          type: 'update_list_context',
-                          next: { searchText: event.target.value },
-                        })
-                      }
-                    />
-                    <Chip
-                      variant="outlined"
-                      label={`Visible workloads: ${visibleWorkloads.length}`}
-                      data-testid="workload-row-count"
-                    />
-                  </Stack>
-                </Paper>
-
-                {loadingMetadata ? <Alert severity="info">Loading workloads...</Alert> : null}
-                {metadataError ? (
-                  <Alert severity="error">Failed to load workloads: {metadataError}</Alert>
-                ) : null}
-
-                {actionResultContext.actionContext.resultSummary ? (
-                  <Alert
-                    severity={
-                      actionResultContext.actionContext.resultSummary.outcome === 'failure'
-                        ? 'error'
-                        : 'success'
-                    }
-                    action={
-                      <Button
-                        color="inherit"
-                        size="small"
-                        onClick={() =>
-                          dispatchWorkContext({ type: 'acknowledge_action_result' })
-                        }
-                      >
-                        Dismiss
-                      </Button>
-                    }
-                  >
-                    {actionResultContext.actionContext.resultSummary.outcome === 'failure'
-                      ? `${formatActionLabel(actionResultContext.actionContext.actionType)} failed: ${actionResultContext.actionContext.resultSummary.failedObjects?.join(', ')}`
-                      : `${formatActionLabel(actionResultContext.actionContext.actionType)} accepted: ${actionResultContext.actionContext.resultSummary.affectedObjects?.join(', ')}`}
-                  </Alert>
-                ) : null}
-
-                <Paper variant="outlined">
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Name</TableCell>
-                        <TableCell>Kind</TableCell>
-                        <TableCell>Namespace</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell>Health</TableCell>
-                        <TableCell>Updated</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {visibleWorkloads.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={6}>
-                            <Typography color="text.secondary">
-                              No workloads available in the current cluster and namespace context.
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        visibleWorkloads.map((workload) => (
-                          <TableRow key={workload.id}>
-                            <TableCell sx={{ fontWeight: 700 }}>{workload.name}</TableCell>
-                            <TableCell>{workload.kind}</TableCell>
-                            <TableCell>{workload.namespace}</TableCell>
-                            <TableCell>{workload.status}</TableCell>
-                            <TableCell>{workload.health}</TableCell>
-                            <TableCell>{workload.updatedAt}</TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </Paper>
-              </Stack>
-            </ListPageShell>
-          )}
-        </Stack>
+        {isWorkloadsPage ? (
+          <WorkloadsPage
+            activeClusterId={workloadsContext.activeCluster.id}
+            namespaceScope={workloadsContext.namespaceScope}
+            namespaceScopeLabel={namespaceScopeLabel}
+            searchText={workloadsContext.listContext.searchText ?? ''}
+            onSearchTextChange={(next) =>
+              dispatchWorkContext({
+                type: 'update_list_context',
+                next: { searchText: next },
+              })
+            }
+            onReturnHomepage={handleReturnHomepage}
+            onRefresh={() => setReloadToken((current) => current + 1)}
+            onNamespaceScopeChange={handleNamespaceScopeChange}
+            onOpenAction={handleOpenAction}
+            loading={loadingMetadata}
+            metadataError={metadataError}
+            workloads={visibleWorkloads}
+            resultBanner={workloadsResultBanner}
+            resultBannerSeverity={workloadsResultSeverity}
+            onDismissResult={() =>
+              dispatchWorkContext({ type: 'acknowledge_action_result' })
+            }
+          />
+        ) : (
+          <HomepageView
+            activeClusterId={homepageContext.activeCluster.id}
+            namespaceScopeLabel={namespaceScopeLabel}
+            primaryEntryTitle={primaryWorkloadsEntry?.title ?? 'Workloads'}
+            onEnterWorkloads={handleEnterWorkloads}
+            blockingSummary={blockingSummary}
+            healthStatus={healthStatus}
+            readyStatus={readyStatus}
+            apiTargetHint={apiTargetHint}
+            lastCheckedAt={lastCheckedAt}
+            additionalEntries={secondaryEntries}
+            statusColor={statusColor}
+          />
+        )}
       </Box>
 
-      <Drawer
-        anchor="right"
+      <ActionDrawer
         open={actionDrawerOpen}
+        actionLabel={actionLabel}
+        activeClusterId={createApplyContext.activeCluster.id}
+        namespaceScopeLabel={namespaceScopeLabel}
+        namespaceScope={createApplyContext.namespaceScope}
+        actionContext={createApplyContext.actionContext}
+        actionNamespace={actionNamespace}
+        actionManifest={actionManifest}
+        actionFormError={actionFormError}
         onClose={handleCloseAction}
-        PaperProps={{ sx: { width: { xs: '100%', sm: 480 }, p: 2 } }}
-      >
-        <Stack spacing={2}>
-          <Typography variant="overline" color="primary.main">
-            {actionLabel} Workflow
-          </Typography>
-          <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            {actionLabel} in {createApplyContext.activeCluster.id}
-          </Typography>
-          <Typography color="text.secondary">
-            Browsing scope: {describeNamespaceScope(createApplyContext.namespaceScope)}
-          </Typography>
-
-          {createApplyContext.actionContext.resultSummary ? (
-            <>
-              <Alert
-                severity={resolveResultSeverity(
-                  createApplyContext.actionContext.resultSummary.outcome,
-                )}
-              >
-                {createApplyContext.actionContext.resultSummary.outcome === 'success'
-                  ? `${actionLabel} succeeded`
-                  : createApplyContext.actionContext.resultSummary.outcome ===
-                      'partial_failure'
-                    ? `${actionLabel} partially failed`
-                    : `${actionLabel} failed`}
-              </Alert>
-
-              <Paper variant="outlined" sx={{ p: 1.5 }}>
-                <Stack spacing={1}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                    Result summary
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Execution target:{' '}
-                    {createApplyContext.actionContext.executionTarget?.kind === 'namespace'
-                      ? createApplyContext.actionContext.executionTarget.namespace
-                      : 'cluster-scoped'}
-                  </Typography>
-                  {createApplyContext.actionContext.resultSummary.affectedObjects?.length ? (
-                    <Typography variant="body2">
-                      Affected: {createApplyContext.actionContext.resultSummary.affectedObjects.join(', ')}
-                    </Typography>
-                  ) : null}
-                  {createApplyContext.actionContext.resultSummary.failedObjects?.length ? (
-                    <Typography variant="body2" color="error">
-                      Failed: {createApplyContext.actionContext.resultSummary.failedObjects.join(', ')}
-                    </Typography>
-                  ) : null}
-                </Stack>
-              </Paper>
-
-              <Stack direction="row" spacing={1} justifyContent="flex-end">
-                {createApplyContext.actionContext.resultSummary.outcome === 'failure' ? (
-                  <Button variant="outlined" onClick={handleBackToEdit}>
-                    Back to Edit
-                  </Button>
-                ) : null}
-                <Button variant="contained" onClick={handleReturnToWorkloads}>
-                  Back to Workloads
-                </Button>
-              </Stack>
-            </>
-          ) : (
-            <>
-              {createApplyContext.actionContext.needsRevalidation ? (
-                <Alert severity="warning">
-                  Namespace browsing scope changed. Review the execution target before submit.
-                </Alert>
-              ) : null}
-
-              {actionFormError ? <Alert severity="error">{actionFormError}</Alert> : null}
-
-              <TextField
-                label="Execution namespace"
-                size="small"
-                value={actionNamespace}
-                onChange={(event) => setActionNamespace(event.target.value)}
-                disabled={createApplyContext.namespaceScope.mode === 'single'}
-                helperText={
-                  createApplyContext.namespaceScope.mode === 'single'
-                    ? 'Derived from the current single-namespace browsing scope.'
-                    : 'Required because all namespaces is not a valid write target.'
-                }
-              />
-
-              <TextField
-                label="Manifest"
-                multiline
-                minRows={12}
-                value={actionManifest}
-                onChange={(event) => setActionManifest(event.target.value)}
-              />
-
-              <Stack direction="row" spacing={1} justifyContent="flex-end">
-                <Button variant="text" onClick={handleCloseAction}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={handleSubmitAction}
-                  disabled={createApplyContext.actionContext.status === 'submitting'}
-                >
-                  {createApplyContext.actionContext.status === 'submitting'
-                    ? 'Submitting...'
-                    : `Submit ${actionLabel}`}
-                </Button>
-              </Stack>
-            </>
-          )}
-        </Stack>
-      </Drawer>
+        onSubmit={handleSubmitAction}
+        onBackToEdit={handleBackToEdit}
+        onReturnToWorkloads={handleReturnToWorkloads}
+        onNamespaceChange={setActionNamespace}
+        onManifestChange={setActionManifest}
+        resultSeverity={resolveResultSeverity}
+      />
     </Box>
   );
 }
