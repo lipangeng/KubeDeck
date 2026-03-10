@@ -20,7 +20,9 @@ function createMenu(id: string): MenuContribution {
     identity: { source: 'builtin', capabilityId: 'core.homepage', contributionId: id },
     workflowDomainId: id,
     entryKey: id,
+    groupKey: 'core',
     placement: 'primary',
+    availability: 'enabled',
     title: { key: `${id}.title`, fallback: id },
   };
 }
