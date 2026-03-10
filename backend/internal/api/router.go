@@ -7,6 +7,7 @@ func NewRouter() http.Handler {
 	mux := http.NewServeMux()
 	kernel := NewKernelHandler()
 
+	mux.HandleFunc("/api/meta/kernel", kernel.Snapshot)
 	mux.HandleFunc("/api/meta/menus", kernel.Menus)
 	mux.HandleFunc("/api/meta/pages", kernel.Pages)
 	mux.HandleFunc("/api/meta/actions", kernel.Actions)

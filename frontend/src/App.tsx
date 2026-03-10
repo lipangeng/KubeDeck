@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -13,8 +13,11 @@ import { registerBuiltInMenus } from './kernel/builtins/registerBuiltInMenus';
 import { registerBuiltInPages } from './kernel/builtins/registerBuiltInPages';
 import { registerBuiltInSlots } from './kernel/builtins/registerBuiltInSlots';
 import { composeKernelNavigation } from './kernel/runtime/composeKernelNavigation';
+import { fetchKernelMetadata } from './kernel/runtime/fetchKernelMetadata';
+import { hydrateKernelSnapshot } from './kernel/runtime/hydrateKernelSnapshot';
 import { KernelRegistry } from './kernel/runtime/kernelRegistry';
 import { resolveWorkflowActions } from './kernel/runtime/resolveWorkflowActions';
+import type { KernelRegistrySnapshot } from './kernel/runtime/types';
 import { type ThemePreference } from './themeMode';
 
 interface AppProps {
@@ -24,6 +27,10 @@ interface AppProps {
 
 function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const [activeRoute, setActiveRoute] = useState('/');
+  const [runtimeSnapshot, setRuntimeSnapshot] = useState<KernelRegistrySnapshot | null>(null);
+  const [kernelSource, setKernelSource] = useState<'loading' | 'backend' | 'local-fallback'>(
+    'loading',
+  );
 
   const cycleThemePreference = () => {
     const nextPreference: ThemePreference =
@@ -35,7 +42,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
     onThemePreferenceChange(nextPreference);
   };
 
-  const registrySnapshot = useMemo(() => {
+  const localSnapshot = useMemo(() => {
     const registry = new KernelRegistry();
     registry.register({
       pages: registerBuiltInPages(),
@@ -45,6 +52,34 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
     });
     return registry.snapshot();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadKernelMetadata() {
+      try {
+        const remoteMetadata = await fetchKernelMetadata();
+        if (!active) {
+          return;
+        }
+        setRuntimeSnapshot(hydrateKernelSnapshot(localSnapshot, remoteMetadata));
+        setKernelSource('backend');
+      } catch {
+        if (!active) {
+          return;
+        }
+        setRuntimeSnapshot(localSnapshot);
+        setKernelSource('local-fallback');
+      }
+    }
+
+    void loadKernelMetadata();
+    return () => {
+      active = false;
+    };
+  }, [localSnapshot]);
+
+  const registrySnapshot = runtimeSnapshot ?? localSnapshot;
 
   const navigation = useMemo(
     () => composeKernelNavigation(registrySnapshot.menus),
@@ -97,6 +132,9 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             <Divider />
             <Typography variant="caption" color="text.secondary">
               Registered actions: {activeActions.map((action) => action.title.fallback).join(', ') || 'None'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Kernel metadata source: {kernelSource}
             </Typography>
           </Stack>
         </Paper>
