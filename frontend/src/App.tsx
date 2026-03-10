@@ -42,7 +42,7 @@ import {
   selectNamespaceScope,
   selectWorkloadsContext,
 } from './state/work-context/selectors';
-import type { NamespaceScope } from './state/work-context/types';
+import type { ActionType, NamespaceScope } from './state/work-context/types';
 
 type ProbeStatus = 'checking' | 'ok' | 'error';
 
@@ -113,6 +113,10 @@ function resolveResultSeverity(outcome: string): 'success' | 'warning' | 'error'
     return 'warning';
   }
   return 'error';
+}
+
+function formatActionLabel(actionType: ActionType | undefined): string {
+  return actionType === 'create' ? 'Create' : 'Apply';
 }
 
 function PrimaryEntryCard({
@@ -198,8 +202,8 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
   const [requestedClusterId, setRequestedClusterId] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
-  const [applyDrawerOpen, setApplyDrawerOpen] = useState(false);
-  const [applyManifest, setApplyManifest] = useState(
+  const [actionDrawerOpen, setActionDrawerOpen] = useState(false);
+  const [actionManifest, setActionManifest] = useState(
     [
       'apiVersion: apps/v1',
       'kind: Deployment',
@@ -210,8 +214,8 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
       '',
     ].join('\n'),
   );
-  const [applyNamespace, setApplyNamespace] = useState('default');
-  const [applyFormError, setApplyFormError] = useState<string | null>(null);
+  const [actionNamespace, setActionNamespace] = useState('default');
+  const [actionFormError, setActionFormError] = useState<string | null>(null);
 
   const clusterContext = selectClusterContext(workContext);
   const namespaceScope = selectNamespaceScope(workContext);
@@ -219,6 +223,8 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const workloadsContext = selectWorkloadsContext(workContext);
   const createApplyContext = selectCreateApplyContext(workContext);
   const actionResultContext = selectActionResultContext(workContext);
+  const actionType = createApplyContext.actionContext.actionType ?? 'apply';
+  const actionLabel = formatActionLabel(actionType);
   const currentClusterId = clusterContext.id;
   const metadataClusterId = requestedClusterId ?? currentClusterId;
   const visibleClusterValue = requestedClusterId ?? currentClusterId;
@@ -406,14 +412,14 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
   }, []);
 
   useEffect(() => {
-    if (!applyDrawerOpen) {
+    if (!actionDrawerOpen) {
       return;
     }
 
     if (namespaceScope.mode === 'single') {
-      setApplyNamespace(resolveSingleNamespace(namespaceScope));
+      setActionNamespace(resolveSingleNamespace(namespaceScope));
     }
-  }, [applyDrawerOpen, namespaceScope]);
+  }, [actionDrawerOpen, namespaceScope]);
 
   function handleClusterChange(nextClusterId: string) {
     if (nextClusterId === visibleClusterValue) {
@@ -447,41 +453,41 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
     });
   }
 
-  function handleOpenApply() {
-    dispatchWorkContext({ type: 'start_action', actionType: 'apply' });
+  function handleOpenAction(nextActionType: ActionType) {
+    dispatchWorkContext({ type: 'start_action', actionType: nextActionType });
     if (namespaceScope.mode === 'single') {
-      setApplyNamespace(resolveSingleNamespace(namespaceScope));
+      setActionNamespace(resolveSingleNamespace(namespaceScope));
     } else {
-      setApplyNamespace('');
+      setActionNamespace('');
     }
-    setApplyFormError(null);
-    setApplyDrawerOpen(true);
+    setActionFormError(null);
+    setActionDrawerOpen(true);
   }
 
-  function handleCloseApply() {
-    setApplyDrawerOpen(false);
-    setApplyFormError(null);
+  function handleCloseAction() {
+    setActionDrawerOpen(false);
+    setActionFormError(null);
     dispatchWorkContext({ type: 'acknowledge_action_result' });
   }
 
   function handleReturnToWorkloads() {
-    setApplyDrawerOpen(false);
-    setApplyFormError(null);
+    setActionDrawerOpen(false);
+    setActionFormError(null);
     dispatchWorkContext({ type: 'return_to_workloads' });
     setReloadToken((current) => current + 1);
   }
 
   function handleBackToEdit() {
-    setApplyFormError(null);
-    dispatchWorkContext({ type: 'start_action', actionType: 'apply' });
+    setActionFormError(null);
+    dispatchWorkContext({ type: 'start_action', actionType });
   }
 
-  async function handleSubmitApply() {
+  async function handleSubmitAction() {
     dispatchWorkContext({ type: 'validate_action' });
 
-    const manifest = applyManifest.trim();
+    const manifest = actionManifest.trim();
     if (manifest === '') {
-      setApplyFormError('Manifest is required before submit.');
+      setActionFormError('Manifest is required before submit.');
       dispatchWorkContext({ type: 'fail_action_validation' });
       return;
     }
@@ -489,14 +495,14 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
     const namespaceTarget =
       namespaceScope.mode === 'single'
         ? resolveSingleNamespace(namespaceScope)
-        : applyNamespace.trim();
+        : actionNamespace.trim();
     if (namespaceTarget === '') {
-      setApplyFormError('Namespace target is required when browsing all namespaces.');
+      setActionFormError('Namespace target is required when browsing all namespaces.');
       dispatchWorkContext({ type: 'fail_action_validation' });
       return;
     }
 
-    setApplyFormError(null);
+    setActionFormError(null);
     dispatchWorkContext({
       type: 'resolve_execution_target',
       target: { kind: 'namespace', namespace: namespaceTarget },
@@ -508,19 +514,20 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          actionType,
           cluster: currentClusterId,
           namespace: namespaceTarget,
           manifest,
         }),
       });
       if (!response.ok) {
-        throw new Error(`apply request failed: ${response.status}`);
+        throw new Error(`${actionLabel.toLowerCase()} request failed: ${response.status}`);
       }
 
       dispatchWorkContext({
         type: 'complete_action_success',
         summary: {
-          affectedObjects: [`apply accepted for ${namespaceTarget}`],
+          affectedObjects: [`${actionLabel.toLowerCase()} accepted for ${namespaceTarget}`],
         },
       });
     } catch (error) {
@@ -528,7 +535,9 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
         type: 'complete_action_failure',
         summary: {
           failedObjects: [
-            error instanceof Error ? error.message : 'apply request failed',
+            error instanceof Error
+              ? error.message
+              : `${actionLabel.toLowerCase()} request failed`,
           ],
         },
       });
@@ -719,10 +728,10 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                   <Button variant="outlined" onClick={() => setReloadToken((current) => current + 1)}>
                     Refresh
                   </Button>
-                  <Button variant="contained" onClick={handleOpenApply}>
+                  <Button variant="contained" onClick={() => handleOpenAction('apply')}>
                     Apply
                   </Button>
-                  <Button variant="outlined" disabled>
+                  <Button variant="outlined" onClick={() => handleOpenAction('create')}>
                     Create
                   </Button>
                 </Stack>
@@ -813,8 +822,8 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                     }
                   >
                     {actionResultContext.actionContext.resultSummary.outcome === 'failure'
-                      ? `Apply failed: ${actionResultContext.actionContext.resultSummary.failedObjects?.join(', ')}`
-                      : `Apply accepted: ${actionResultContext.actionContext.resultSummary.affectedObjects?.join(', ')}`}
+                      ? `${formatActionLabel(actionResultContext.actionContext.actionType)} failed: ${actionResultContext.actionContext.resultSummary.failedObjects?.join(', ')}`
+                      : `${formatActionLabel(actionResultContext.actionContext.actionType)} accepted: ${actionResultContext.actionContext.resultSummary.affectedObjects?.join(', ')}`}
                   </Alert>
                 ) : null}
 
@@ -862,16 +871,16 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
 
       <Drawer
         anchor="right"
-        open={applyDrawerOpen}
-        onClose={handleCloseApply}
+        open={actionDrawerOpen}
+        onClose={handleCloseAction}
         PaperProps={{ sx: { width: { xs: '100%', sm: 480 }, p: 2 } }}
       >
         <Stack spacing={2}>
           <Typography variant="overline" color="primary.main">
-            Apply Workflow
+            {actionLabel} Workflow
           </Typography>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            Apply to {createApplyContext.activeCluster.id}
+            {actionLabel} in {createApplyContext.activeCluster.id}
           </Typography>
           <Typography color="text.secondary">
             Browsing scope: {describeNamespaceScope(createApplyContext.namespaceScope)}
@@ -885,11 +894,11 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                 )}
               >
                 {createApplyContext.actionContext.resultSummary.outcome === 'success'
-                  ? 'Apply succeeded'
+                  ? `${actionLabel} succeeded`
                   : createApplyContext.actionContext.resultSummary.outcome ===
                       'partial_failure'
-                    ? 'Apply partially failed'
-                    : 'Apply failed'}
+                    ? `${actionLabel} partially failed`
+                    : `${actionLabel} failed`}
               </Alert>
 
               <Paper variant="outlined" sx={{ p: 1.5 }}>
@@ -935,13 +944,13 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                 </Alert>
               ) : null}
 
-              {applyFormError ? <Alert severity="error">{applyFormError}</Alert> : null}
+              {actionFormError ? <Alert severity="error">{actionFormError}</Alert> : null}
 
               <TextField
                 label="Execution namespace"
                 size="small"
-                value={applyNamespace}
-                onChange={(event) => setApplyNamespace(event.target.value)}
+                value={actionNamespace}
+                onChange={(event) => setActionNamespace(event.target.value)}
                 disabled={createApplyContext.namespaceScope.mode === 'single'}
                 helperText={
                   createApplyContext.namespaceScope.mode === 'single'
@@ -954,22 +963,22 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                 label="Manifest"
                 multiline
                 minRows={12}
-                value={applyManifest}
-                onChange={(event) => setApplyManifest(event.target.value)}
+                value={actionManifest}
+                onChange={(event) => setActionManifest(event.target.value)}
               />
 
               <Stack direction="row" spacing={1} justifyContent="flex-end">
-                <Button variant="text" onClick={handleCloseApply}>
+                <Button variant="text" onClick={handleCloseAction}>
                   Cancel
                 </Button>
                 <Button
                   variant="contained"
-                  onClick={handleSubmitApply}
+                  onClick={handleSubmitAction}
                   disabled={createApplyContext.actionContext.status === 'submitting'}
                 >
                   {createApplyContext.actionContext.status === 'submitting'
                     ? 'Submitting...'
-                    : 'Submit Apply'}
+                    : `Submit ${actionLabel}`}
                 </Button>
               </Stack>
             </>
