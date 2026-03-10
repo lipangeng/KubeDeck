@@ -8,13 +8,22 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
 import { ListPageShell } from '../../../components/page-shell/ResourcePageShell';
 import { copy } from '../../../i18n/copy';
+import { ResourcePageShell } from '../../resource-pages/ResourcePageShell';
+import { resolveDefaultTabs } from '../../resource-pages/tabs';
 import { useKernelRuntime } from '../../runtime/KernelRuntimeContext';
 import type { WorkloadItem } from '../../runtime/fetchWorkloads';
 
 export function WorkloadsPage() {
-  const { activePage, activeSummarySlots, fetchWorkloadsForDomain } = useKernelRuntime();
+  const {
+    activePage,
+    activeSummarySlots,
+    currentResource,
+    enterResource,
+    fetchWorkloadsForDomain,
+  } = useKernelRuntime();
   const [items, setItems] = useState<WorkloadItem[]>([]);
   const [loading, setLoading] = useState(true);
   const workflowDomainId = activePage?.workflowDomainId;
@@ -45,6 +54,27 @@ export function WorkloadsPage() {
       active = false;
     };
   }, [fetchWorkloadsForDomain, workflowDomainId]);
+
+  if (currentResource) {
+    return (
+      <ResourcePageShell
+        title={`${currentResource.kind}/${currentResource.name}`}
+        summary={
+          <Typography color="text.secondary">
+            Namespace: {currentResource.namespace ?? 'cluster'}
+          </Typography>
+        }
+        tabs={resolveDefaultTabs({
+          overviewContent: <Typography>Resource overview for {currentResource.name}</Typography>,
+          yamlContent: (
+            <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
+              {`apiVersion: apps/v1\nkind: ${currentResource.kind}\nmetadata:\n  name: ${currentResource.name}\n  namespace: ${currentResource.namespace ?? 'default'}`}
+            </Typography>
+          ),
+        })}
+      />
+    );
+  }
 
   return (
     <ListPageShell
@@ -84,7 +114,20 @@ export function WorkloadsPage() {
             <TableBody>
               {items.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell>{item.name}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="text"
+                      onClick={() =>
+                        enterResource({
+                          kind: item.kind,
+                          name: item.name,
+                          namespace: item.namespace,
+                        })
+                      }
+                    >
+                      {item.name}
+                    </Button>
+                  </TableCell>
                   <TableCell>{item.kind}</TableCell>
                   <TableCell>{item.namespace}</TableCell>
                   <TableCell>{item.status}</TableCell>

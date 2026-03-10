@@ -206,6 +206,19 @@ describe('App', () => {
     expect(screen.getByText('Kernel Insights')).toBeTruthy();
   });
 
+  it('opens one workload resource through the shared resource page shell', async () => {
+    vi.stubGlobal('fetch', createKernelMetadataFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Workloads' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'api' }));
+
+    expect(screen.getByRole('heading', { name: 'Deployment/api' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'YAML' })).toBeTruthy();
+  });
+
   it('executes a kernel action through the backend action entry', async () => {
     vi.stubGlobal('fetch', createKernelMetadataFetchMock());
     render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
