@@ -241,7 +241,7 @@ describe('App', () => {
     expect(screen.getByText('Namespace scope: All namespaces')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
-    expect(await screen.findByText('Apply to dev')).toBeTruthy();
+    expect(await screen.findByText('Apply in dev')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Submit Apply' }));
     expect(
@@ -268,6 +268,53 @@ describe('App', () => {
     expect(applyCall?.[1]?.body).toContain('"namespace":"team-a"');
   });
 
+  it('supports create through the same action surface and result flow', async () => {
+    const fetchMock = createDefaultFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Enter Workloads' }))[0]);
+    await screen.findByText('Cluster: dev');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    expect(await screen.findByText('Create in dev')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Submit Create' })).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Manifest'), {
+      target: {
+        value: [
+          'apiVersion: v1',
+          'kind: Service',
+          'metadata:',
+          '  name: create-service',
+          'spec:',
+          '  selector:',
+          '    app: demo',
+        ].join('\n'),
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Create' }));
+
+    await screen.findByText('Create succeeded');
+    expect(screen.getByText('Affected: create accepted for default')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Workloads' }));
+    await screen.findByText('Create accepted: create accepted for default');
+
+    const createCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        String(input).endsWith('/api/resources/apply') &&
+        String(init?.body).includes('"actionType":"create"'),
+    );
+    expect(createCall).toBeTruthy();
+    expect(createCall?.[1]?.body).toContain('"namespace":"default"');
+  });
+
   it('preserves apply input on failure and lets the user return to editing', async () => {
     const fetchMock = createApplyFailureFetchMock();
     vi.stubGlobal('fetch', fetchMock);
@@ -283,7 +330,7 @@ describe('App', () => {
     await screen.findByText('Cluster: dev');
 
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
-    expect(await screen.findByText('Apply to dev')).toBeTruthy();
+    expect(await screen.findByText('Apply in dev')).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Manifest'), {
       target: {
