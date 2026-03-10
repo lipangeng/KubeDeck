@@ -1,4 +1,3 @@
-import { useEffect, useMemo, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -8,17 +7,7 @@ import Stack from '@mui/material/Stack';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { copy } from './i18n/copy';
-import { executeKernelAction } from './kernel/runtime/executeKernelAction';
-import { registerBuiltInActions } from './kernel/builtins/registerBuiltInActions';
-import { registerBuiltInMenus } from './kernel/builtins/registerBuiltInMenus';
-import { registerBuiltInPages } from './kernel/builtins/registerBuiltInPages';
-import { registerBuiltInSlots } from './kernel/builtins/registerBuiltInSlots';
-import { composeKernelNavigation } from './kernel/runtime/composeKernelNavigation';
-import { fetchKernelMetadata } from './kernel/runtime/fetchKernelMetadata';
-import { hydrateKernelSnapshot } from './kernel/runtime/hydrateKernelSnapshot';
-import { KernelRegistry } from './kernel/runtime/kernelRegistry';
-import { resolveWorkflowActions } from './kernel/runtime/resolveWorkflowActions';
-import type { KernelRegistrySnapshot } from './kernel/runtime/types';
+import { KernelRuntimeProvider, useKernelRuntime } from './kernel/runtime/KernelRuntimeContext';
 import { type ThemePreference } from './themeMode';
 
 interface AppProps {
@@ -27,12 +16,20 @@ interface AppProps {
 }
 
 function App({ themePreference, onThemePreferenceChange }: AppProps) {
-  const [activeRoute, setActiveRoute] = useState('/');
-  const [runtimeSnapshot, setRuntimeSnapshot] = useState<KernelRegistrySnapshot | null>(null);
-  const [kernelSource, setKernelSource] = useState<'loading' | 'backend' | 'local-fallback'>(
-    'loading',
+  return (
+    <KernelRuntimeProvider>
+      <AppShell
+        themePreference={themePreference}
+        onThemePreferenceChange={onThemePreferenceChange}
+      />
+    </KernelRuntimeProvider>
   );
-  const [actionSummary, setActionSummary] = useState<string | null>(null);
+}
+
+function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
+  const { activeActions, activePage, actionSummary, executeAction, kernelSource, navigate, navigation } =
+    useKernelRuntime();
+  const ActiveComponent = activePage?.component;
 
   const cycleThemePreference = () => {
     const nextPreference: ThemePreference =
@@ -44,59 +41,8 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
     onThemePreferenceChange(nextPreference);
   };
 
-  const localSnapshot = useMemo(() => {
-    const registry = new KernelRegistry();
-    registry.register({
-      pages: registerBuiltInPages(),
-      menus: registerBuiltInMenus(),
-      actions: registerBuiltInActions(),
-      slots: registerBuiltInSlots(),
-    });
-    return registry.snapshot();
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadKernelMetadata() {
-      try {
-        const remoteMetadata = await fetchKernelMetadata();
-        if (!active) {
-          return;
-        }
-        setRuntimeSnapshot(hydrateKernelSnapshot(localSnapshot, remoteMetadata));
-        setKernelSource('backend');
-      } catch {
-        if (!active) {
-          return;
-        }
-        setRuntimeSnapshot(localSnapshot);
-        setKernelSource('local-fallback');
-      }
-    }
-
-    void loadKernelMetadata();
-    return () => {
-      active = false;
-    };
-  }, [localSnapshot]);
-
-  const registrySnapshot = runtimeSnapshot ?? localSnapshot;
-
-  const navigation = useMemo(
-    () => composeKernelNavigation(registrySnapshot.menus),
-    [registrySnapshot.menus],
-  );
-
-  const activePage =
-    registrySnapshot.pages.find((page) => page.route === activeRoute) ?? registrySnapshot.pages[0];
-  const activeActions = activePage
-    ? resolveWorkflowActions(activePage.workflowDomainId, registrySnapshot.actions)
-    : [];
-  const ActiveComponent = activePage?.component;
-
   const handleExecuteAction = async (actionId: string) => {
-    const result = await executeKernelAction({
+    await executeAction({
       actionId,
       workflowDomainId: activePage?.workflowDomainId ?? 'homepage',
       target: {
@@ -108,7 +54,6 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
         name: 'sample',
       },
     });
-    setActionSummary(result.Summary);
   };
 
   return (
@@ -136,23 +81,24 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Stack spacing={1.5}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              Kernel Navigation
+              {copy('app.kernelNavigation')}
             </Typography>
             {navigation.map((entry) => (
               <Button
                 key={entry.identity.contributionId}
-                variant={entry.route === activeRoute ? 'contained' : 'outlined'}
-                onClick={() => setActiveRoute(entry.route ?? '/')}
+                variant={entry.route === activePage?.route ? 'contained' : 'outlined'}
+                onClick={() => navigate(entry.route ?? '/')}
               >
                 {entry.title.fallback}
               </Button>
             ))}
             <Divider />
             <Typography variant="caption" color="text.secondary">
-              Registered actions: {activeActions.map((action) => action.title.fallback).join(', ') || 'None'}
+              {copy('app.registeredActions')}:{' '}
+              {activeActions.map((action) => action.title.fallback).join(', ') || copy('app.none')}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Kernel metadata source: {kernelSource}
+              {copy('app.kernelMetadataSource')}: {kernelSource}
             </Typography>
             {activeActions.map((action) => (
               <Button
@@ -162,12 +108,12 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                   void handleExecuteAction(action.actionId);
                 }}
               >
-                Run {action.title.fallback}
+                {copy('app.runAction')} {action.title.fallback}
               </Button>
             ))}
             {actionSummary ? (
               <Typography variant="caption" color="text.secondary">
-                Last action result: {actionSummary}
+                {copy('app.lastActionResult')}: {actionSummary}
               </Typography>
             ) : null}
           </Stack>

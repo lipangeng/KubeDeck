@@ -37,8 +37,12 @@ func (h *KernelHandler) Snapshot(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *KernelHandler) Workloads(w http.ResponseWriter, r *http.Request) {
+	workflowDomainID := r.URL.Query().Get("workflowDomainId")
+	if workflowDomainID == "" {
+		workflowDomainID = "workloads"
+	}
 	cluster := r.URL.Query().Get("cluster")
-	items := plugins.ResolveWorkloads(h.registry.Providers(), "workloads", cluster)
+	items := plugins.ResolveWorkloads(h.registry.Providers(), workflowDomainID, cluster)
 	writeJSON(w, items)
 }
 

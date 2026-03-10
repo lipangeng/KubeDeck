@@ -1,6 +1,12 @@
 export const enMessages = {
   'app.title': 'KubeDeck',
   'app.themeLabel': 'Theme',
+  'app.kernelNavigation': 'Kernel Navigation',
+  'app.registeredActions': 'Registered actions',
+  'app.none': 'None',
+  'app.kernelMetadataSource': 'Kernel metadata source',
+  'app.runAction': 'Run',
+  'app.lastActionResult': 'Last action result',
   'app.cleanup.badge': 'Baseline Reset',
   'app.cleanup.title': 'Microkernel cleanup in progress',
   'app.cleanup.body':
@@ -14,6 +20,11 @@ export const enMessages = {
   'workloads.placeholder':
     'Action execution now flows through the kernel action entry instead of page-private logic.',
   'workloads.badge': 'Built-in Capability',
+  'workloads.columns.name': 'Name',
+  'workloads.columns.kind': 'Kind',
+  'workloads.columns.namespace': 'Namespace',
+  'workloads.columns.status': 'Status',
+  'workloads.columns.health': 'Health',
   'actions.create': 'Create',
   'actions.apply': 'Apply',
 } as const;
