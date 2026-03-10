@@ -24,20 +24,29 @@ function createDefaultFetchMock() {
       );
     }
 
-    if (url.includes('/api/meta/registry?cluster=dev')) {
+    if (url.includes('/api/resources/workloads?cluster=dev&namespace=default')) {
       return new Response(
         JSON.stringify({
           cluster: 'dev',
-          resourceTypes: [
+          namespace: 'default',
+          items: [
             {
-              id: 'apps.v1.deployments',
-              group: 'apps',
-              version: 'v1',
+              id: 'dev-default-api',
+              name: 'api',
               kind: 'Deployment',
-              plural: 'deployments',
-              namespaced: true,
-              preferredVersion: 'v1',
-              source: 'system',
+              namespace: 'default',
+              status: 'Running',
+              health: 'Healthy',
+              updatedAt: '2026-03-10T06:30:00Z',
+            },
+            {
+              id: 'dev-default-api-service',
+              name: 'api',
+              kind: 'Service',
+              namespace: 'default',
+              status: 'Active',
+              health: 'Healthy',
+              updatedAt: '2026-03-10T06:32:00Z',
             },
           ],
         }),
@@ -45,30 +54,77 @@ function createDefaultFetchMock() {
       );
     }
 
-    if (url.includes('/api/meta/registry?cluster=prod')) {
+    if (url.includes('/api/resources/workloads?cluster=dev&namespace=all')) {
+      return new Response(
+        JSON.stringify({
+          cluster: 'dev',
+          namespace: 'all',
+          items: [
+            {
+              id: 'dev-default-api',
+              name: 'api',
+              kind: 'Deployment',
+              namespace: 'default',
+              status: 'Running',
+              health: 'Healthy',
+              updatedAt: '2026-03-10T06:30:00Z',
+            },
+            {
+              id: 'dev-default-api-service',
+              name: 'api',
+              kind: 'Service',
+              namespace: 'default',
+              status: 'Active',
+              health: 'Healthy',
+              updatedAt: '2026-03-10T06:32:00Z',
+            },
+            {
+              id: 'dev-team-a-worker',
+              name: 'worker',
+              kind: 'Deployment',
+              namespace: 'team-a',
+              status: 'CrashLoopBackOff',
+              health: 'Critical',
+              updatedAt: '2026-03-10T06:40:00Z',
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+
+    if (url.includes('/api/resources/workloads?cluster=prod&namespace=default')) {
       return new Response(
         JSON.stringify({
           cluster: 'prod',
-          resourceTypes: [
+          namespace: 'default',
+          items: [
             {
-              id: 'apps.v1.deployments',
-              group: 'apps',
-              version: 'v1',
+              id: 'prod-default-api',
+              name: 'api',
               kind: 'Deployment',
-              plural: 'deployments',
-              namespaced: true,
-              preferredVersion: 'v1',
-              source: 'system',
+              namespace: 'default',
+              status: 'Running',
+              health: 'Healthy',
+              updatedAt: '2026-03-10T08:15:00Z',
             },
             {
-              id: 'v1.services',
-              group: '',
-              version: 'v1',
+              id: 'prod-default-web',
+              name: 'web',
+              kind: 'Deployment',
+              namespace: 'default',
+              status: 'Pending',
+              health: 'Warning',
+              updatedAt: '2026-03-10T08:18:00Z',
+            },
+            {
+              id: 'prod-default-web-service',
+              name: 'web',
               kind: 'Service',
-              plural: 'services',
-              namespaced: true,
-              preferredVersion: 'v1',
-              source: 'system',
+              namespace: 'default',
+              status: 'Active',
+              health: 'Healthy',
+              updatedAt: '2026-03-10T08:20:00Z',
             },
           ],
         }),
@@ -200,8 +256,10 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { level: 2, name: 'Workloads' })).toBeTruthy();
     expect(screen.getByText('Cluster: dev')).toBeTruthy();
     expect(screen.getByText('Namespace scope: default')).toBeTruthy();
-    expect(screen.getByTestId('workload-type-count').textContent).toContain('1');
+    expect(screen.getByTestId('workload-row-count').textContent).toContain('2');
+    expect(screen.getAllByText('api').length).toBeGreaterThan(0);
     expect(screen.getByText('Deployment')).toBeTruthy();
+    expect(screen.getByText('Running')).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Cluster'), {
       target: { value: 'prod' },
@@ -209,16 +267,17 @@ describe('App', () => {
 
     await screen.findByText('Cluster: prod');
     await waitFor(() => {
-      expect(screen.getByTestId('workload-type-count').textContent).toContain('2');
+      expect(screen.getByTestId('workload-row-count').textContent).toContain('3');
     });
+    expect(screen.getAllByText('web').length).toBeGreaterThan(0);
     expect(screen.getByText('Service')).toBeTruthy();
 
     const calledUrls = fetchMock.mock.calls.map(([input]) => String(input));
     expect(calledUrls.some((url) => url.endsWith('/api/meta/clusters'))).toBe(true);
     expect(calledUrls.some((url) => url.includes('/api/meta/menus?cluster=dev'))).toBe(true);
     expect(calledUrls.some((url) => url.includes('/api/meta/menus?cluster=prod'))).toBe(true);
-    expect(calledUrls.some((url) => url.includes('/api/meta/registry?cluster=dev'))).toBe(true);
-    expect(calledUrls.some((url) => url.includes('/api/meta/registry?cluster=prod'))).toBe(true);
+    expect(calledUrls.some((url) => url.includes('/api/resources/workloads?cluster=dev&namespace=default'))).toBe(true);
+    expect(calledUrls.some((url) => url.includes('/api/resources/workloads?cluster=prod&namespace=default'))).toBe(true);
   });
 
   it('requires an explicit execution namespace when applying from all namespaces', async () => {
@@ -239,6 +298,10 @@ describe('App', () => {
       target: { value: 'all' },
     });
     expect(screen.getByText('Namespace scope: All namespaces')).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByTestId('workload-row-count').textContent).toContain('3');
+    });
+    expect(screen.getByText('worker')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     expect(await screen.findByText('Apply in dev')).toBeTruthy();
@@ -395,11 +458,12 @@ describe('App', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
-      if (url.includes('/api/meta/registry?cluster=dev')) {
+      if (url.includes('/api/resources/workloads?cluster=dev&namespace=default')) {
         return new Response(
           JSON.stringify({
             cluster: 'dev',
-            resourceTypes: [],
+            namespace: 'default',
+            items: [],
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );

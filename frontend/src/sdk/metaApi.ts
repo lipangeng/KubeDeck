@@ -4,6 +4,7 @@ import type {
   MenusResponse,
   MenuSource,
   RegistryResponse,
+  WorkloadsResponse,
 } from './types';
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -125,5 +126,45 @@ export function parseRegistryResponse(value: unknown): RegistryResponse {
   return {
     cluster,
     resourceTypes: resourceTypes as RegistryResponse['resourceTypes'],
+  };
+}
+
+export function parseWorkloadsResponse(value: unknown): WorkloadsResponse {
+  if (!isObject(value)) {
+    throw new Error('invalid workloads response: not an object');
+  }
+
+  const { cluster, namespace, items } = value;
+  if (typeof cluster !== 'string' || cluster === '') {
+    throw new Error('invalid workloads response: cluster is required');
+  }
+  if (typeof namespace !== 'string') {
+    throw new Error('invalid workloads response: namespace must be string');
+  }
+  if (!Array.isArray(items)) {
+    throw new Error('invalid workloads response: items must be array');
+  }
+
+  for (const item of items) {
+    if (!isObject(item)) {
+      throw new Error('invalid workloads response: item must be object');
+    }
+    if (
+      typeof item.id !== 'string' ||
+      typeof item.name !== 'string' ||
+      typeof item.kind !== 'string' ||
+      typeof item.namespace !== 'string' ||
+      typeof item.status !== 'string' ||
+      typeof item.health !== 'string' ||
+      typeof item.updatedAt !== 'string'
+    ) {
+      throw new Error('invalid workloads response: malformed item');
+    }
+  }
+
+  return {
+    cluster,
+    namespace,
+    items: items as WorkloadsResponse['items'],
   };
 }

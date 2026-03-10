@@ -27,8 +27,12 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { ListPageShell } from './components/page-shell/ResourcePageShell';
 import { composeMenus } from './core/menuComposer';
-import { parseClustersResponse, parseMenusResponse, parseRegistryResponse } from './sdk/metaApi';
-import type { MenuItem, RegistryResourceType } from './sdk/types';
+import {
+  parseClustersResponse,
+  parseMenusResponse,
+  parseWorkloadsResponse,
+} from './sdk/metaApi';
+import type { MenuItem, WorkloadItem } from './sdk/types';
 import { type ThemePreference } from './themeMode';
 import {
   applyWorkContextEvent,
@@ -97,12 +101,6 @@ function describeNamespaceScope(scope: NamespaceScope): string {
 
 function resolveSingleNamespace(scope: NamespaceScope): string {
   return scope.mode === 'single' ? (scope.values[0] ?? 'default') : '';
-}
-
-function resolveWorkloadKinds(resourceTypes: RegistryResourceType[]): RegistryResourceType[] {
-  return resourceTypes.filter((resourceType) =>
-    ['Deployment', 'Service'].includes(resourceType.kind),
-  );
 }
 
 function resolveResultSeverity(outcome: string): 'success' | 'warning' | 'error' {
@@ -192,7 +190,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
   );
   const [clusters, setClusters] = useState<string[]>(['default']);
   const [menus, setMenus] = useState<MenuItem[]>([]);
-  const [resourceTypes, setResourceTypes] = useState<RegistryResourceType[]>([]);
+  const [workloadItems, setWorkloadItems] = useState<WorkloadItem[]>([]);
   const [loadingMetadata, setLoadingMetadata] = useState(true);
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<ProbeStatus>('checking');
@@ -245,19 +243,23 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
     () => composedMenus.filter((menu) => menu.targetRef !== '/workloads'),
     [composedMenus],
   );
-  const workloadKinds = useMemo(
-    () => resolveWorkloadKinds(resourceTypes).filter((resourceType) => {
+  const requestedNamespaceScope =
+    namespaceScope.mode === 'all' ? 'all' : resolveSingleNamespace(namespaceScope);
+
+  const visibleWorkloads = useMemo(
+    () => workloadItems.filter((workload) => {
       const searchText = workloadsContext.listContext.searchText?.trim().toLowerCase();
       if (!searchText) {
         return true;
       }
 
       return (
-        resourceType.kind.toLowerCase().includes(searchText) ||
-        resourceType.plural.toLowerCase().includes(searchText)
+        workload.name.toLowerCase().includes(searchText) ||
+        workload.kind.toLowerCase().includes(searchText) ||
+        workload.namespace.toLowerCase().includes(searchText)
       );
     }),
-    [resourceTypes, workloadsContext.listContext.searchText],
+    [workloadItems, workloadsContext.listContext.searchText],
   );
 
   const blockingSummary = useMemo(() => {
@@ -311,23 +313,25 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
       try {
         const [menusResponse, registryResponse] = await Promise.all([
           fetch(`/api/meta/menus?cluster=${encodeURIComponent(metadataClusterId)}`),
-          fetch(`/api/meta/registry?cluster=${encodeURIComponent(metadataClusterId)}`),
+          fetch(
+            `/api/resources/workloads?cluster=${encodeURIComponent(metadataClusterId)}&namespace=${encodeURIComponent(requestedNamespaceScope)}`,
+          ),
         ]);
         if (!menusResponse.ok) {
           throw new Error(`menus request failed: ${menusResponse.status}`);
         }
         if (!registryResponse.ok) {
-          throw new Error(`registry request failed: ${registryResponse.status}`);
+          throw new Error(`workloads request failed: ${registryResponse.status}`);
         }
 
         const menusPayload = parseMenusResponse(await menusResponse.json());
-        const registryPayload = parseRegistryResponse(await registryResponse.json());
+        const workloadsPayload = parseWorkloadsResponse(await registryResponse.json());
         if (!active) {
           return;
         }
 
         setMenus(menusPayload.menus);
-        setResourceTypes(registryPayload.resourceTypes);
+        setWorkloadItems(workloadsPayload.items);
 
         if (requestedClusterId === metadataClusterId) {
           dispatchWorkContext({
@@ -343,7 +347,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
 
         setMetadataError(error instanceof Error ? error.message : 'unknown error');
         setMenus([]);
-        setResourceTypes([]);
+        setWorkloadItems([]);
         if (requestedClusterId === metadataClusterId) {
           dispatchWorkContext({ type: 'fail_cluster_switch' });
           setRequestedClusterId(null);
@@ -360,7 +364,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
     return () => {
       active = false;
     };
-  }, [metadataClusterId, reloadToken, requestedClusterId]);
+  }, [metadataClusterId, reloadToken, requestedClusterId, requestedNamespaceScope]);
 
   useEffect(() => {
     let active = true;
@@ -791,8 +795,8 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                     />
                     <Chip
                       variant="outlined"
-                      label={`Available types: ${workloadKinds.length}`}
-                      data-testid="workload-type-count"
+                      label={`Visible workloads: ${visibleWorkloads.length}`}
+                      data-testid="workload-row-count"
                     />
                   </Stack>
                 </Paper>
@@ -831,32 +835,32 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
                   <Table>
                     <TableHead>
                       <TableRow>
+                        <TableCell>Name</TableCell>
                         <TableCell>Kind</TableCell>
-                        <TableCell>Plural</TableCell>
-                        <TableCell>Scope</TableCell>
-                        <TableCell>Source</TableCell>
-                        <TableCell>Version</TableCell>
+                        <TableCell>Namespace</TableCell>
+                        <TableCell>Status</TableCell>
+                        <TableCell>Health</TableCell>
+                        <TableCell>Updated</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {workloadKinds.length === 0 ? (
+                      {visibleWorkloads.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5}>
+                          <TableCell colSpan={6}>
                             <Typography color="text.secondary">
-                              No workload-capable resource types available in the current cluster context.
+                              No workloads available in the current cluster and namespace context.
                             </Typography>
                           </TableCell>
                         </TableRow>
                       ) : (
-                        workloadKinds.map((resourceType) => (
-                          <TableRow key={resourceType.id}>
-                            <TableCell sx={{ fontWeight: 700 }}>{resourceType.kind}</TableCell>
-                            <TableCell>{resourceType.plural}</TableCell>
-                            <TableCell>
-                              {resourceType.namespaced ? 'Namespaced' : 'Cluster-scoped'}
-                            </TableCell>
-                            <TableCell>{resourceType.source}</TableCell>
-                            <TableCell>{resourceType.preferredVersion}</TableCell>
+                        visibleWorkloads.map((workload) => (
+                          <TableRow key={workload.id}>
+                            <TableCell sx={{ fontWeight: 700 }}>{workload.name}</TableCell>
+                            <TableCell>{workload.kind}</TableCell>
+                            <TableCell>{workload.namespace}</TableCell>
+                            <TableCell>{workload.status}</TableCell>
+                            <TableCell>{workload.health}</TableCell>
+                            <TableCell>{workload.updatedAt}</TableCell>
                           </TableRow>
                         ))
                       )}
