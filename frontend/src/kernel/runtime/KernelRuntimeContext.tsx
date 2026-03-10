@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { FrontendCapabilityModule } from '../sdk';
 import { composeKernelNavigation } from './composeKernelNavigation';
+import type { KernelNavigationGroup } from './menu/types';
 import { createLocalKernelSnapshot } from './createLocalKernelSnapshot';
 import {
   executeKernelAction as executeKernelActionRequest,
@@ -31,7 +32,7 @@ interface KernelRuntimeContextValue {
   activeSummarySlots: KernelRegistrySnapshot['slots'];
   actionSummary: string | null;
   kernelSource: KernelSource;
-  navigation: ReturnType<typeof composeKernelNavigation>;
+  navigation: KernelNavigationGroup[];
   registrySnapshot: KernelRegistrySnapshot;
   navigate: (route: string) => void;
   fetchWorkloadsForDomain: (workflowDomainId: string, cluster?: string) => Promise<WorkloadItem[]>;

@@ -55,8 +55,10 @@ function createKernelMetadataFetchMock() {
               ID: 'menu.homepage',
               WorkflowDomainID: 'homepage',
               EntryKey: 'homepage',
+              GroupKey: 'core',
               Route: '/',
               Placement: 'primary',
+              Availability: 'enabled',
               Order: 10,
               Visible: true,
               Title: { Key: 'homepage.title', Fallback: 'Homepage' },
@@ -65,8 +67,10 @@ function createKernelMetadataFetchMock() {
               ID: 'menu.workloads',
               WorkflowDomainID: 'workloads',
               EntryKey: 'workloads',
+              GroupKey: 'core',
               Route: '/workloads',
               Placement: 'primary',
+              Availability: 'enabled',
               Order: 20,
               Visible: true,
               Title: { Key: 'workloads.title', Fallback: 'Workloads' },
@@ -75,11 +79,26 @@ function createKernelMetadataFetchMock() {
               ID: 'menu.operations',
               WorkflowDomainID: 'operations',
               EntryKey: 'operations',
+              GroupKey: 'extensions',
               Route: '/operations',
               Placement: 'primary',
+              Availability: 'enabled',
               Order: 30,
               Visible: true,
               Title: { Key: 'operations.title', Fallback: 'Operations' },
+            },
+            {
+              ID: 'menu.crds',
+              WorkflowDomainID: 'crds',
+              EntryKey: 'crds',
+              GroupKey: 'resources',
+              Route: '/resources/crds',
+              Placement: 'secondary',
+              Availability: 'disabled-unavailable',
+              IsFallback: true,
+              Order: 999,
+              Visible: true,
+              Title: { Key: 'resources.crds.title', Fallback: 'CRDs' },
             },
           ],
           actions: [
@@ -213,6 +232,17 @@ describe('App', () => {
     ).toBeTruthy();
   });
 
+  it('renders grouped navigation and disables unavailable fallback entries', async () => {
+    vi.stubGlobal('fetch', createKernelMetadataFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    expect(screen.getByText('core')).toBeTruthy();
+    expect(screen.getByText('extensions')).toBeTruthy();
+    expect(screen.getByText('resources')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'CRDs' }).hasAttribute('disabled')).toBe(true);
+  });
+
   it('cycles the theme preference', () => {
     vi.stubGlobal('fetch', createKernelMetadataFetchMock());
     const onThemePreferenceChange = vi.fn();
@@ -249,7 +279,9 @@ describe('App', () => {
       },
       workflowDomainId: 'ops-console',
       entryKey: 'ops-console',
+      groupKey: 'extensions',
       placement: 'primary',
+      availability: 'enabled',
       route: '/ops-console',
       title: { key: 'opsConsole.title', fallback: 'Operations Console' },
     };
@@ -297,7 +329,9 @@ describe('App', () => {
       },
       workflowDomainId: 'discovered',
       entryKey: 'discovered',
+      groupKey: 'extensions',
       placement: 'primary',
+      availability: 'enabled',
       route: '/discovered',
       title: { key: 'discovered.title', fallback: 'Discovered Plugin' },
     };
