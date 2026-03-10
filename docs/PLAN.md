@@ -92,6 +92,8 @@ Near-term priorities must follow this order:
 - Kernel contribution contract draft (ZH): `docs/product/architecture/kernel-contribution-contract.zh.md`
 - Kernel implementation mapping draft: `docs/product/architecture/kernel-implementation-mapping.md`
 - Kernel implementation mapping draft (ZH): `docs/product/architecture/kernel-implementation-mapping.zh.md`
+- Cluster-aware menu composition design: `docs/product/architecture/cluster-aware-menu-composition.md`
+- Cluster-aware menu composition design (ZH): `docs/product/architecture/cluster-aware-menu-composition.zh.md`
 - I18n runtime model draft: `docs/product/architecture/i18n-runtime-model.md`
 - I18n runtime model draft (ZH): `docs/product/architecture/i18n-runtime-model.zh.md`
 - First core workflow draft: `docs/product/workflows/first-workflow.md`
