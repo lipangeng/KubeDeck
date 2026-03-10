@@ -143,3 +143,7 @@ Work can proceed directly from this plan when the following remain true:
 - menu work still targets `cluster-aware-menu-composition`,
 - resource-page work still targets `frontend-resource-page-extension-model`,
 - and V1 scope still matches `implementation-boundary`.
+
+For the immediate remediation sequence before broader V1 feature work, use:
+
+- `docs/product/releases/v1/foundation-architecture-remediation-plan.md`
