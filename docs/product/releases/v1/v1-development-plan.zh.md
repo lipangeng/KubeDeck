@@ -143,3 +143,7 @@ V1 开发必须遵循“架构优先”的顺序：
 - 菜单开发仍然以 `cluster-aware-menu-composition` 为目标，
 - 资源页开发仍然以 `frontend-resource-page-extension-model` 为目标，
 - V1 范围仍然与 `implementation-boundary` 保持一致。
+
+如果接下来要先完成基础架构补全，再进入更广泛的 V1 实施，请使用：
+
+- `docs/product/releases/v1/foundation-architecture-remediation-plan.zh.md`

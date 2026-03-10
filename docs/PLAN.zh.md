@@ -74,6 +74,8 @@ KubeDeck 的目标不是再做一个通用 Kubernetes 仪表盘。
 - V1 implementation boundary: `docs/product/releases/v1/implementation-boundary.md`
 - V1 开发计划：`docs/product/releases/v1/v1-development-plan.zh.md`
 - V1 development plan: `docs/product/releases/v1/v1-development-plan.md`
+- 基础架构补全实施计划：`docs/product/releases/v1/foundation-architecture-remediation-plan.zh.md`
+- Foundation architecture remediation plan: `docs/product/releases/v1/foundation-architecture-remediation-plan.md`
 
 ### 归档
 
