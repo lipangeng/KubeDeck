@@ -32,6 +32,22 @@ export interface RegistryResponse {
   resourceTypes: RegistryResourceType[];
 }
 
+export interface WorkloadItem {
+  id: string;
+  name: string;
+  kind: string;
+  namespace: string;
+  status: string;
+  health: string;
+  updatedAt: string;
+}
+
+export interface WorkloadsResponse {
+  cluster: string;
+  namespace: string;
+  items: WorkloadItem[];
+}
+
 export interface ClustersResponse {
   clusters: string[];
 }

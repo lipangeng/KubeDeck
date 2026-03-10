@@ -35,6 +35,20 @@ type menusResponse struct {
 	} `json:"menus"`
 }
 
+type workloadsResponse struct {
+	Cluster   string `json:"cluster"`
+	Namespace string `json:"namespace"`
+	Items     []struct {
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		Kind      string `json:"kind"`
+		Namespace string `json:"namespace"`
+		Status    string `json:"status"`
+		Health    string `json:"health"`
+		UpdatedAt string `json:"updatedAt"`
+	} `json:"items"`
+}
+
 func TestRegistryEndpoint(t *testing.T) {
 	router := NewRouter()
 
@@ -137,6 +151,42 @@ func TestResourceApplyEndpoint(t *testing.T) {
 
 	if _, ok := body["message"]; !ok {
 		t.Fatalf("expected response to contain message key, body=%s", resp.Body.String())
+	}
+}
+
+func TestWorkloadsEndpoint(t *testing.T) {
+	router := NewRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/resources/workloads?cluster=dev&namespace=default", nil)
+	resp := httptest.NewRecorder()
+
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, resp.Code)
+	}
+
+	var body workloadsResponse
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected JSON response, got error: %v", err)
+	}
+
+	if body.Cluster != "dev" {
+		t.Fatalf("expected cluster dev, got %q", body.Cluster)
+	}
+	if body.Namespace != "default" {
+		t.Fatalf("expected namespace default, got %q", body.Namespace)
+	}
+	if len(body.Items) == 0 {
+		t.Fatalf("expected non-empty workload items, body=%s", resp.Body.String())
+	}
+	if body.Items[0].Name == "" || body.Items[0].Kind == "" || body.Items[0].Status == "" {
+		t.Fatalf("expected typed workload fields, body=%s", resp.Body.String())
+	}
+	for _, item := range body.Items {
+		if item.Namespace != "default" {
+			t.Fatalf("expected namespace filtering to apply, got item namespace %q", item.Namespace)
+		}
 	}
 }
 

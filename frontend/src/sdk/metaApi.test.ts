@@ -3,6 +3,7 @@ import {
   parseClustersResponse,
   parseMenusResponse,
   parseRegistryResponse,
+  parseWorkloadsResponse,
 } from './metaApi';
 
 describe('parseMenusResponse', () => {
@@ -73,5 +74,29 @@ describe('parseRegistryResponse', () => {
 
     expect(parsed.cluster).toBe('default');
     expect(parsed.resourceTypes[0].kind).toBe('Deployment');
+  });
+});
+
+describe('parseWorkloadsResponse', () => {
+  it('parses typed workloads response', () => {
+    const parsed = parseWorkloadsResponse({
+      cluster: 'dev',
+      namespace: 'default',
+      items: [
+        {
+          id: 'dev-default-api',
+          name: 'api',
+          kind: 'Deployment',
+          namespace: 'default',
+          status: 'Running',
+          health: 'Healthy',
+          updatedAt: '2026-03-10T06:30:00Z',
+        },
+      ],
+    });
+
+    expect(parsed.cluster).toBe('dev');
+    expect(parsed.items[0].name).toBe('api');
+    expect(parsed.items[0].status).toBe('Running');
   });
 });
