@@ -2,124 +2,129 @@
 
 ## 1. Purpose
 
-This document defines what the first implementation of KubeDeck must include and what it must explicitly defer.
+This document defines what V1 must include now that menu composition and resource-page extension have entered the product architecture.
 
-The goal is to prevent scope expansion before the first core workflow becomes real and usable.
+V1 is complete only when one real workflow is usable on top of the new runtime shape.
 
-## 2. Boundary Principle
+## 2. V1 Core Principle
 
-V1 is complete only when one real user workflow is usable end-to-end.
+V1 must prove product value and architecture validity at the same time.
 
-V1 is not complete because:
+That means V1 is not complete merely because:
+
 - the shell renders,
-- metadata endpoints exist,
-- or extension points are declared in architecture documents.
+- plugin contracts exist,
+- or menus and pages can technically register.
+
+V1 is complete only when one real workflow is delivered through the current microkernel, menu, and resource-page models.
 
 ## 3. V1 Must Deliver
 
-### 3.1 Core Workflow
+### 3.1 Runtime Foundation
+
+V1 must preserve:
+
+- the microkernel and plugin runtime,
+- composed menu behavior,
+- and the shared resource-page shell model.
+
+### 3.2 First Real Workflow
 
 V1 must deliver one complete workflow:
 
-1. Enter Homepage
-2. Confirm or change cluster
-3. Enter `Workloads`
-4. View a real workload list
-5. Start `Create` or `Apply`
-6. Submit with valid target resolution
-7. Receive clear result feedback
-8. Return to the workload context without losing state
+1. enter homepage,
+2. confirm active cluster,
+3. enter `Workloads` through the composed menu,
+4. view real workload data,
+5. enter a resource or action path,
+6. complete one standard operation,
+7. receive clear result feedback,
+8. continue without losing core context.
 
-### 3.2 Required Pages
+### 3.3 Required Pages And Surfaces
 
 V1 must include:
-- Homepage
-- Workloads page
-- Create / Apply interaction surface
-- contextual result feedback in the same task flow
 
-### 3.3 Required Context
+- homepage,
+- left navigation driven by the composed menu model,
+- `Workloads` as the first real domain,
+- one shared resource-page shell,
+- `Overview` and `YAML` as the default tabs,
+- and one action path such as create, apply, or edit.
+
+### 3.4 Required Context
 
 V1 must preserve:
-- active cluster
-- namespace context
-- current resource domain
-- key list filters needed for task continuity
 
-### 3.4 Required Namespace Support
+- active cluster,
+- namespace scope,
+- current menu and workflow domain,
+- current resource identity when entering resource pages,
+- and enough continuity to return to the prior working path.
+
+### 3.5 Required Namespace Behavior
 
 V1 must support:
-- `single` namespace scope for browsing and action defaults
-- `all` namespace scope for browsing
 
-V1 must also ensure:
-- create/apply resolves to a concrete namespace target when required
-- cluster-scoped resources are handled explicitly
-- namespace context persists across Homepage, Workloads, and Create / Apply
+- `single` namespace scope,
+- `all` namespace scope for browsing,
+- explicit target resolution for operations that require a concrete namespace,
+- and continuity of namespace context between menu navigation, lists, and actions.
 
-### 3.5 Required Feedback
+### 3.6 Required Menu Behavior
 
-V1 must provide:
-- success feedback with affected objects
-- failure feedback with preserved input context
-- partial-failure distinction when multi-document or mixed outcomes exist
+V1 must show the new menu model in product form:
 
-### 3.6 Required Homepage Behavior
+- a system-owned default menu skeleton,
+- explicit built-in entries,
+- room for CRD and plugin mounts,
+- disabled state for configured-but-unavailable entries,
+- and a `CRDs` fallback resource entry.
 
-Homepage must:
-- prioritize task entry over diagnostics
-- show active cluster clearly
-- provide a direct entry into `Workloads`
-- avoid making technical source categories part of the primary UX
+User override storage may remain minimal in V1, but the runtime shape must not block it.
 
-### 3.7 Required Workloads Behavior
+### 3.7 Required Resource Page Behavior
 
-Workloads page must:
-- show current cluster and namespace scope clearly
-- present a real resource list
-- expose `Create` or `Apply` prominently
-- preserve context after actions
+V1 must show the new resource-page model in product form:
+
+- all first-wave resources resolve through the shared shell,
+- `Overview` and `YAML` are real tabs,
+- built-in specialization still fits the shared model,
+- and the model leaves room for later tab replacement and takeover.
 
 ## 4. V1 Should Deliver If Low Cost
 
 These items are useful but not required for V1 completion:
-- last-used namespace restoration per cluster
-- recent task or resume shortcut on Homepage
-- lightweight empty-state guidance
-- secondary refresh status messaging
-- delayed support for `multiple` namespace selection in the UI
 
-These should be added only if they do not delay the first usable workflow.
+- lightweight global user menu preferences,
+- cluster-local menu overrides with minimal persistence,
+- more than one specialized resource page,
+- more than one YAML variant,
+- resume shortcuts on homepage,
+- delayed `multiple` namespace selection in the UI.
 
 ## 5. V1 Must Not Include
 
 V1 must not expand into:
-- AI-assisted workflows
-- generalized chat or assistant surfaces
-- broad plugin-driven workflow delivery
-- large dashboard-style observability surfaces
-- multi-resource-domain expansion beyond the first real workflow
-- detailed visual polish work before workflow completion
-- advanced filtering and sorting that do not materially support the first task
 
-## 6. Deferred After V1
+- AI-assisted workflows,
+- generalized chat surfaces,
+- plugin marketplace or hot-install UI,
+- broad observability dashboard work,
+- broad block-level page-extension systems,
+- large multi-domain expansion before the first domain is stable,
+- or heavy visual polish before workflow validity is proven.
 
-The following are valid post-V1 directions:
-- AI as a later task-enhancement layer
-- broader plugin-hosted workflows
-- richer workload detail views
-- `multiple` namespace selection in full UI form
-- broader resource domains beyond `Workloads`
-- homepage resume intelligence and task memory
+## 6. V1 Completion Check
 
-## 7. Completion Check
+V1 is in bounds only if all answers below are yes:
 
-V1 is in bounds when all answers below are yes:
-- Can the user reach `Workloads` directly from Homepage?
-- Can the user understand current cluster and namespace context immediately?
-- Can the user perform one real create/apply operation?
-- Can the operation resolve to a valid concrete target?
-- Can the user understand success and failure without leaving the task path?
-- Can the user continue working without losing context?
+- Does the workflow run on top of the current microkernel runtime?
+- Is the left menu composed rather than hard-coded?
+- Can the user enter `Workloads` from that menu?
+- Can the user reach a real resource list and resource page?
+- Does the resource page expose `Overview` and `YAML` through the shared model?
+- Can the user complete one real operation with valid target resolution?
+- Can the user understand results and continue without losing context?
 
-If any answer is no, V1 scope should not expand.
+If any answer is no, V1 scope must not expand.
