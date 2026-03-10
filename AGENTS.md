@@ -37,6 +37,13 @@ KubeDeck is now a runnable monorepo with backend, frontend, and plugin templates
   - ZH: 变更内容 / 原因 / 测试方法
 - PRs should include: scope summary, validation commands run, and UI screenshots for frontend changes.
 
+## Documentation Guidelines
+- User-facing and contributor-facing documentation must be maintained as two standalone files: one Chinese version and one English version.
+- Do not mix Chinese and English in the same canonical document, except for required identifiers, commands, or API names.
+- When creating new docs, add both language versions together in the same change.
+- When updating an existing doc, update the corresponding Chinese and English versions in the same change and keep their structure, meaning, and examples aligned.
+- If one language version is intentionally deferred, record the gap and reason in the PR description before merge.
+
 ## Security & Configuration Tips
 - Never commit secrets or private credentials.
 - Backend auth/authorization is authoritative; frontend permission hints are display-only.
