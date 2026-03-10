@@ -33,8 +33,18 @@ function App({ themePreference, onThemePreferenceChange, pluginModules = [] }: A
 }
 
 function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
-  const { activeActions, activePage, actionSummary, executeAction, kernelSource, navigate, navigation } =
-    useKernelRuntime();
+  const {
+    activeActions,
+    activeCluster,
+    activePage,
+    actionSummary,
+    currentWorkflowDomainId,
+    executeAction,
+    kernelSource,
+    namespaceScope,
+    navigate,
+    navigation,
+  } = useKernelRuntime();
   const ActiveComponent = activePage?.component;
 
   const cycleThemePreference = () => {
@@ -113,6 +123,16 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
             </Typography>
             <Typography variant="caption" color="text.secondary">
               {copy('app.kernelMetadataSource')}: {kernelSource}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {copy('app.activeCluster')}: {activeCluster}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {copy('app.namespaceScope')}:{' '}
+              {namespaceScope.kind === 'single' ? namespaceScope.namespaces.join(', ') : 'all'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {copy('app.activeWorkflow')}: {currentWorkflowDomainId ?? copy('app.none')}
             </Typography>
             {activeActions.map((action) => (
               <Button
