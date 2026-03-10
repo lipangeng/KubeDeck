@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { FrontendCapabilityModule } from '../sdk';
-import { collectFrontendPluginModules } from './discoverFrontendPluginModules';
+import {
+  collectFrontendPluginModules,
+  discoverFrontendPluginModules,
+} from './discoverFrontendPluginModules';
 
 describe('collectFrontendPluginModules', () => {
   it('returns default frontend plugin modules and skips template entries', () => {
@@ -25,5 +28,12 @@ describe('collectFrontendPluginModules', () => {
     });
 
     expect(discovered).toEqual([pluginModule]);
+  });
+
+  it('discovers the repository sample frontend plugin and skips templates', () => {
+    const discovered = discoverFrontendPluginModules();
+
+    expect(discovered.some((module) => module.pluginId === 'plugin.sample-ops-console')).toBe(true);
+    expect(discovered.some((module) => module.pluginId === 'example-frontend-plugin')).toBe(false);
   });
 });

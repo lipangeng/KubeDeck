@@ -1,0 +1,64 @@
+{
+  "pluginId": "plugin.sample-ops-console",
+  "version": "0.1.0",
+  "displayName": "Sample Ops Console",
+  "contributions": {
+    "pages": [
+      {
+        "id": "page.sample-ops-console",
+        "workflowDomainId": "sample-ops-console",
+        "route": "/sample-ops-console",
+        "entryKey": "sample-ops-console",
+        "title": {
+          "key": "sampleOpsConsole.title",
+          "fallback": "Sample Ops Console"
+        },
+        "description": {
+          "key": "sampleOpsConsole.description",
+          "fallback": "A sample plugin contribution used to validate end-to-end plugin discovery."
+        }
+      }
+    ],
+    "menus": [
+      {
+        "id": "menu.sample-ops-console",
+        "workflowDomainId": "sample-ops-console",
+        "entryKey": "sample-ops-console",
+        "route": "/sample-ops-console",
+        "placement": "primary",
+        "order": 110,
+        "visible": true,
+        "title": {
+          "key": "sampleOpsConsole.title",
+          "fallback": "Sample Ops Console"
+        }
+      }
+    ],
+    "actions": [
+      {
+        "id": "refresh-sample-ops-console",
+        "workflowDomainId": "sample-ops-console",
+        "surface": "inline",
+        "visible": true,
+        "title": {
+          "key": "sampleOpsConsole.actions.refresh",
+          "fallback": "Refresh Sample Ops Console"
+        }
+      }
+    ],
+    "slots": [
+      {
+        "id": "slot.sample-ops-console.summary",
+        "workflowDomainId": "sample-ops-console",
+        "slotId": "sample-ops-console.summary",
+        "placement": "summary",
+        "visible": true,
+        "title": {
+          "key": "sampleOpsConsole.slots.summary",
+          "fallback": "Sample Ops Console Summary"
+        }
+      }
+    ]
+  },
+  "requiredCapabilities": []
+}

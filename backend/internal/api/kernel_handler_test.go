@@ -156,6 +156,28 @@ func TestKernelHandlerSnapshotIncludesDiscoveredPluginContributions(t *testing.T
 	}
 }
 
+func TestKernelHandlerSnapshotLoadsRepositorySamplePluginAndSkipsTemplates(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "plugins")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/meta/kernel", nil)
+
+	NewKernelHandlerWithPluginRoot(root).Snapshot(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if want := "page.sample-ops-console"; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+	if unwanted := "example-frontend-plugin"; contains(body, unwanted) {
+		t.Fatalf("expected body not to contain template plugin %q, got %s", unwanted, body)
+	}
+	if unwanted := "example-backend-plugin"; contains(body, unwanted) {
+		t.Fatalf("expected body not to contain template plugin %q, got %s", unwanted, body)
+	}
+}
+
 func contains(body string, want string) bool {
 	return len(body) >= len(want) && (body == want || len(body) > len(want) && (index(body, want) >= 0))
 }
