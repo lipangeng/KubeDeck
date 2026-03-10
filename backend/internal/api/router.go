@@ -5,6 +5,11 @@ import "net/http"
 // NewRouter wires the minimal backend API surface kept during cleanup.
 func NewRouter() http.Handler {
 	mux := http.NewServeMux()
+	kernel := NewKernelHandler()
+
+	mux.HandleFunc("/api/meta/menus", kernel.Menus)
+	mux.HandleFunc("/api/meta/pages", kernel.Pages)
+	mux.HandleFunc("/api/meta/actions", kernel.Actions)
 	mux.HandleFunc("/api/healthz", healthHandler)
 	mux.HandleFunc("/api/readyz", healthHandler)
 	return mux
