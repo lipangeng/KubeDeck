@@ -17,8 +17,11 @@ export interface RemoteMenuDescriptor {
   ID: string;
   WorkflowDomainID: string;
   EntryKey: string;
+  GroupKey: string;
   Route: string;
   Placement: 'primary' | 'secondary' | 'context';
+  Availability: 'enabled' | 'disabled-unavailable' | 'hidden';
+  IsFallback?: boolean;
   Order: number;
   Visible: boolean;
   Title: RemoteTextRef;

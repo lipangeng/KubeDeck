@@ -89,14 +89,22 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
               {copy('app.kernelNavigation')}
             </Typography>
-            {navigation.map((entry) => (
-              <Button
-                key={entry.identity.contributionId}
-                variant={entry.route === activePage?.route ? 'contained' : 'outlined'}
-                onClick={() => navigate(entry.route ?? '/')}
-              >
-                {entry.title.fallback}
-              </Button>
+            {navigation.map((group) => (
+              <Stack key={group.key} spacing={1}>
+                <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
+                  {group.key}
+                </Typography>
+                {group.entries.map((entry) => (
+                  <Button
+                    key={entry.identity.contributionId}
+                    variant={entry.route === activePage?.route ? 'contained' : 'outlined'}
+                    disabled={entry.availability !== 'enabled'}
+                    onClick={() => navigate(entry.route ?? '/')}
+                  >
+                    {entry.title.fallback}
+                  </Button>
+                ))}
+              </Stack>
             ))}
             <Divider />
             <Typography variant="caption" color="text.secondary">
