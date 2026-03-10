@@ -40,6 +40,20 @@ func TestKernelHandlerActions(t *testing.T) {
 	}
 }
 
+func TestKernelHandlerSlots(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/meta/slots", nil)
+	rec := httptest.NewRecorder()
+
+	NewKernelHandler().Slots(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	if want := "slot.workloads.summary.insights"; !contains(rec.Body.String(), want) {
+		t.Fatalf("expected body to contain %q, got %s", want, rec.Body.String())
+	}
+}
+
 func TestKernelHandlerSnapshot(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/meta/kernel", nil)
 	rec := httptest.NewRecorder()
@@ -54,6 +68,9 @@ func TestKernelHandlerSnapshot(t *testing.T) {
 		t.Fatalf("expected body to contain %q, got %s", want, body)
 	}
 	if want := "actions"; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+	if want := "slots"; !contains(body, want) {
 		t.Fatalf("expected body to contain %q, got %s", want, body)
 	}
 	if want := "operations"; !contains(body, want) {

@@ -14,7 +14,7 @@ import { useKernelRuntime } from '../../runtime/KernelRuntimeContext';
 import type { WorkloadItem } from '../../runtime/fetchWorkloads';
 
 export function WorkloadsPage() {
-  const { activePage, fetchWorkloadsForDomain } = useKernelRuntime();
+  const { activePage, activeSummarySlots, fetchWorkloadsForDomain } = useKernelRuntime();
   const [items, setItems] = useState<WorkloadItem[]>([]);
   const [loading, setLoading] = useState(true);
   const workflowDomainId = activePage?.workflowDomainId;
@@ -50,6 +50,16 @@ export function WorkloadsPage() {
     <ListPageShell
       title={copy('workloads.title')}
       toolbar={<Chip color="primary" label={copy('workloads.badge')} size="small" />}
+      summary={
+        activeSummarySlots.length > 0 ? (
+          <Stack spacing={1}>
+            {activeSummarySlots.map((slot) => {
+              const SlotComponent = slot.component;
+              return <SlotComponent key={slot.identity.contributionId} />;
+            })}
+          </Stack>
+        ) : null
+      }
     >
       <Stack spacing={1.5}>
         <Typography color="text.secondary">{copy('workloads.description')}</Typography>

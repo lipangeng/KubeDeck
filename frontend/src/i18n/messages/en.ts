@@ -14,6 +14,8 @@ export const enMessages = {
   'remoteCapability.badge': 'Remote Capability',
   'remoteCapability.body':
     'This workflow page is rendered by the generic kernel runtime because no built-in page implementation was registered locally.',
+  'remoteCapability.slotBody':
+    'This summary slot is composed from backend capability metadata and rendered through the generic runtime slot.',
   'homepage.title': 'Homepage',
   'homepage.description': 'The shell now renders built-in workflow pages through the kernel registry.',
   'workloads.title': 'Workloads',

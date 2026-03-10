@@ -35,8 +35,18 @@ export interface RemoteActionDescriptor {
   Description?: RemoteTextRef;
 }
 
+export interface RemoteSlotDescriptor {
+  ID: string;
+  WorkflowDomainID: string;
+  SlotID: string;
+  Placement: 'summary' | 'panel' | 'toolbar' | 'context';
+  Visible: boolean;
+  Title?: RemoteTextRef;
+}
+
 export interface RemoteKernelMetadata {
   pages: RemotePageDescriptor[];
   menus: RemoteMenuDescriptor[];
   actions: RemoteActionDescriptor[];
+  slots: RemoteSlotDescriptor[];
 }

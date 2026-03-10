@@ -18,6 +18,7 @@ import { fetchKernelMetadata } from './fetchKernelMetadata';
 import { fetchWorkloads, type WorkloadItem } from './fetchWorkloads';
 import { hydrateKernelSnapshot } from './hydrateKernelSnapshot';
 import { resolveWorkflowActions } from './resolveWorkflowActions';
+import { resolveWorkflowSlots } from './resolveWorkflowSlots';
 import type { KernelRegistrySnapshot } from './types';
 
 type KernelSource = 'loading' | 'backend' | 'local-fallback';
@@ -26,6 +27,7 @@ interface KernelRuntimeContextValue {
   activeRoute: string;
   activePage: KernelRegistrySnapshot['pages'][number] | null;
   activeActions: KernelRegistrySnapshot['actions'];
+  activeSummarySlots: KernelRegistrySnapshot['slots'];
   actionSummary: string | null;
   kernelSource: KernelSource;
   navigation: ReturnType<typeof composeKernelNavigation>;
@@ -83,6 +85,9 @@ export function KernelRuntimeProvider({ children }: PropsWithChildren) {
   const activeActions = activePage
     ? resolveWorkflowActions(activePage.workflowDomainId, registrySnapshot.actions)
     : [];
+  const activeSummarySlots = activePage
+    ? resolveWorkflowSlots(activePage.workflowDomainId, registrySnapshot.slots, 'summary')
+    : [];
 
   const navigate = useCallback((route: string) => {
     setActiveRoute(route);
@@ -109,6 +114,7 @@ export function KernelRuntimeProvider({ children }: PropsWithChildren) {
       activeRoute,
       activePage,
       activeActions,
+      activeSummarySlots,
       actionSummary,
       kernelSource,
       navigation,
@@ -119,6 +125,7 @@ export function KernelRuntimeProvider({ children }: PropsWithChildren) {
     }),
     [
       activeActions,
+      activeSummarySlots,
       activePage,
       activeRoute,
       actionSummary,

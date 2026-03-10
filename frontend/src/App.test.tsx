@@ -93,6 +93,16 @@ function createKernelMetadataFetchMock() {
               Title: { Key: 'actions.apply', Fallback: 'Apply' },
             },
           ],
+          slots: [
+            {
+              ID: 'slot.workloads.summary.insights',
+              WorkflowDomainID: 'workloads',
+              SlotID: 'workloads.summary.insights',
+              Placement: 'summary',
+              Visible: true,
+              Title: { Key: 'workloads.insights.title', Fallback: 'Kernel Insights' },
+            },
+          ],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
@@ -169,6 +179,7 @@ describe('App', () => {
     ).toBeTruthy();
     expect(screen.getByText('Registered actions: Create, Apply')).toBeTruthy();
     expect(await screen.findByText('api')).toBeTruthy();
+    expect(screen.getByText('Kernel Insights')).toBeTruthy();
   });
 
   it('executes a kernel action through the backend action entry', async () => {

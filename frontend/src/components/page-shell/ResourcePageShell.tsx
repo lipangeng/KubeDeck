@@ -11,6 +11,7 @@ interface BaseShellProps {
 
 interface ListPageShellProps extends BaseShellProps {
   toolbar?: ReactNode;
+  summary?: ReactNode;
 }
 
 interface DetailPageShellProps extends BaseShellProps {
@@ -18,7 +19,7 @@ interface DetailPageShellProps extends BaseShellProps {
   sidePanel?: ReactNode;
 }
 
-export function ListPageShell({ title, toolbar, children }: ListPageShellProps) {
+export function ListPageShell({ title, toolbar, summary, children }: ListPageShellProps) {
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Stack spacing={1.5}>
@@ -28,6 +29,7 @@ export function ListPageShell({ title, toolbar, children }: ListPageShellProps) 
           </Typography>
           {toolbar ? <Box>{toolbar}</Box> : null}
         </Stack>
+        {summary ? <Box>{summary}</Box> : null}
         <Box>{children}</Box>
       </Stack>
     </Paper>
