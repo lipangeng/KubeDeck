@@ -86,6 +86,14 @@ Near-term priorities must follow this order:
 
 - Product requirements clarification: `docs/product/product-requirements.md`
 - Product requirements clarification (ZH): `docs/product/product-requirements.zh.md`
+- Microkernel extensibility and i18n minimum constraints: `docs/product/architecture/microkernel-and-i18n-decision.md`
+- Microkernel extensibility and i18n minimum constraints (ZH): `docs/product/architecture/microkernel-and-i18n-decision.zh.md`
+- Kernel contribution contract draft: `docs/product/architecture/kernel-contribution-contract.md`
+- Kernel contribution contract draft (ZH): `docs/product/architecture/kernel-contribution-contract.zh.md`
+- Kernel implementation mapping draft: `docs/product/architecture/kernel-implementation-mapping.md`
+- Kernel implementation mapping draft (ZH): `docs/product/architecture/kernel-implementation-mapping.zh.md`
+- I18n runtime model draft: `docs/product/architecture/i18n-runtime-model.md`
+- I18n runtime model draft (ZH): `docs/product/architecture/i18n-runtime-model.zh.md`
 - First core workflow draft: `docs/product/workflows/first-workflow.md`
 - First core workflow draft (ZH): `docs/product/workflows/first-workflow.zh.md`
 - Shared working context model spec: `docs/product/workflows/shared-working-context-model.md`
@@ -104,8 +112,12 @@ Near-term priorities must follow this order:
 - Namespace context decision draft (ZH): `docs/product/workflows/namespace-context-decision.zh.md`
 - V1 implementation boundary: `docs/product/releases/v1/implementation-boundary.md`
 - V1 implementation boundary (ZH): `docs/product/releases/v1/implementation-boundary.zh.md`
+- V1 microkernel and i18n implementation boundary: `docs/product/releases/v1/microkernel-and-i18n-implementation-boundary.md`
+- V1 microkernel and i18n implementation boundary (ZH): `docs/product/releases/v1/microkernel-and-i18n-implementation-boundary.zh.md`
 - V1 implementation task breakdown: `docs/product/releases/v1/implementation-task-breakdown.md`
 - V1 implementation task breakdown (ZH): `docs/product/releases/v1/implementation-task-breakdown.zh.md`
+- V1 microkernel and i18n task breakdown: `docs/product/releases/v1/microkernel-and-i18n-task-breakdown.md`
+- V1 microkernel and i18n task breakdown (ZH): `docs/product/releases/v1/microkernel-and-i18n-task-breakdown.zh.md`
 - V1 initial development tasks: `docs/product/releases/v1/initial-development-tasks.md`
 - V1 initial development tasks (ZH): `docs/product/releases/v1/initial-development-tasks.zh.md`
 - Task A code change plan: `docs/product/releases/v1/task-a-code-change-plan.md`
@@ -114,6 +126,14 @@ Near-term priorities must follow this order:
 - Task A first patch scope (ZH): `docs/product/releases/v1/task-a-first-patch-scope.zh.md`
 - Task A first patch checklist: `docs/product/releases/v1/task-a-first-patch-checklist.md`
 - Task A first patch checklist (ZH): `docs/product/releases/v1/task-a-first-patch-checklist.zh.md`
+- V1 microkernel and i18n first patch scope: `docs/product/releases/v1/microkernel-and-i18n-first-patch-scope.md`
+- V1 microkernel and i18n first patch scope (ZH): `docs/product/releases/v1/microkernel-and-i18n-first-patch-scope.zh.md`
+- V1 microkernel and i18n first patch checklist: `docs/product/releases/v1/microkernel-and-i18n-first-patch-checklist.md`
+- V1 microkernel and i18n first patch checklist (ZH): `docs/product/releases/v1/microkernel-and-i18n-first-patch-checklist.zh.md`
+- V1 first microkernel patch code mapping draft: `docs/product/releases/v1/microkernel-first-patch-code-mapping.md`
+- V1 first microkernel patch code mapping draft (ZH): `docs/product/releases/v1/microkernel-first-patch-code-mapping.zh.md`
+- V1 first microkernel patch task list and file responsibility: `docs/product/releases/v1/microkernel-first-patch-task-list-and-file-responsibility.md`
+- V1 first microkernel patch task list and file responsibility (ZH): `docs/product/releases/v1/microkernel-first-patch-task-list-and-file-responsibility.zh.md`
 - Architecture design: `docs/plans/2026-02-25-kubedeck-architecture-design.md`
 - Implementation plan: `docs/plans/2026-02-25-kubedeck-microkernel-baseline-implementation.md`
 - PLAN (ZH): `docs/PLAN.zh.md`
