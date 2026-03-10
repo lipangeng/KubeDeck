@@ -7,17 +7,19 @@ import Stack from '@mui/material/Stack';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { copy } from './i18n/copy';
+import type { FrontendCapabilityModule } from './kernel/sdk';
 import { KernelRuntimeProvider, useKernelRuntime } from './kernel/runtime/KernelRuntimeContext';
 import { type ThemePreference } from './themeMode';
 
 interface AppProps {
   themePreference: ThemePreference;
   onThemePreferenceChange: (next: ThemePreference) => void;
+  pluginModules?: FrontendCapabilityModule[];
 }
 
-function App({ themePreference, onThemePreferenceChange }: AppProps) {
+function App({ themePreference, onThemePreferenceChange, pluginModules = [] }: AppProps) {
   return (
-    <KernelRuntimeProvider>
+    <KernelRuntimeProvider pluginModules={pluginModules}>
       <AppShell
         themePreference={themePreference}
         onThemePreferenceChange={onThemePreferenceChange}

@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import type { FrontendCapabilityModule, MenuContribution, PageContribution } from './kernel/sdk';
 
 afterEach(() => {
   cleanup();
@@ -221,5 +222,53 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Theme: system' }));
     expect(onThemePreferenceChange).toHaveBeenCalledWith('light');
+  });
+
+  it('renders local frontend plugin modules through the kernel runtime fallback snapshot', async () => {
+    const pluginPage: PageContribution = {
+      identity: {
+        source: 'plugin',
+        capabilityId: 'plugin.ops-console',
+        contributionId: 'page.ops-console',
+      },
+      workflowDomainId: 'ops-console',
+      route: '/ops-console',
+      entryKey: 'ops-console',
+      title: { key: 'opsConsole.title', fallback: 'Operations Console' },
+      component: () => <div>Local plugin page</div>,
+    };
+    const pluginMenu: MenuContribution = {
+      identity: {
+        source: 'plugin',
+        capabilityId: 'plugin.ops-console',
+        contributionId: 'menu.ops-console',
+      },
+      workflowDomainId: 'ops-console',
+      entryKey: 'ops-console',
+      placement: 'primary',
+      route: '/ops-console',
+      title: { key: 'opsConsole.title', fallback: 'Operations Console' },
+    };
+    const pluginModule: FrontendCapabilityModule = {
+      pluginId: 'plugin.ops-console',
+      registerPages: () => [pluginPage],
+      registerMenus: () => [pluginMenu],
+      registerActions: () => [],
+      registerSlots: () => [],
+    };
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 500 })));
+    render(
+      <App
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+        pluginModules={[pluginModule]}
+      />,
+    );
+
+    expect(await screen.findByText('Kernel metadata source: local-fallback')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Operations Console' }));
+
+    expect(screen.getByText('Local plugin page')).toBeTruthy();
   });
 });
