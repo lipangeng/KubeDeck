@@ -76,6 +76,44 @@ function createKernelMetadataFetchMock() {
       );
     }
 
+    if (url.includes('/api/workflows/workloads/items?cluster=default')) {
+      return new Response(
+        JSON.stringify([
+          {
+            id: 'workload-api-default',
+            name: 'api',
+            kind: 'Deployment',
+            namespace: 'default',
+            status: 'Running',
+            health: 'Healthy',
+            updatedAt: '2026-03-10T10:00:00Z',
+          },
+          {
+            id: 'workload-web-default',
+            name: 'web',
+            kind: 'Deployment',
+            namespace: 'default',
+            status: 'Pending',
+            health: 'Warning',
+            updatedAt: '2026-03-10T10:05:00Z',
+          },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+
+    if (url.endsWith('/api/actions/execute')) {
+      return new Response(
+        JSON.stringify({
+          Accepted: true,
+          Summary: 'apply accepted',
+          AffectedObjects: ['deployment/sample'],
+          FailedObjects: [],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+
     throw new Error(`Unhandled fetch request: ${url}`);
   });
 }
@@ -108,6 +146,18 @@ describe('App', () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText('Registered actions: Create, Apply')).toBeTruthy();
+    expect(await screen.findByText('api')).toBeTruthy();
+  });
+
+  it('executes a kernel action through the backend action entry', async () => {
+    vi.stubGlobal('fetch', createKernelMetadataFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Workloads' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Run Apply' }));
+
+    expect(await screen.findByText('Last action result: apply accepted')).toBeTruthy();
   });
 
   it('cycles the theme preference', () => {

@@ -8,6 +8,7 @@ import Stack from '@mui/material/Stack';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { copy } from './i18n/copy';
+import { executeKernelAction } from './kernel/runtime/executeKernelAction';
 import { registerBuiltInActions } from './kernel/builtins/registerBuiltInActions';
 import { registerBuiltInMenus } from './kernel/builtins/registerBuiltInMenus';
 import { registerBuiltInPages } from './kernel/builtins/registerBuiltInPages';
@@ -31,6 +32,7 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const [kernelSource, setKernelSource] = useState<'loading' | 'backend' | 'local-fallback'>(
     'loading',
   );
+  const [actionSummary, setActionSummary] = useState<string | null>(null);
 
   const cycleThemePreference = () => {
     const nextPreference: ThemePreference =
@@ -93,6 +95,22 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
     : [];
   const ActiveComponent = activePage?.component;
 
+  const handleExecuteAction = async (actionId: string) => {
+    const result = await executeKernelAction({
+      actionId,
+      workflowDomainId: activePage?.workflowDomainId ?? 'homepage',
+      target: {
+        cluster: 'default',
+        namespace: 'default',
+        scope: 'namespace',
+      },
+      input: {
+        name: 'sample',
+      },
+    });
+    setActionSummary(result.Summary);
+  };
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', color: 'text.primary' }}>
       <AppBar position="sticky" color="transparent" elevation={0}>
@@ -136,6 +154,22 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             <Typography variant="caption" color="text.secondary">
               Kernel metadata source: {kernelSource}
             </Typography>
+            {activeActions.map((action) => (
+              <Button
+                key={action.identity.contributionId}
+                variant="text"
+                onClick={() => {
+                  void handleExecuteAction(action.actionId);
+                }}
+              >
+                Run {action.title.fallback}
+              </Button>
+            ))}
+            {actionSummary ? (
+              <Typography variant="caption" color="text.secondary">
+                Last action result: {actionSummary}
+              </Typography>
+            ) : null}
           </Stack>
         </Paper>
 
