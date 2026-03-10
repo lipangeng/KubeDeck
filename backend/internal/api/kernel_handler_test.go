@@ -39,6 +39,24 @@ func TestKernelHandlerActions(t *testing.T) {
 	}
 }
 
+func TestKernelHandlerSnapshot(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/meta/kernel", nil)
+	rec := httptest.NewRecorder()
+
+	NewKernelHandler().Snapshot(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if want := "pages"; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+	if want := "actions"; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+}
+
 func contains(body string, want string) bool {
 	return len(body) >= len(want) && (body == want || len(body) > len(want) && (index(body, want) >= 0))
 }
