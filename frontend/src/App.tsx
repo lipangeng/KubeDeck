@@ -105,6 +105,16 @@ function resolveWorkloadKinds(resourceTypes: RegistryResourceType[]): RegistryRe
   );
 }
 
+function resolveResultSeverity(outcome: string): 'success' | 'warning' | 'error' {
+  if (outcome === 'success') {
+    return 'success';
+  }
+  if (outcome === 'partial_failure') {
+    return 'warning';
+  }
+  return 'error';
+}
+
 function PrimaryEntryCard({
   title,
   description,
@@ -454,6 +464,18 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
     dispatchWorkContext({ type: 'acknowledge_action_result' });
   }
 
+  function handleReturnToWorkloads() {
+    setApplyDrawerOpen(false);
+    setApplyFormError(null);
+    dispatchWorkContext({ type: 'return_to_workloads' });
+    setReloadToken((current) => current + 1);
+  }
+
+  function handleBackToEdit() {
+    setApplyFormError(null);
+    dispatchWorkContext({ type: 'start_action', actionType: 'apply' });
+  }
+
   async function handleSubmitApply() {
     dispatchWorkContext({ type: 'validate_action' });
 
@@ -501,9 +523,6 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
           affectedObjects: [`apply accepted for ${namespaceTarget}`],
         },
       });
-      dispatchWorkContext({ type: 'return_to_workloads' });
-      setApplyDrawerOpen(false);
-      setReloadToken((current) => current + 1);
     } catch (error) {
       dispatchWorkContext({
         type: 'complete_action_failure',
@@ -858,54 +877,103 @@ function App({ themePreference, onThemePreferenceChange }: AppProps) {
             Browsing scope: {describeNamespaceScope(createApplyContext.namespaceScope)}
           </Typography>
 
-          {createApplyContext.actionContext.needsRevalidation ? (
-            <Alert severity="warning">
-              Namespace browsing scope changed. Review the execution target before submit.
-            </Alert>
-          ) : null}
+          {createApplyContext.actionContext.resultSummary ? (
+            <>
+              <Alert
+                severity={resolveResultSeverity(
+                  createApplyContext.actionContext.resultSummary.outcome,
+                )}
+              >
+                {createApplyContext.actionContext.resultSummary.outcome === 'success'
+                  ? 'Apply succeeded'
+                  : createApplyContext.actionContext.resultSummary.outcome ===
+                      'partial_failure'
+                    ? 'Apply partially failed'
+                    : 'Apply failed'}
+              </Alert>
 
-          {applyFormError ? <Alert severity="error">{applyFormError}</Alert> : null}
-          {createApplyContext.actionContext.resultSummary?.outcome === 'failure' ? (
-            <Alert severity="error">
-              {createApplyContext.actionContext.resultSummary.failedObjects?.join(', ')}
-            </Alert>
-          ) : null}
+              <Paper variant="outlined" sx={{ p: 1.5 }}>
+                <Stack spacing={1}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    Result summary
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Execution target:{' '}
+                    {createApplyContext.actionContext.executionTarget?.kind === 'namespace'
+                      ? createApplyContext.actionContext.executionTarget.namespace
+                      : 'cluster-scoped'}
+                  </Typography>
+                  {createApplyContext.actionContext.resultSummary.affectedObjects?.length ? (
+                    <Typography variant="body2">
+                      Affected: {createApplyContext.actionContext.resultSummary.affectedObjects.join(', ')}
+                    </Typography>
+                  ) : null}
+                  {createApplyContext.actionContext.resultSummary.failedObjects?.length ? (
+                    <Typography variant="body2" color="error">
+                      Failed: {createApplyContext.actionContext.resultSummary.failedObjects.join(', ')}
+                    </Typography>
+                  ) : null}
+                </Stack>
+              </Paper>
 
-          <TextField
-            label="Execution namespace"
-            size="small"
-            value={applyNamespace}
-            onChange={(event) => setApplyNamespace(event.target.value)}
-            disabled={createApplyContext.namespaceScope.mode === 'single'}
-            helperText={
-              createApplyContext.namespaceScope.mode === 'single'
-                ? 'Derived from the current single-namespace browsing scope.'
-                : 'Required because all namespaces is not a valid write target.'
-            }
-          />
+              <Stack direction="row" spacing={1} justifyContent="flex-end">
+                {createApplyContext.actionContext.resultSummary.outcome === 'failure' ? (
+                  <Button variant="outlined" onClick={handleBackToEdit}>
+                    Back to Edit
+                  </Button>
+                ) : null}
+                <Button variant="contained" onClick={handleReturnToWorkloads}>
+                  Back to Workloads
+                </Button>
+              </Stack>
+            </>
+          ) : (
+            <>
+              {createApplyContext.actionContext.needsRevalidation ? (
+                <Alert severity="warning">
+                  Namespace browsing scope changed. Review the execution target before submit.
+                </Alert>
+              ) : null}
 
-          <TextField
-            label="Manifest"
-            multiline
-            minRows={12}
-            value={applyManifest}
-            onChange={(event) => setApplyManifest(event.target.value)}
-          />
+              {applyFormError ? <Alert severity="error">{applyFormError}</Alert> : null}
 
-          <Stack direction="row" spacing={1} justifyContent="flex-end">
-            <Button variant="text" onClick={handleCloseApply}>
-              Cancel
-            </Button>
-            <Button
-              variant="contained"
-              onClick={handleSubmitApply}
-              disabled={createApplyContext.actionContext.status === 'submitting'}
-            >
-              {createApplyContext.actionContext.status === 'submitting'
-                ? 'Submitting...'
-                : 'Submit Apply'}
-            </Button>
-          </Stack>
+              <TextField
+                label="Execution namespace"
+                size="small"
+                value={applyNamespace}
+                onChange={(event) => setApplyNamespace(event.target.value)}
+                disabled={createApplyContext.namespaceScope.mode === 'single'}
+                helperText={
+                  createApplyContext.namespaceScope.mode === 'single'
+                    ? 'Derived from the current single-namespace browsing scope.'
+                    : 'Required because all namespaces is not a valid write target.'
+                }
+              />
+
+              <TextField
+                label="Manifest"
+                multiline
+                minRows={12}
+                value={applyManifest}
+                onChange={(event) => setApplyManifest(event.target.value)}
+              />
+
+              <Stack direction="row" spacing={1} justifyContent="flex-end">
+                <Button variant="text" onClick={handleCloseApply}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={handleSubmitApply}
+                  disabled={createApplyContext.actionContext.status === 'submitting'}
+                >
+                  {createApplyContext.actionContext.status === 'submitting'
+                    ? 'Submitting...'
+                    : 'Submit Apply'}
+                </Button>
+              </Stack>
+            </>
+          )}
         </Stack>
       </Drawer>
     </Box>
