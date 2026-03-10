@@ -50,6 +50,8 @@ describe('composeKernelNavigation', () => {
     expect(composeKernelNavigation(entries)).toEqual([
       {
         key: 'core',
+        order: 10,
+        title: { key: 'menu.group.core', fallback: 'Core' },
         entries: [
           expect.objectContaining({ entryKey: 'homepage' }),
           expect.objectContaining({ entryKey: 'workloads' }),
@@ -57,6 +59,8 @@ describe('composeKernelNavigation', () => {
       },
       {
         key: 'resources',
+        order: 40,
+        title: { key: 'menu.group.resources', fallback: 'Resources' },
         entries: [expect.objectContaining({ entryKey: 'crds', availability: 'disabled-unavailable' })],
       },
     ]);

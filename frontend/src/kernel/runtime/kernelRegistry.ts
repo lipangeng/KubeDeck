@@ -27,6 +27,7 @@ export class KernelRegistry {
     return {
       pages: this.modules.flatMap((module) => module.pages ?? []),
       menus: this.modules.flatMap((module) => module.menus ?? []),
+      menuGroups: [],
       actions: this.modules.flatMap((module) => module.actions ?? []),
       slots: this.modules.flatMap((module) => module.slots ?? []),
     };

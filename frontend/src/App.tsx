@@ -102,7 +102,7 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
             {navigation.map((group) => (
               <Stack key={group.key} spacing={1}>
                 <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
-                  {group.key}
+                  {group.title.fallback}
                 </Typography>
                 {group.entries.map((entry) => (
                   <Button

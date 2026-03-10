@@ -4,11 +4,13 @@ import type { PageContribution } from '../contracts/pageContribution';
 import type { SlotContribution } from '../contracts/slotContribution';
 import { createRemoteCapabilityPage } from './createRemoteCapabilityPage';
 import { createRemoteCapabilitySlot } from './createRemoteCapabilitySlot';
+import type { KernelNavigationGroup } from './menu/types';
 import type { KernelRegistrySnapshot } from './types';
 import type {
   RemoteActionDescriptor,
   RemoteKernelMetadata,
   RemoteMenuDescriptor,
+  RemoteMenuGroup,
   RemotePageDescriptor,
   RemoteSlotDescriptor,
 } from './transport';
@@ -83,6 +85,32 @@ function hydrateMenus(remoteMenus: RemoteMenuDescriptor[]): MenuContribution[] {
   }));
 }
 
+function hydrateMenuGroups(remoteGroups: RemoteMenuGroup[]): KernelNavigationGroup[] {
+  return remoteGroups.map((group) => ({
+    key: group.key,
+    order: group.order,
+    title: toLocalizedText(group.title),
+    entries: group.entries.map((entry) => ({
+      identity: {
+        source: entry.SourceType === 'plugin' ? 'plugin' : 'builtin',
+        capabilityId: entry.CapabilityID,
+        contributionId: entry.ID,
+      },
+      workflowDomainId: entry.WorkflowDomainID,
+      entryKey: entry.EntryKey,
+      groupKey: entry.GroupKey,
+      placement: entry.Placement,
+      availability: entry.Availability,
+      isFallback: entry.IsFallback,
+      order: entry.Order,
+      visible: entry.Visible,
+      route: entry.Route,
+      title: toLocalizedText(entry.Title),
+      description: entry.Description ? toLocalizedText(entry.Description) : undefined,
+    })),
+  }));
+}
+
 function hydrateActions(remoteActions: RemoteActionDescriptor[]): ActionContribution[] {
   return remoteActions.map((action) => ({
     identity: {
@@ -144,6 +172,10 @@ export function hydrateKernelSnapshot(
   return {
     pages: pages.length > 0 ? pages : localSnapshot.pages,
     menus: hydrateMenus(remoteMetadata.menus),
+    menuGroups:
+      remoteMetadata.menuGroups && remoteMetadata.menuGroups.length > 0
+        ? hydrateMenuGroups(remoteMetadata.menuGroups)
+        : localSnapshot.menuGroups,
     actions: hydrateActions(remoteMetadata.actions),
     slots: hydrateSlots(localSnapshot.slots, remoteMetadata.slots),
   };

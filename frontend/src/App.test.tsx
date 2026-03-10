@@ -101,6 +101,112 @@ function createKernelMetadataFetchMock() {
               Title: { Key: 'resources.crds.title', Fallback: 'CRDs' },
             },
           ],
+          menuBlueprint: {
+            groups: [
+              { key: 'core', order: 10, title: { Key: 'menu.group.core', Fallback: 'Core' } },
+              {
+                key: 'extensions',
+                order: 30,
+                title: { Key: 'menu.group.extensions', Fallback: 'Extensions' },
+              },
+              {
+                key: 'resources',
+                order: 40,
+                title: { Key: 'menu.group.resources', Fallback: 'Resources' },
+              },
+            ],
+            entries: [],
+          },
+          menuMounts: [],
+          menuOverrides: [],
+          menuGroups: [
+            {
+              key: 'core',
+              order: 10,
+              title: { Key: 'menu.group.core', Fallback: 'Core' },
+              entries: [
+                {
+                  ID: 'menu.homepage',
+                  CapabilityID: 'core.homepage',
+                  SourceType: 'builtin',
+                  WorkflowDomainID: 'homepage',
+                  EntryKey: 'homepage',
+                  GroupKey: 'core',
+                  Route: '/',
+                  Placement: 'primary',
+                  Availability: 'enabled',
+                  Order: 10,
+                  Visible: true,
+                  Mounted: true,
+                  Configured: true,
+                  Title: { Key: 'homepage.title', Fallback: 'Homepage' },
+                },
+                {
+                  ID: 'menu.workloads',
+                  CapabilityID: 'core.workloads',
+                  SourceType: 'builtin',
+                  WorkflowDomainID: 'workloads',
+                  EntryKey: 'workloads',
+                  GroupKey: 'core',
+                  Route: '/workloads',
+                  Placement: 'primary',
+                  Availability: 'enabled',
+                  Order: 20,
+                  Visible: true,
+                  Mounted: true,
+                  Configured: true,
+                  Title: { Key: 'workloads.title', Fallback: 'Workloads' },
+                },
+              ],
+            },
+            {
+              key: 'extensions',
+              order: 30,
+              title: { Key: 'menu.group.extensions', Fallback: 'Extensions' },
+              entries: [
+                {
+                  ID: 'menu.operations',
+                  CapabilityID: 'core.operations',
+                  SourceType: 'builtin',
+                  WorkflowDomainID: 'operations',
+                  EntryKey: 'operations',
+                  GroupKey: 'extensions',
+                  Route: '/operations',
+                  Placement: 'primary',
+                  Availability: 'enabled',
+                  Order: 30,
+                  Visible: true,
+                  Mounted: true,
+                  Configured: true,
+                  Title: { Key: 'operations.title', Fallback: 'Operations' },
+                },
+              ],
+            },
+            {
+              key: 'resources',
+              order: 40,
+              title: { Key: 'menu.group.resources', Fallback: 'Resources' },
+              entries: [
+                {
+                  ID: 'menu.crds',
+                  CapabilityID: 'configured.crds',
+                  SourceType: 'fallback',
+                  WorkflowDomainID: 'crds',
+                  EntryKey: 'crds',
+                  GroupKey: 'resources',
+                  Route: '/resources/crds',
+                  Placement: 'secondary',
+                  Availability: 'disabled-unavailable',
+                  IsFallback: true,
+                  Order: 999,
+                  Visible: true,
+                  Mounted: false,
+                  Configured: true,
+                  Title: { Key: 'resources.crds.title', Fallback: 'CRDs' },
+                },
+              ],
+            },
+          ],
           actions: [
             {
               ID: 'create',
@@ -165,6 +271,115 @@ function createKernelMetadataFetchMock() {
           Summary: 'apply accepted',
           AffectedObjects: ['deployment/sample'],
           FailedObjects: [],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+
+    throw new Error(`Unhandled fetch request: ${url}`);
+  });
+}
+
+function createOverrideAwareKernelMetadataFetchMock() {
+  return vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith('/api/meta/kernel')) {
+      return new Response(
+        JSON.stringify({
+          pages: [
+            {
+              ID: 'page.homepage',
+              WorkflowDomainID: 'homepage',
+              Route: '/',
+              EntryKey: 'homepage',
+              Title: { Key: 'homepage.title', Fallback: 'Homepage' },
+            },
+            {
+              ID: 'page.operations',
+              WorkflowDomainID: 'operations',
+              Route: '/operations',
+              EntryKey: 'operations',
+              Title: { Key: 'operations.title', Fallback: 'Operations' },
+            },
+          ],
+          menus: [
+            {
+              ID: 'menu.homepage',
+              WorkflowDomainID: 'homepage',
+              EntryKey: 'homepage',
+              GroupKey: 'core',
+              Route: '/',
+              Placement: 'primary',
+              Availability: 'enabled',
+              Order: 10,
+              Visible: true,
+              Title: { Key: 'homepage.title', Fallback: 'Homepage' },
+            },
+            {
+              ID: 'menu.operations',
+              WorkflowDomainID: 'operations',
+              EntryKey: 'operations',
+              GroupKey: 'extensions',
+              Route: '/operations',
+              Placement: 'primary',
+              Availability: 'enabled',
+              Order: 30,
+              Visible: true,
+              Title: { Key: 'operations.title', Fallback: 'Operations' },
+            },
+          ],
+          menuBlueprint: {
+            groups: [
+              { key: 'core', order: 10, title: { Key: 'menu.group.core', Fallback: 'Core' } },
+            ],
+            entries: [],
+          },
+          menuMounts: [],
+          menuOverrides: [{ scope: 'global', moveEntryKeys: { operations: 'core' } }],
+          menuGroups: [
+            {
+              key: 'core',
+              order: 10,
+              title: { Key: 'menu.group.core', Fallback: 'Core' },
+              entries: [
+                {
+                  ID: 'menu.homepage',
+                  CapabilityID: 'core.homepage',
+                  SourceType: 'builtin',
+                  WorkflowDomainID: 'homepage',
+                  EntryKey: 'homepage',
+                  GroupKey: 'core',
+                  Route: '/',
+                  Placement: 'primary',
+                  Availability: 'enabled',
+                  Order: 10,
+                  Visible: true,
+                  Mounted: true,
+                  Configured: true,
+                  Title: { Key: 'homepage.title', Fallback: 'Homepage' },
+                },
+                {
+                  ID: 'menu.operations',
+                  CapabilityID: 'core.operations',
+                  SourceType: 'builtin',
+                  WorkflowDomainID: 'operations',
+                  EntryKey: 'operations',
+                  GroupKey: 'core',
+                  Route: '/operations',
+                  Placement: 'primary',
+                  Availability: 'enabled',
+                  Order: 20,
+                  Visible: true,
+                  Mounted: true,
+                  Configured: true,
+                  Pinned: true,
+                  Title: { Key: 'operations.title', Fallback: 'Operations' },
+                },
+              ],
+            },
+          ],
+          actions: [],
+          slots: [],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
@@ -269,10 +484,20 @@ describe('App', () => {
     render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
 
     expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
-    expect(screen.getByText('core')).toBeTruthy();
-    expect(screen.getByText('extensions')).toBeTruthy();
-    expect(screen.getByText('resources')).toBeTruthy();
+    expect(screen.getByText('Core')).toBeTruthy();
+    expect(screen.getByText('Extensions')).toBeTruthy();
+    expect(screen.getByText('Resources')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'CRDs' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('prefers backend-composed menu groups over local flat regrouping', async () => {
+    vi.stubGlobal('fetch', createOverrideAwareKernelMetadataFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    expect(screen.getByText('Core')).toBeTruthy();
+    expect(screen.queryByText('Extensions')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Operations' })).toBeTruthy();
   });
 
   it('keeps working context continuity during menu navigation', async () => {
