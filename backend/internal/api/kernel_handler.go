@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 
 	"kubedeck/backend/internal/core/builtins"
 	"kubedeck/backend/internal/plugins"
@@ -14,11 +15,20 @@ type KernelHandler struct {
 }
 
 func NewKernelHandler() *KernelHandler {
+	return NewKernelHandlerWithPluginRoot(os.Getenv("KUBEDECK_PLUGIN_DIR"))
+}
+
+func NewKernelHandlerWithPluginRoot(pluginRoot string) *KernelHandler {
 	registry := plugins.NewCapabilityRegistry()
 	_ = registry.Register(builtins.HomepageCapability{})
 	_ = registry.Register(builtins.WorkloadsCapability{})
 	_ = registry.Register(builtins.WorkloadsInsightsCapability{})
 	_ = registry.Register(builtins.OperationsCapability{})
+	if providers, err := plugins.LoadManifestProvidersFromDir(pluginRoot); err == nil {
+		for _, provider := range providers {
+			_ = registry.Register(provider)
+		}
+	}
 	return &KernelHandler{registry: registry}
 }
 

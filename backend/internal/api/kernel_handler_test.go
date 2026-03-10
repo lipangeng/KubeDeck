@@ -3,6 +3,8 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -107,6 +109,49 @@ func TestKernelHandlerExecuteAction(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", rec.Code)
 	}
 	if want := "apply accepted"; !contains(rec.Body.String(), want) {
+		t.Fatalf("expected body to contain %q, got %s", want, rec.Body.String())
+	}
+}
+
+func TestKernelHandlerSnapshotIncludesDiscoveredPluginContributions(t *testing.T) {
+	root := t.TempDir()
+	pluginDir := filepath.Join(root, "ops-console")
+	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
+		t.Fatalf("mkdir plugin dir: %v", err)
+	}
+
+	manifest := `{
+  "pluginId": "plugin.ops-console",
+  "version": "1.0.0",
+  "displayName": "Operations Console",
+  "contributions": {
+    "pages": [
+      {
+        "id": "page.ops-console",
+        "workflowDomainId": "ops-console",
+        "route": "/ops-console",
+        "entryKey": "ops-console",
+        "title": { "key": "opsConsole.title", "fallback": "Operations Console" }
+      }
+    ],
+    "menus": [],
+    "actions": [],
+    "slots": []
+  }
+}`
+	if err := os.WriteFile(filepath.Join(pluginDir, "plugin.manifest.json"), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/meta/kernel", nil)
+
+	NewKernelHandlerWithPluginRoot(root).Snapshot(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	if want := "page.ops-console"; !contains(rec.Body.String(), want) {
 		t.Fatalf("expected body to contain %q, got %s", want, rec.Body.String())
 	}
 }
