@@ -1,6 +1,6 @@
 ---
-name: KubeDeck Product-First Delivery SOP
-description: Use when working on KubeDeck features from requirement clarification through implementation. Enforces a product-first workflow: clarify user task, define workflow and IA, set V1 boundaries, then implement in small batches. Also recommends which supporting skills to use at each stage, especially notion-spec-to-implementation, playwright, openai-docs, gh-address-comments, and gh-fix-ci, with room to substitute equivalent obra/superpowers skills when your local bundle differs.
+name: "kubedeck-product-first-delivery-sop"
+description: "Use when working on KubeDeck features from requirement clarification through implementation. Enforces a product-first workflow: clarify user task, define workflow and IA, set V1 boundaries, then implement in small batches. Also recommends which supporting skills to use at each stage, especially notion-spec-to-implementation, playwright, openai-docs, gh-address-comments, and gh-fix-ci, with room to substitute equivalent obra/superpowers skills when your local bundle differs."
 ---
 
 # Purpose
