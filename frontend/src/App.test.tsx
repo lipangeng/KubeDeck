@@ -153,6 +153,24 @@ function createDefaultFetchMock() {
   });
 }
 
+function createApplyFailureFetchMock() {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+
+    if (url.endsWith('/api/resources/apply')) {
+      expect(init?.method).toBe('POST');
+      return new Response(
+        JSON.stringify({
+          error: 'apply failed',
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+
+    return createDefaultFetchMock()(input, init);
+  });
+}
+
 describe('App', () => {
   it('enters workloads as the primary workflow and reloads workload types on cluster change', async () => {
     const fetchMock = createDefaultFetchMock();
@@ -237,6 +255,9 @@ describe('App', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Submit Apply' }));
 
+    await screen.findByText('Apply succeeded');
+    expect(screen.getByText('Affected: apply accepted for team-a')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Workloads' }));
     await screen.findByText('Apply accepted: apply accepted for team-a');
 
     const applyCall = fetchMock.mock.calls.find(([input]) =>
@@ -245,6 +266,49 @@ describe('App', () => {
     expect(applyCall).toBeTruthy();
     expect(applyCall?.[1]?.body).toContain('"cluster":"dev"');
     expect(applyCall?.[1]?.body).toContain('"namespace":"team-a"');
+  });
+
+  it('preserves apply input on failure and lets the user return to editing', async () => {
+    const fetchMock = createApplyFailureFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <App
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Enter Workloads' }))[0]);
+    await screen.findByText('Cluster: dev');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(await screen.findByText('Apply to dev')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Manifest'), {
+      target: {
+        value: [
+          'apiVersion: apps/v1',
+          'kind: Deployment',
+          'metadata:',
+          '  name: failed-api',
+          'spec:',
+          '  replicas: 2',
+        ].join('\n'),
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Apply' }));
+
+    await screen.findByText('Apply failed');
+    expect(screen.getByText('Failed: apply request failed: 500')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Edit' }));
+
+    const manifestField = await screen.findByLabelText('Manifest');
+    const namespaceField = screen.getByLabelText('Execution namespace');
+    expect((manifestField as HTMLInputElement).value).toContain('failed-api');
+    expect((namespaceField as HTMLInputElement).value).toBe('default');
   });
 
   it('shows blocking summary when readiness check fails', async () => {
