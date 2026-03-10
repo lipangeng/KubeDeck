@@ -52,6 +52,7 @@ interface KernelRuntimeContextValue {
   registrySnapshot: KernelRegistrySnapshot;
   navigate: (route: string) => void;
   enterResource: (resource: ResourceIdentity) => void;
+  exitResource: () => void;
   fetchWorkloadsForDomain: (workflowDomainId: string, cluster?: string) => Promise<WorkloadItem[]>;
   executeAction: (request: KernelActionExecutionRequest) => Promise<KernelActionExecutionResult>;
 }
@@ -146,6 +147,10 @@ export function KernelRuntimeProvider({
     dispatchWorkingContext({ type: 'enter_resource', resource });
   }, []);
 
+  const exitResource = useCallback(() => {
+    dispatchWorkingContext({ type: 'exit_resource' });
+  }, []);
+
   const executeAction = useCallback(
     async (request: KernelActionExecutionRequest) => {
       const result = await executeKernelActionRequest(request);
@@ -171,6 +176,7 @@ export function KernelRuntimeProvider({
       registrySnapshot,
       navigate,
       enterResource,
+      exitResource,
       fetchWorkloadsForDomain,
       executeAction,
     }),
@@ -182,6 +188,7 @@ export function KernelRuntimeProvider({
       actionSummary,
       workingContext,
       enterResource,
+      exitResource,
       executeAction,
       fetchWorkloadsForDomain,
       kernelSource,

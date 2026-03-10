@@ -219,6 +219,25 @@ describe('App', () => {
     expect(screen.getByRole('tab', { name: 'YAML' })).toBeTruthy();
   });
 
+  it('completes the first workflow through resource action, result, and return', async () => {
+    vi.stubGlobal('fetch', createKernelMetadataFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Workloads' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'api' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(await screen.findByText('apply accepted')).toBeTruthy();
+    expect(screen.getByText('deployment/sample')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Workloads' }));
+
+    expect(await screen.findByRole('button', { name: 'api' })).toBeTruthy();
+    expect(screen.getByText('Active workflow: workloads')).toBeTruthy();
+  });
+
   it('executes a kernel action through the backend action entry', async () => {
     vi.stubGlobal('fetch', createKernelMetadataFetchMock());
     render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);

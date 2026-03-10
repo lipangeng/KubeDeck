@@ -41,6 +41,11 @@ export function reduceWorkingContext(
         ...state,
         currentResource: action.resource,
       };
+    case 'exit_resource':
+      return {
+        ...state,
+        currentResource: null,
+      };
     default:
       return state;
   }
