@@ -17,6 +17,7 @@ func NewKernelHandler() *KernelHandler {
 	registry := plugins.NewCapabilityRegistry()
 	_ = registry.Register(builtins.HomepageCapability{})
 	_ = registry.Register(builtins.WorkloadsCapability{})
+	_ = registry.Register(builtins.OperationsCapability{})
 	return &KernelHandler{registry: registry}
 }
 

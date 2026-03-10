@@ -1,6 +1,7 @@
 import type { ActionContribution } from '../contracts/actionContribution';
 import type { MenuContribution } from '../contracts/menuContribution';
 import type { PageContribution } from '../contracts/pageContribution';
+import { createRemoteCapabilityPage } from './createRemoteCapabilityPage';
 import type { KernelRegistrySnapshot } from './types';
 import type { RemoteActionDescriptor, RemoteKernelMetadata, RemoteMenuDescriptor, RemotePageDescriptor } from './transport';
 
@@ -21,7 +22,23 @@ function hydratePages(
     .map((page) => {
       const local = localByEntryKey.get(page.EntryKey);
       if (!local) {
-        return null;
+        const title = toLocalizedText(page.Title);
+        const description = page.Description ? toLocalizedText(page.Description) : undefined;
+        const remotePage: PageContribution = {
+          identity: {
+            source: 'plugin',
+            capabilityId: `server.${page.WorkflowDomainID}`,
+            contributionId: page.ID,
+          },
+          workflowDomainId: page.WorkflowDomainID,
+          route: page.Route,
+          entryKey: page.EntryKey,
+          title,
+          description,
+          component: createRemoteCapabilityPage(title, description),
+          visible: true,
+        };
+        return remotePage;
       }
       return {
         ...local,
