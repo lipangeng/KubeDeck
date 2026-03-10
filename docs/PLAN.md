@@ -94,6 +94,8 @@ Near-term priorities must follow this order:
 - Kernel implementation mapping draft (ZH): `docs/product/architecture/kernel-implementation-mapping.zh.md`
 - Cluster-aware menu composition design: `docs/product/architecture/cluster-aware-menu-composition.md`
 - Cluster-aware menu composition design (ZH): `docs/product/architecture/cluster-aware-menu-composition.zh.md`
+- Frontend resource page extension model: `docs/product/architecture/frontend-resource-page-extension-model.md`
+- Frontend resource page extension model (ZH): `docs/product/architecture/frontend-resource-page-extension-model.zh.md`
 - I18n runtime model draft: `docs/product/architecture/i18n-runtime-model.md`
 - I18n runtime model draft (ZH): `docs/product/architecture/i18n-runtime-model.zh.md`
 - First core workflow draft: `docs/product/workflows/first-workflow.md`
