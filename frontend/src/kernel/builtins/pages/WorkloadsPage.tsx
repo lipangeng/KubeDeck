@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
+import Alert from '@mui/material/Alert';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -14,6 +15,7 @@ import { copy } from '../../../i18n/copy';
 import { ResourcePageShell } from '../../resource-pages/ResourcePageShell';
 import { resolveDefaultTabs } from '../../resource-pages/tabs';
 import { useKernelRuntime } from '../../runtime/KernelRuntimeContext';
+import type { KernelActionExecutionResult } from '../../runtime/executeKernelAction';
 import type { WorkloadItem } from '../../runtime/fetchWorkloads';
 
 export function WorkloadsPage() {
@@ -21,11 +23,14 @@ export function WorkloadsPage() {
     activePage,
     activeSummarySlots,
     currentResource,
+    executeAction,
     enterResource,
+    exitResource,
     fetchWorkloadsForDomain,
   } = useKernelRuntime();
   const [items, setItems] = useState<WorkloadItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionResult, setActionResult] = useState<KernelActionExecutionResult | null>(null);
   const workflowDomainId = activePage?.workflowDomainId;
 
   useEffect(() => {
@@ -56,23 +61,64 @@ export function WorkloadsPage() {
   }, [fetchWorkloadsForDomain, workflowDomainId]);
 
   if (currentResource) {
+    const handleAction = async (actionId: string) => {
+      const result = await executeAction({
+        actionId,
+        workflowDomainId: activePage?.workflowDomainId ?? 'workloads',
+        target: {
+          cluster: 'default',
+          namespace: currentResource.namespace ?? 'default',
+          scope: currentResource.namespace ? 'namespace' : 'cluster',
+        },
+        input: {
+          name: currentResource.name,
+        },
+      });
+      setActionResult(result);
+    };
+
     return (
-      <ResourcePageShell
-        title={`${currentResource.kind}/${currentResource.name}`}
-        summary={
-          <Typography color="text.secondary">
-            Namespace: {currentResource.namespace ?? 'cluster'}
-          </Typography>
-        }
-        tabs={resolveDefaultTabs({
-          overviewContent: <Typography>Resource overview for {currentResource.name}</Typography>,
-          yamlContent: (
-            <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
-              {`apiVersion: apps/v1\nkind: ${currentResource.kind}\nmetadata:\n  name: ${currentResource.name}\n  namespace: ${currentResource.namespace ?? 'default'}`}
+      <Stack spacing={2}>
+        <Stack direction="row" spacing={1}>
+          <Button variant="contained" onClick={() => void handleAction('apply')}>
+            Apply
+          </Button>
+          <Button variant="outlined" onClick={() => void handleAction('create')}>
+            Create
+          </Button>
+          <Button variant="text" onClick={exitResource}>
+            Back to Workloads
+          </Button>
+        </Stack>
+        {actionResult ? (
+          <Alert severity="success">
+            <Stack spacing={0.5}>
+              <Typography>{actionResult.Summary}</Typography>
+              {actionResult.AffectedObjects.map((item) => (
+                <Typography key={item} variant="body2">
+                  {item}
+                </Typography>
+              ))}
+            </Stack>
+          </Alert>
+        ) : null}
+        <ResourcePageShell
+          title={`${currentResource.kind}/${currentResource.name}`}
+          summary={
+            <Typography color="text.secondary">
+              Namespace: {currentResource.namespace ?? 'cluster'}
             </Typography>
-          ),
-        })}
-      />
+          }
+          tabs={resolveDefaultTabs({
+            overviewContent: <Typography>Resource overview for {currentResource.name}</Typography>,
+            yamlContent: (
+              <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
+                {`apiVersion: apps/v1\nkind: ${currentResource.kind}\nmetadata:\n  name: ${currentResource.name}\n  namespace: ${currentResource.namespace ?? 'default'}`}
+              </Typography>
+            ),
+          })}
+        />
+      </Stack>
     );
   }
 

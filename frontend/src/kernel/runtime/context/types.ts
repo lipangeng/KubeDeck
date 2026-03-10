@@ -21,4 +21,5 @@ export type WorkingContextAction =
   | { type: 'request_cluster_switch'; cluster: string }
   | { type: 'update_namespace_scope'; namespaceScope: NamespaceScope }
   | { type: 'enter_workflow_domain'; workflowDomainId: string; route: string }
-  | { type: 'enter_resource'; resource: ResourceIdentity };
+  | { type: 'enter_resource'; resource: ResourceIdentity }
+  | { type: 'exit_resource' };
