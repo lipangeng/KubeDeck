@@ -39,3 +39,11 @@ func (r *CapabilityRegistry) Descriptors() []sdk.CapabilityDescriptor {
 	}
 	return descriptors
 }
+
+func (r *CapabilityRegistry) Providers() []sdk.CapabilityProvider {
+	providers := make([]sdk.CapabilityProvider, 0, len(r.providers))
+	for _, provider := range r.providers {
+		providers = append(providers, provider)
+	}
+	return providers
+}

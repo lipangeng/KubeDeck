@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -54,6 +55,35 @@ func TestKernelHandlerSnapshot(t *testing.T) {
 	}
 	if want := "actions"; !contains(body, want) {
 		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+}
+
+func TestKernelHandlerWorkloads(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/workflows/workloads/items?cluster=dev", nil)
+	rec := httptest.NewRecorder()
+
+	NewKernelHandler().Workloads(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	if want := "workload-api-dev"; !contains(rec.Body.String(), want) {
+		t.Fatalf("expected body to contain %q, got %s", want, rec.Body.String())
+	}
+}
+
+func TestKernelHandlerExecuteAction(t *testing.T) {
+	body := `{"actionId":"apply","workflowDomainId":"workloads","target":{"cluster":"default","namespace":"default","scope":"namespace"},"input":{"name":"api"}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/actions/execute", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	NewKernelHandler().ExecuteAction(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	if want := "apply accepted"; !contains(rec.Body.String(), want) {
+		t.Fatalf("expected body to contain %q, got %s", want, rec.Body.String())
 	}
 }
 

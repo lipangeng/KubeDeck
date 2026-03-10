@@ -6,6 +6,7 @@ import (
 
 	"kubedeck/backend/internal/core/builtins"
 	"kubedeck/backend/internal/plugins"
+	"kubedeck/backend/pkg/sdk"
 )
 
 type KernelHandler struct {
@@ -33,6 +34,33 @@ func (h *KernelHandler) Actions(w http.ResponseWriter, _ *http.Request) {
 
 func (h *KernelHandler) Snapshot(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, plugins.ComposeKernelSnapshot(h.registry.Descriptors()))
+}
+
+func (h *KernelHandler) Workloads(w http.ResponseWriter, r *http.Request) {
+	cluster := r.URL.Query().Get("cluster")
+	items := plugins.ResolveWorkloads(h.registry.Providers(), "workloads", cluster)
+	writeJSON(w, items)
+}
+
+func (h *KernelHandler) ExecuteAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request sdk.ActionExecutionRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "invalid action request", http.StatusBadRequest)
+		return
+	}
+
+	result, err := plugins.ExecuteAction(h.registry.Providers(), request)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	writeJSON(w, result)
 }
 
 func writeJSON(w http.ResponseWriter, payload any) {

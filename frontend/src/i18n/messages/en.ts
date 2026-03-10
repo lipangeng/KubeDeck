@@ -10,8 +10,9 @@ export const enMessages = {
   'workloads.title': 'Workloads',
   'workloads.description':
     'This is the first built-in workflow domain registered through the kernel contribution system.',
+  'workloads.loading': 'Loading built-in workload data from the kernel backend.',
   'workloads.placeholder':
-    'Resource data and actions will be connected through capability composition in the next patch.',
+    'Action execution now flows through the kernel action entry instead of page-private logic.',
   'workloads.badge': 'Built-in Capability',
   'actions.create': 'Create',
   'actions.apply': 'Apply',

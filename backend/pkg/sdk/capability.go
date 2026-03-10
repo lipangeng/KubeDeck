@@ -20,3 +20,27 @@ type CapabilityDescriptor struct {
 type CapabilityProvider interface {
 	CapabilityDescriptor() CapabilityDescriptor
 }
+
+// WorkloadItem describes one workload row exposed by a workflow data provider.
+type WorkloadItem struct {
+	ID        string
+	Name      string
+	Kind      string
+	Namespace string
+	Status    string
+	Health    string
+	UpdatedAt string
+}
+
+// WorkloadProvider exposes workflow-owned workload data.
+type WorkloadProvider interface {
+	CapabilityProvider
+	WorkflowDomainID() string
+	ListWorkloads(cluster string) []WorkloadItem
+}
+
+// ActionExecutor executes kernel actions behind a capability boundary.
+type ActionExecutor interface {
+	CapabilityProvider
+	ExecuteAction(ActionExecutionRequest) (ActionExecutionResult, error)
+}
