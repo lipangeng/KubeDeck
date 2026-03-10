@@ -28,6 +28,80 @@ export interface RemoteMenuDescriptor {
   Description?: RemoteTextRef;
 }
 
+export interface RemoteMenuBlueprintGroup {
+  key: string;
+  order: number;
+  title: RemoteTextRef;
+}
+
+export interface RemoteMenuBlueprintEntry {
+  entryKey: string;
+  workflowDomainId: string;
+  defaultGroupKey: string;
+  route: string;
+  order: number;
+  placement: 'primary' | 'secondary' | 'context';
+  title: RemoteTextRef;
+  sourceType: 'builtin' | 'plugin' | 'crd' | 'fallback';
+  isFallback?: boolean;
+}
+
+export interface RemoteMenuBlueprint {
+  groups: RemoteMenuBlueprintGroup[];
+  entries: RemoteMenuBlueprintEntry[];
+}
+
+export interface RemoteMenuMount {
+  id: string;
+  capabilityId: string;
+  sourceType: 'builtin' | 'plugin' | 'crd' | 'fallback';
+  workflowDomainId: string;
+  entryKey: string;
+  groupKey: string;
+  route: string;
+  placement: 'primary' | 'secondary' | 'context';
+  availability: 'enabled' | 'disabled-unavailable' | 'hidden';
+  isFallback?: boolean;
+  order: number;
+  visible: boolean;
+  title: RemoteTextRef;
+  description?: RemoteTextRef;
+}
+
+export interface RemoteMenuOverride {
+  scope: 'global' | 'cluster';
+  hiddenEntryKeys?: string[];
+  moveEntryKeys?: Record<string, string>;
+  pinEntryKeys?: string[];
+}
+
+export interface RemoteResolvedMenuEntry {
+  ID: string;
+  CapabilityID: string;
+  SourceType: 'builtin' | 'plugin' | 'crd' | 'fallback';
+  WorkflowDomainID: string;
+  EntryKey: string;
+  GroupKey: string;
+  Route: string;
+  Placement: 'primary' | 'secondary' | 'context';
+  Availability: 'enabled' | 'disabled-unavailable' | 'hidden';
+  IsFallback?: boolean;
+  Order: number;
+  Visible: boolean;
+  Title: RemoteTextRef;
+  Description?: RemoteTextRef;
+  Mounted: boolean;
+  Configured: boolean;
+  Pinned?: boolean;
+}
+
+export interface RemoteMenuGroup {
+  key: string;
+  order: number;
+  title: RemoteTextRef;
+  entries: RemoteResolvedMenuEntry[];
+}
+
 export interface RemoteActionDescriptor {
   ID: string;
   WorkflowDomainID: string;
@@ -50,6 +124,10 @@ export interface RemoteSlotDescriptor {
 export interface RemoteKernelMetadata {
   pages: RemotePageDescriptor[];
   menus: RemoteMenuDescriptor[];
+  menuBlueprint?: RemoteMenuBlueprint;
+  menuMounts?: RemoteMenuMount[];
+  menuOverrides?: RemoteMenuOverride[];
+  menuGroups?: RemoteMenuGroup[];
   actions: RemoteActionDescriptor[];
   slots: RemoteSlotDescriptor[];
 }

@@ -107,8 +107,11 @@ export function KernelRuntimeProvider({
 
   const registrySnapshot = runtimeSnapshot ?? localSnapshot;
   const navigation = useMemo(
-    () => composeKernelNavigation(registrySnapshot.menus),
-    [registrySnapshot.menus],
+    () =>
+      registrySnapshot.menuGroups.length > 0
+        ? registrySnapshot.menuGroups
+        : composeKernelNavigation(registrySnapshot.menus),
+    [registrySnapshot.menuGroups, registrySnapshot.menus],
   );
   const activePage =
     registrySnapshot.pages.find((page) => page.route === activeRoute) ??

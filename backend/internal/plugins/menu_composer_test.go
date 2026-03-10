@@ -6,105 +6,166 @@ import (
 	"kubedeck/backend/pkg/sdk"
 )
 
-func TestComposeMenusOrdersByOrderThenID(t *testing.T) {
+func TestComposeMenusBuildsBlueprintDrivenGroupsAndUnavailableEntries(t *testing.T) {
 	descriptors := []sdk.CapabilityDescriptor{
 		{
-			ID: "b",
+			ID: "core.homepage",
 			Menus: []sdk.MenuDescriptor{
 				{
-					ID:           "workloads",
-					GroupKey:     "core",
-					Availability: sdk.MenuAvailabilityEnabled,
-					Order:        20,
+					ID:               "menu.homepage",
+					WorkflowDomainID: "homepage",
+					EntryKey:         "homepage",
+					GroupKey:         "core",
+					Route:            "/",
+					Placement:        sdk.MenuPlacementPrimary,
+					Availability:     sdk.MenuAvailabilityEnabled,
+					Order:            20,
+					Visible:          true,
+					Title:            sdk.TextRef{Key: "homepage.title", Fallback: "Homepage"},
 				},
 			},
 		},
 		{
-			ID: "a",
+			ID: "core.workloads",
 			Menus: []sdk.MenuDescriptor{
 				{
-					ID:           "homepage",
-					GroupKey:     "core",
-					Availability: sdk.MenuAvailabilityEnabled,
-					Order:        10,
+					ID:               "menu.workloads",
+					WorkflowDomainID: "workloads",
+					EntryKey:         "workloads",
+					GroupKey:         "core",
+					Route:            "/workloads",
+					Placement:        sdk.MenuPlacementPrimary,
+					Availability:     sdk.MenuAvailabilityEnabled,
+					Order:            20,
+					Visible:          true,
+					Title:            sdk.TextRef{Key: "workloads.title", Fallback: "Workloads"},
 				},
+			},
+		},
+		{
+			ID: "plugin.sample-ops-console",
+			Menus: []sdk.MenuDescriptor{
 				{
-					ID:           "secondary",
-					GroupKey:     "resources",
-					Availability: sdk.MenuAvailabilityDisabledUnavailable,
-					IsFallback:   true,
-					Order:        20,
+					ID:               "menu.sample-ops-console",
+					WorkflowDomainID: "sample-ops-console",
+					EntryKey:         "sample-ops-console",
+					GroupKey:         "extensions",
+					Route:            "/sample-ops-console",
+					Placement:        sdk.MenuPlacementPrimary,
+					Availability:     sdk.MenuAvailabilityEnabled,
+					Order:            30,
+					Visible:          true,
+					Title:            sdk.TextRef{Key: "sampleOps.title", Fallback: "Sample Ops Console"},
 				},
 			},
 		},
 	}
 
-	menus := ComposeMenus(descriptors)
-	if len(menus) != 4 {
-		t.Fatalf("expected 4 menus including fallback, got %d", len(menus))
+	composed := ComposeMenuComposition(descriptors, nil, nil)
+	if len(composed.Blueprint.Groups) != 4 {
+		t.Fatalf("expected 4 blueprint groups, got %d", len(composed.Blueprint.Groups))
 	}
-	if menus[0].ID != "homepage" || menus[1].ID != "workloads" || menus[2].ID != "secondary" || menus[3].ID != "menu.crds" {
-		t.Fatalf("unexpected menu order: %#v", menus)
+	if composed.Blueprint.Groups[0].Title.Fallback != "Core" {
+		t.Fatalf("expected first blueprint group title to be Core, got %#v", composed.Blueprint.Groups[0])
 	}
-	if menus[0].GroupKey != "core" {
-		t.Fatalf("expected first menu group to be preserved, got %q", menus[0].GroupKey)
+	if len(composed.Groups) != 4 {
+		t.Fatalf("expected 4 resolved groups, got %d", len(composed.Groups))
 	}
-	if menus[2].Availability != sdk.MenuAvailabilityDisabledUnavailable {
-		t.Fatalf("expected disabled-unavailable availability, got %q", menus[2].Availability)
+	coreGroup := composed.Groups[0]
+	if coreGroup.Key != "core" {
+		t.Fatalf("expected first group key to be core, got %#v", coreGroup)
 	}
-	if !menus[2].IsFallback {
-		t.Fatalf("expected fallback flag to be preserved")
+	if coreGroup.Entries[0].EntryKey != "homepage" || coreGroup.Entries[1].EntryKey != "workloads" {
+		t.Fatalf("expected homepage then workloads in core group, got %#v", coreGroup.Entries)
 	}
-	if !menus[3].IsFallback || menus[3].EntryKey != "crds" {
-		t.Fatalf("expected trailing fallback crds menu, got %#v", menus[3])
+	if coreGroup.Entries[2].EntryKey != "services" {
+		t.Fatalf("expected blueprint-only services mount in core group, got %#v", coreGroup.Entries)
+	}
+	if coreGroup.Entries[2].Availability != sdk.MenuAvailabilityDisabledUnavailable {
+		t.Fatalf("expected missing services mount to be disabled-unavailable, got %#v", coreGroup.Entries[2])
+	}
+	extensionsGroup := composed.Groups[2]
+	if extensionsGroup.Key != "extensions" {
+		t.Fatalf("expected extensions group in position 3, got %#v", extensionsGroup)
+	}
+	if len(extensionsGroup.Entries) != 1 || extensionsGroup.Entries[0].EntryKey != "sample-ops-console" {
+		t.Fatalf("expected sample plugin mount in extensions, got %#v", extensionsGroup.Entries)
+	}
+	resourcesGroup := composed.Groups[3]
+	if len(resourcesGroup.Entries) != 1 || resourcesGroup.Entries[0].EntryKey != "crds" || !resourcesGroup.Entries[0].IsFallback {
+		t.Fatalf("expected fallback crds entry in resources group, got %#v", resourcesGroup.Entries)
 	}
 }
 
-func TestComposeMenusAppendsCrdsFallbackAndRespectsBlueprintGroupOrder(t *testing.T) {
+func TestComposeMenusAppliesGlobalThenClusterOverrides(t *testing.T) {
 	descriptors := []sdk.CapabilityDescriptor{
 		{
 			ID: "core.workloads",
 			Menus: []sdk.MenuDescriptor{
 				{
-					ID:           "menu.workloads",
-					EntryKey:     "workloads",
-					GroupKey:     "core",
-					Availability: sdk.MenuAvailabilityEnabled,
-					Order:        20,
+					ID:               "menu.workloads",
+					WorkflowDomainID: "workloads",
+					EntryKey:         "workloads",
+					GroupKey:         "core",
+					Route:            "/workloads",
+					Placement:        sdk.MenuPlacementPrimary,
+					Availability:     sdk.MenuAvailabilityEnabled,
+					Order:            20,
+					Visible:          true,
+					Title:            sdk.TextRef{Key: "workloads.title", Fallback: "Workloads"},
 				},
 			},
 		},
 		{
-			ID: "plugin.ops-console",
+			ID: "plugin.sample-ops-console",
 			Menus: []sdk.MenuDescriptor{
 				{
-					ID:           "menu.ops-console",
-					EntryKey:     "ops-console",
-					GroupKey:     "extensions",
-					Availability: sdk.MenuAvailabilityEnabled,
-					Order:        5,
+					ID:               "menu.sample-ops-console",
+					WorkflowDomainID: "sample-ops-console",
+					EntryKey:         "sample-ops-console",
+					GroupKey:         "extensions",
+					Route:            "/sample-ops-console",
+					Placement:        sdk.MenuPlacementPrimary,
+					Availability:     sdk.MenuAvailabilityEnabled,
+					Order:            30,
+					Visible:          true,
+					Title:            sdk.TextRef{Key: "sampleOps.title", Fallback: "Sample Ops Console"},
 				},
 			},
 		},
 	}
 
-	menus := ComposeMenus(descriptors)
-	if len(menus) != 3 {
-		t.Fatalf("expected 3 menus including fallback, got %d", len(menus))
+	globalOverrides := []MenuOverride{
+		{
+			Scope:           MenuOverrideScopeGlobal,
+			MoveEntryKeys:   map[string]string{"sample-ops-console": "platform"},
+			HiddenEntryKeys: []string{"secrets"},
+		},
 	}
-	if menus[0].GroupKey != "core" || menus[0].EntryKey != "workloads" {
-		t.Fatalf("expected core workloads menu first, got %#v", menus[0])
+	clusterOverrides := []MenuOverride{
+		{
+			Scope:         MenuOverrideScopeCluster,
+			MoveEntryKeys: map[string]string{"sample-ops-console": "core"},
+			PinEntryKeys:  []string{"sample-ops-console"},
+		},
 	}
-	if menus[1].GroupKey != "extensions" || menus[1].EntryKey != "ops-console" {
-		t.Fatalf("expected extensions menu second, got %#v", menus[1])
+
+	composed := ComposeMenuComposition(descriptors, globalOverrides, clusterOverrides)
+	if len(composed.Overrides) != 2 {
+		t.Fatalf("expected overrides to be preserved in composition, got %#v", composed.Overrides)
 	}
-	if menus[2].EntryKey != "crds" {
-		t.Fatalf("expected fallback crds menu last, got %#v", menus[2])
+	coreGroup := composed.Groups[0]
+	if len(coreGroup.Entries) < 2 {
+		t.Fatalf("expected moved entry to appear in core group, got %#v", coreGroup.Entries)
 	}
-	if menus[2].GroupKey != "resources" {
-		t.Fatalf("expected fallback crds menu to be in resources group, got %#v", menus[2])
+	if coreGroup.Entries[0].EntryKey != "sample-ops-console" {
+		t.Fatalf("expected cluster pin to move sample-ops-console to front of core group, got %#v", coreGroup.Entries)
 	}
-	if !menus[2].IsFallback {
-		t.Fatalf("expected crds menu to be marked as fallback")
+	for _, group := range composed.Groups {
+		for _, entry := range group.Entries {
+			if entry.EntryKey == "secrets" {
+				t.Fatalf("expected global hidden entry to be removed from final groups, got %#v", composed.Groups)
+			}
+		}
 	}
 }

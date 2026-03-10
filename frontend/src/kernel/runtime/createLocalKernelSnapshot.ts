@@ -3,6 +3,7 @@ import { registerBuiltInActions } from '../builtins/registerBuiltInActions';
 import { registerBuiltInMenus } from '../builtins/registerBuiltInMenus';
 import { registerBuiltInPages } from '../builtins/registerBuiltInPages';
 import { registerBuiltInSlots } from '../builtins/registerBuiltInSlots';
+import { composeKernelNavigation } from './composeKernelNavigation';
 import { KernelRegistry } from './kernelRegistry';
 import type { KernelRegistrySnapshot } from './types';
 
@@ -24,5 +25,9 @@ export function createLocalKernelSnapshot(
       slots: pluginModule.registerSlots?.() ?? [],
     });
   }
-  return registry.snapshot();
+  const snapshot = registry.snapshot();
+  return {
+    ...snapshot,
+    menuGroups: composeKernelNavigation(snapshot.menus),
+  };
 }

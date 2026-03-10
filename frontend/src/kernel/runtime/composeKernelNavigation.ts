@@ -8,6 +8,13 @@ const GROUP_ORDER: Record<string, number> = {
   resources: 40,
 };
 
+const GROUP_TITLE: Record<string, { key: string; fallback: string }> = {
+  core: { key: 'menu.group.core', fallback: 'Core' },
+  platform: { key: 'menu.group.platform', fallback: 'Platform' },
+  extensions: { key: 'menu.group.extensions', fallback: 'Extensions' },
+  resources: { key: 'menu.group.resources', fallback: 'Resources' },
+};
+
 function defaultVisible(entry: MenuContribution): boolean {
   const available = entry.availability ?? 'enabled';
   return (entry.visible ?? true) && available !== 'hidden';
@@ -42,6 +49,8 @@ export function composeKernelNavigation(entries: MenuContribution[]): KernelNavi
 
   return Array.from(groups.entries()).map(([key, groupEntries]) => ({
     key,
+    order: GROUP_ORDER[key] ?? 1000,
+    title: GROUP_TITLE[key] ?? { key: `menu.group.${key}`, fallback: key },
     entries: groupEntries,
   }));
 }

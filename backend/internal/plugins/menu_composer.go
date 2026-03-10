@@ -1,35 +1,50 @@
 package plugins
 
-import (
-	"sort"
+import "kubedeck/backend/pkg/sdk"
 
-	"kubedeck/backend/pkg/sdk"
-)
+func ComposeMenuComposition(
+	descriptors []sdk.CapabilityDescriptor,
+	globalOverrides []MenuOverride,
+	clusterOverrides []MenuOverride,
+) MenuComposition {
+	blueprint := defaultMenuBlueprint()
+	mounts := buildMenuMounts(descriptors)
+	resolved, usedMounts := composeBlueprintEntries(blueprint, mounts)
+	resolved = appendUnconfiguredMounts(resolved, mounts, usedMounts)
+
+	overrides := make([]MenuOverride, 0, len(globalOverrides)+len(clusterOverrides))
+	overrides = append(overrides, globalOverrides...)
+	overrides = append(overrides, clusterOverrides...)
+	resolved = applyMenuOverrides(resolved, overrides)
+
+	return MenuComposition{
+		Blueprint: blueprint,
+		Mounts:    mounts,
+		Overrides: overrides,
+		Groups:    buildMenuGroups(blueprint, resolved),
+	}
+}
 
 func ComposeMenus(descriptors []sdk.CapabilityDescriptor) []sdk.MenuDescriptor {
-	menus := appendFallbackMenus(buildMenuMounts(descriptors))
-	groupOrder := make(map[string]int)
-	for _, group := range defaultMenuBlueprint() {
-		groupOrder[group.Key] = group.Order
+	composition := ComposeMenuComposition(descriptors, nil, nil)
+	menus := make([]sdk.MenuDescriptor, 0)
+	for _, group := range composition.Groups {
+		for _, entry := range group.Entries {
+			menus = append(menus, sdk.MenuDescriptor{
+				ID:               entry.ID,
+				WorkflowDomainID: entry.WorkflowDomainID,
+				EntryKey:         entry.EntryKey,
+				GroupKey:         entry.GroupKey,
+				Route:            entry.Route,
+				Placement:        entry.Placement,
+				Availability:     entry.Availability,
+				IsFallback:       entry.IsFallback,
+				Order:            entry.Order,
+				Visible:          entry.Visible,
+				Title:            entry.Title,
+				Description:      entry.Description,
+			})
+		}
 	}
-
-	sort.SliceStable(menus, func(i, j int) bool {
-		leftGroupOrder, ok := groupOrder[menus[i].GroupKey]
-		if !ok {
-			leftGroupOrder = 1000
-		}
-		rightGroupOrder, ok := groupOrder[menus[j].GroupKey]
-		if !ok {
-			rightGroupOrder = 1000
-		}
-		if leftGroupOrder != rightGroupOrder {
-			return leftGroupOrder < rightGroupOrder
-		}
-		if menus[i].Order != menus[j].Order {
-			return menus[i].Order < menus[j].Order
-		}
-		return menus[i].ID < menus[j].ID
-	})
-
 	return menus
 }
