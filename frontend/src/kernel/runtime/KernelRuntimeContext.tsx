@@ -51,6 +51,7 @@ interface KernelRuntimeContextValue {
   navigation: KernelNavigationGroup[];
   registrySnapshot: KernelRegistrySnapshot;
   navigate: (route: string) => void;
+  switchCluster: (cluster: string) => void;
   enterResource: (resource: ResourceIdentity) => void;
   exitResource: () => void;
   fetchWorkloadsForDomain: (workflowDomainId: string, cluster?: string) => Promise<WorkloadItem[]>;
@@ -78,13 +79,14 @@ export function KernelRuntimeProvider({
   );
 
   const localSnapshot = useMemo(() => createLocalKernelSnapshot(pluginModules), [pluginModules]);
+  const activeCluster = selectActiveCluster(workingContext);
 
   useEffect(() => {
     let active = true;
 
     async function loadKernelMetadata() {
       try {
-        const remoteMetadata = await fetchKernelMetadata();
+        const remoteMetadata = await fetchKernelMetadata(activeCluster);
         if (!active) {
           return;
         }
@@ -103,7 +105,7 @@ export function KernelRuntimeProvider({
     return () => {
       active = false;
     };
-  }, [localSnapshot]);
+  }, [activeCluster, localSnapshot]);
 
   const registrySnapshot = runtimeSnapshot ?? localSnapshot;
   const navigation = useMemo(
@@ -140,10 +142,10 @@ export function KernelRuntimeProvider({
   );
 
   const fetchWorkloadsForDomain = useCallback(
-    async (workflowDomainId: string, cluster = 'default') => {
+    async (workflowDomainId: string, cluster = activeCluster) => {
       return fetchWorkloads(workflowDomainId, cluster);
     },
-    [],
+    [activeCluster],
   );
 
   const enterResource = useCallback((resource: ResourceIdentity) => {
@@ -163,6 +165,10 @@ export function KernelRuntimeProvider({
     [],
   );
 
+  const switchCluster = useCallback((cluster: string) => {
+    dispatchWorkingContext({ type: 'request_cluster_switch', cluster });
+  }, []);
+
   const value = useMemo<KernelRuntimeContextValue>(
     () => ({
       activeRoute,
@@ -170,7 +176,7 @@ export function KernelRuntimeProvider({
       activeActions,
       activeSummarySlots,
       actionSummary,
-      activeCluster: selectActiveCluster(workingContext),
+      activeCluster,
       namespaceScope: selectNamespaceScope(workingContext),
       currentWorkflowDomainId: selectCurrentWorkflowDomain(workingContext),
       currentResource: selectCurrentResource(workingContext),
@@ -178,6 +184,7 @@ export function KernelRuntimeProvider({
       navigation,
       registrySnapshot,
       navigate,
+      switchCluster,
       enterResource,
       exitResource,
       fetchWorkloadsForDomain,
@@ -188,8 +195,8 @@ export function KernelRuntimeProvider({
       activeSummarySlots,
       activePage,
       activeRoute,
+      activeCluster,
       actionSummary,
-      workingContext,
       enterResource,
       exitResource,
       executeAction,
@@ -198,6 +205,8 @@ export function KernelRuntimeProvider({
       navigate,
       navigation,
       registrySnapshot,
+      switchCluster,
+      workingContext,
     ],
   );
 

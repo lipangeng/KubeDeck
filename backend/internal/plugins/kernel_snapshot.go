@@ -14,10 +14,18 @@ type KernelSnapshot struct {
 }
 
 func ComposeKernelSnapshot(descriptors []sdk.CapabilityDescriptor) KernelSnapshot {
-	menuComposition := ComposeMenuComposition(descriptors, nil, nil)
+	return ComposeKernelSnapshotWithOverrides(descriptors, nil, nil)
+}
+
+func ComposeKernelSnapshotWithOverrides(
+	descriptors []sdk.CapabilityDescriptor,
+	globalOverrides []MenuOverride,
+	clusterOverrides []MenuOverride,
+) KernelSnapshot {
+	menuComposition := ComposeMenuComposition(descriptors, globalOverrides, clusterOverrides)
 	return KernelSnapshot{
 		Pages:         ComposePages(descriptors),
-		Menus:         ComposeMenus(descriptors),
+		Menus:         flattenMenuGroups(menuComposition.Groups),
 		MenuBlueprint: menuComposition.Blueprint,
 		MenuMounts:    menuComposition.Mounts,
 		MenuOverrides: menuComposition.Overrides,
@@ -25,4 +33,27 @@ func ComposeKernelSnapshot(descriptors []sdk.CapabilityDescriptor) KernelSnapsho
 		Actions:       ComposeActions(descriptors),
 		Slots:         ComposeSlots(descriptors),
 	}
+}
+
+func flattenMenuGroups(groups []MenuResolvedGroup) []sdk.MenuDescriptor {
+	menus := make([]sdk.MenuDescriptor, 0)
+	for _, group := range groups {
+		for _, entry := range group.Entries {
+			menus = append(menus, sdk.MenuDescriptor{
+				ID:               entry.ID,
+				WorkflowDomainID: entry.WorkflowDomainID,
+				EntryKey:         entry.EntryKey,
+				GroupKey:         entry.GroupKey,
+				Route:            entry.Route,
+				Placement:        entry.Placement,
+				Availability:     entry.Availability,
+				IsFallback:       entry.IsFallback,
+				Order:            entry.Order,
+				Visible:          entry.Visible,
+				Title:            entry.Title,
+				Description:      entry.Description,
+			})
+		}
+	}
+	return menus
 }

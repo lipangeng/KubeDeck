@@ -1,11 +1,15 @@
 package storage
 
 type mysqlStore struct {
-	dsn string
+	dsn      string
+	userMenu UserMenuRepo
 }
 
 func newMySQLStore(dsn string) Store {
-	return &mysqlStore{dsn: dsn}
+	return &mysqlStore{
+		dsn:      dsn,
+		userMenu: newInMemoryUserMenuRepo(),
+	}
 }
 
 func (s *mysqlStore) Driver() string {
@@ -13,7 +17,7 @@ func (s *mysqlStore) Driver() string {
 }
 
 func (s *mysqlStore) UserMenus() UserMenuRepo {
-	return defaultUserMenuRepo
+	return s.userMenu
 }
 
 func (s *mysqlStore) UserPreferences() UserPreferenceRepo {

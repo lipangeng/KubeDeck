@@ -1,11 +1,15 @@
 package storage
 
 type sqliteStore struct {
-	dsn string
+	dsn      string
+	userMenu UserMenuRepo
 }
 
 func newSQLiteStore(dsn string) Store {
-	return &sqliteStore{dsn: dsn}
+	return &sqliteStore{
+		dsn:      dsn,
+		userMenu: newInMemoryUserMenuRepo(),
+	}
 }
 
 func (s *sqliteStore) Driver() string {
@@ -13,7 +17,7 @@ func (s *sqliteStore) Driver() string {
 }
 
 func (s *sqliteStore) UserMenus() UserMenuRepo {
-	return defaultUserMenuRepo
+	return s.userMenu
 }
 
 func (s *sqliteStore) UserPreferences() UserPreferenceRepo {

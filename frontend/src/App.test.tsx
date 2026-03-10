@@ -14,8 +14,8 @@ afterEach(() => {
 
 function createKernelMetadataFetchMock() {
   return vi.fn(async (input: RequestInfo | URL) => {
-    const url = String(input);
-    if (url.endsWith('/api/meta/kernel')) {
+    const url = new URL(String(input), 'http://localhost');
+    if (url.pathname === '/api/meta/kernel') {
       return new Response(
         JSON.stringify({
           pages: [
@@ -238,7 +238,11 @@ function createKernelMetadataFetchMock() {
       );
     }
 
-    if (url.includes('/api/workflows/workloads/items?workflowDomainId=workloads&cluster=default')) {
+    if (
+      url.pathname === '/api/workflows/workloads/items' &&
+      url.searchParams.get('workflowDomainId') === 'workloads' &&
+      url.searchParams.get('cluster') === 'default'
+    ) {
       return new Response(
         JSON.stringify([
           {
@@ -264,7 +268,7 @@ function createKernelMetadataFetchMock() {
       );
     }
 
-    if (url.endsWith('/api/actions/execute')) {
+    if (url.pathname === '/api/actions/execute') {
       return new Response(
         JSON.stringify({
           Accepted: true,
@@ -282,8 +286,8 @@ function createKernelMetadataFetchMock() {
 
 function createOverrideAwareKernelMetadataFetchMock() {
   return vi.fn(async (input: RequestInfo | URL) => {
-    const url = String(input);
-    if (url.endsWith('/api/meta/kernel')) {
+    const url = new URL(String(input), 'http://localhost');
+    if (url.pathname === '/api/meta/kernel') {
       return new Response(
         JSON.stringify({
           pages: [
@@ -373,6 +377,115 @@ function createOverrideAwareKernelMetadataFetchMock() {
                   Mounted: true,
                   Configured: true,
                   Pinned: true,
+                  Title: { Key: 'operations.title', Fallback: 'Operations' },
+                },
+              ],
+            },
+          ],
+          actions: [],
+          slots: [],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+
+    throw new Error(`Unhandled fetch request: ${url}`);
+  });
+}
+
+function createClusterAwareKernelMetadataFetchMock() {
+  return vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), 'http://localhost');
+    if (url.pathname === '/api/meta/kernel') {
+      const cluster = url.searchParams.get('cluster') ?? 'default';
+      const operationsGroup = cluster === 'prod-eu1' ? 'platform' : 'core';
+      const operationsGroupTitle =
+        cluster === 'prod-eu1'
+          ? { Key: 'menu.group.platform', Fallback: 'Platform' }
+          : { Key: 'menu.group.core', Fallback: 'Core' };
+
+      return new Response(
+        JSON.stringify({
+          pages: [
+            {
+              ID: 'page.homepage',
+              WorkflowDomainID: 'homepage',
+              Route: '/',
+              EntryKey: 'homepage',
+              Title: { Key: 'homepage.title', Fallback: 'Homepage' },
+            },
+            {
+              ID: 'page.operations',
+              WorkflowDomainID: 'operations',
+              Route: '/operations',
+              EntryKey: 'operations',
+              Title: { Key: 'operations.title', Fallback: 'Operations' },
+            },
+          ],
+          menus: [
+            {
+              ID: 'menu.homepage',
+              WorkflowDomainID: 'homepage',
+              EntryKey: 'homepage',
+              GroupKey: 'core',
+              Route: '/',
+              Placement: 'primary',
+              Availability: 'enabled',
+              Order: 10,
+              Visible: true,
+              Title: { Key: 'homepage.title', Fallback: 'Homepage' },
+            },
+            {
+              ID: 'menu.operations',
+              WorkflowDomainID: 'operations',
+              EntryKey: 'operations',
+              GroupKey: operationsGroup,
+              Route: '/operations',
+              Placement: 'primary',
+              Availability: 'enabled',
+              Order: 20,
+              Visible: true,
+              Title: { Key: 'operations.title', Fallback: 'Operations' },
+            },
+          ],
+          menuBlueprint: {
+            groups: [
+              { key: 'core', order: 10, title: { Key: 'menu.group.core', Fallback: 'Core' } },
+              {
+                key: 'platform',
+                order: 20,
+                title: { Key: 'menu.group.platform', Fallback: 'Platform' },
+              },
+            ],
+            entries: [],
+          },
+          menuMounts: [],
+          menuOverrides: [
+            {
+              scope: 'cluster',
+              moveEntryKeys: { operations: operationsGroup },
+            },
+          ],
+          menuGroups: [
+            {
+              key: operationsGroup,
+              order: cluster === 'prod-eu1' ? 20 : 10,
+              title: operationsGroupTitle,
+              entries: [
+                {
+                  ID: 'menu.operations',
+                  CapabilityID: 'core.operations',
+                  SourceType: 'builtin',
+                  WorkflowDomainID: 'operations',
+                  EntryKey: 'operations',
+                  GroupKey: operationsGroup,
+                  Route: '/operations',
+                  Placement: 'primary',
+                  Availability: 'enabled',
+                  Order: 20,
+                  Visible: true,
+                  Mounted: true,
+                  Configured: true,
                   Title: { Key: 'operations.title', Fallback: 'Operations' },
                 },
               ],
@@ -514,6 +627,20 @@ describe('App', () => {
     expect(screen.getByText('Active cluster: default')).toBeTruthy();
     expect(screen.getByText('Namespace scope: default')).toBeTruthy();
     expect(screen.getByText('Active workflow: workloads')).toBeTruthy();
+  });
+
+  it('reloads backend-composed navigation when the active cluster changes', async () => {
+    vi.stubGlobal('fetch', createClusterAwareKernelMetadataFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    expect(screen.getByText('Active cluster: default')).toBeTruthy();
+    expect(screen.getByText('Core')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cluster: default' }));
+
+    expect(await screen.findByText('Active cluster: prod-eu1')).toBeTruthy();
+    expect(screen.getByText('Platform')).toBeTruthy();
   });
 
   it('cycles the theme preference', () => {
