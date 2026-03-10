@@ -178,6 +178,32 @@ func TestKernelHandlerSnapshotLoadsRepositorySamplePluginAndSkipsTemplates(t *te
 	}
 }
 
+func TestNewKernelHandlerUsesRepositoryPluginsByDefaultWhenEnvUnset(t *testing.T) {
+	original := os.Getenv("KUBEDECK_PLUGIN_DIR")
+	if err := os.Unsetenv("KUBEDECK_PLUGIN_DIR"); err != nil {
+		t.Fatalf("unset env: %v", err)
+	}
+	t.Cleanup(func() {
+		if original == "" {
+			_ = os.Unsetenv("KUBEDECK_PLUGIN_DIR")
+			return
+		}
+		_ = os.Setenv("KUBEDECK_PLUGIN_DIR", original)
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/meta/kernel", nil)
+
+	NewKernelHandler().Snapshot(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	if want := "page.sample-ops-console"; !contains(rec.Body.String(), want) {
+		t.Fatalf("expected body to contain %q, got %s", want, rec.Body.String())
+	}
+}
+
 func contains(body string, want string) bool {
 	return len(body) >= len(want) && (body == want || len(body) > len(want) && (index(body, want) >= 0))
 }
