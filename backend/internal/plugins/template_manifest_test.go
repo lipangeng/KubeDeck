@@ -14,6 +14,16 @@ type manifestShape struct {
 	Contributions json.RawMessage `json:"contributions"`
 }
 
+type contributionShape struct {
+	Pages   []json.RawMessage `json:"pages"`
+	Menus   []json.RawMessage `json:"menus"`
+	Actions []json.RawMessage `json:"actions"`
+	Slots   []json.RawMessage `json:"slots"`
+
+	Extensions json.RawMessage `json:"extensions"`
+	Resources  json.RawMessage `json:"resources"`
+}
+
 func TestTemplateManifestShape(t *testing.T) {
 	t.Helper()
 
@@ -45,6 +55,30 @@ func TestTemplateManifestShape(t *testing.T) {
 			}
 			if len(m.Contributions) == 0 || string(m.Contributions) == "null" {
 				t.Fatal("contributions is required")
+			}
+
+			var contributions contributionShape
+			if err := json.Unmarshal(m.Contributions, &contributions); err != nil {
+				t.Fatalf("unmarshal contributions: %v", err)
+			}
+
+			if contributions.Pages == nil {
+				t.Fatal("contributions.pages is required")
+			}
+			if contributions.Menus == nil {
+				t.Fatal("contributions.menus is required")
+			}
+			if contributions.Actions == nil {
+				t.Fatal("contributions.actions is required")
+			}
+			if contributions.Slots == nil {
+				t.Fatal("contributions.slots is required")
+			}
+			if len(contributions.Extensions) > 0 {
+				t.Fatal("contributions.extensions must not be used in the kernel template")
+			}
+			if len(contributions.Resources) > 0 {
+				t.Fatal("contributions.resources must not be used in the kernel template")
 			}
 		})
 	}

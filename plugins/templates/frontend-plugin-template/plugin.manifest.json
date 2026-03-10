@@ -4,9 +4,9 @@
   "displayName": "Example Frontend Plugin",
   "contributions": {
     "pages": [],
-    "extensions": [],
     "menus": [],
-    "resources": []
+    "actions": [],
+    "slots": []
   },
   "requiredCapabilities": []
 }
