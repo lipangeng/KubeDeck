@@ -8,8 +8,9 @@
 
 ## Contribution Patterns
 
-- Register resources through backend plugin SDK.
-- Provide menu and metadata contributions via registry contracts.
+- Expose one `sdk.CapabilityProvider`.
+- Return kernel contributions through `CapabilityDescriptor`.
+- Add `pages`, `menus`, `actions`, and `slots` only when the capability actually owns them.
 
 ## Run and Debug
 

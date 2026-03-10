@@ -8,9 +8,10 @@
 
 ## Contribution Patterns
 
-- Replacement page: return page metadata with `replacementFor`.
-- Slots extension: provide `registerExtensions` entries.
+- Pages: provide `registerPages` entries.
 - Menus: provide `registerMenus` entries.
+- Actions: provide `registerActions` entries.
+- Slots: provide `registerSlots` entries.
 
 ## Run and Debug
 
