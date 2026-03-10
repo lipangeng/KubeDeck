@@ -11,6 +11,9 @@ export const enMessages = {
   'app.cleanup.title': 'Microkernel cleanup in progress',
   'app.cleanup.body':
     'Historical workflow code has been removed so the next patch can start from the accepted kernel and i18n design instead of inheriting the previous task-flow shell.',
+  'remoteCapability.badge': 'Remote Capability',
+  'remoteCapability.body':
+    'This workflow page is rendered by the generic kernel runtime because no built-in page implementation was registered locally.',
   'homepage.title': 'Homepage',
   'homepage.description': 'The shell now renders built-in workflow pages through the kernel registry.',
   'workloads.title': 'Workloads',

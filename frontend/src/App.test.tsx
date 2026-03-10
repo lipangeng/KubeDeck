@@ -32,6 +32,18 @@ function createKernelMetadataFetchMock() {
               EntryKey: 'workloads',
               Title: { Key: 'workloads.title', Fallback: 'Workloads' },
             },
+            {
+              ID: 'page.operations',
+              WorkflowDomainID: 'operations',
+              Route: '/operations',
+              EntryKey: 'operations',
+              Title: { Key: 'operations.title', Fallback: 'Operations' },
+              Description: {
+                Key: 'operations.description',
+                Fallback:
+                  'This page is composed from backend capability metadata and rendered through the generic runtime page.',
+              },
+            },
           ],
           menus: [
             {
@@ -53,6 +65,16 @@ function createKernelMetadataFetchMock() {
               Order: 20,
               Visible: true,
               Title: { Key: 'workloads.title', Fallback: 'Workloads' },
+            },
+            {
+              ID: 'menu.operations',
+              WorkflowDomainID: 'operations',
+              EntryKey: 'operations',
+              Route: '/operations',
+              Placement: 'primary',
+              Order: 30,
+              Visible: true,
+              Title: { Key: 'operations.title', Fallback: 'Operations' },
             },
           ],
           actions: [
@@ -158,6 +180,21 @@ describe('App', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Run Apply' }));
 
     expect(await screen.findByText('Last action result: apply accepted')).toBeTruthy();
+  });
+
+  it('renders a remote-only page through the generic kernel runtime page', async () => {
+    vi.stubGlobal('fetch', createKernelMetadataFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Operations' }));
+
+    expect(screen.getByText('Remote Capability')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'This workflow page is rendered by the generic kernel runtime because no built-in page implementation was registered locally.',
+      ),
+    ).toBeTruthy();
   });
 
   it('cycles the theme preference', () => {

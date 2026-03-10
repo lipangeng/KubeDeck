@@ -56,6 +56,9 @@ func TestKernelHandlerSnapshot(t *testing.T) {
 	if want := "actions"; !contains(body, want) {
 		t.Fatalf("expected body to contain %q, got %s", want, body)
 	}
+	if want := "operations"; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
 }
 
 func TestKernelHandlerWorkloads(t *testing.T) {
