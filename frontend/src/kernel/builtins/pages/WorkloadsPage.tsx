@@ -10,18 +10,26 @@ import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
 import { ListPageShell } from '../../../components/page-shell/ResourcePageShell';
 import { copy } from '../../../i18n/copy';
-import { fetchWorkloads, type WorkloadItem } from '../../runtime/fetchWorkloads';
+import { useKernelRuntime } from '../../runtime/KernelRuntimeContext';
+import type { WorkloadItem } from '../../runtime/fetchWorkloads';
 
 export function WorkloadsPage() {
+  const { activePage, fetchWorkloadsForDomain } = useKernelRuntime();
   const [items, setItems] = useState<WorkloadItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const workflowDomainId = activePage?.workflowDomainId;
 
   useEffect(() => {
+    if (!workflowDomainId) {
+      return;
+    }
+    const currentWorkflowDomainId = workflowDomainId;
+
     let active = true;
 
     async function load() {
       try {
-        const nextItems = await fetchWorkloads('default');
+        const nextItems = await fetchWorkloadsForDomain(currentWorkflowDomainId, 'default');
         if (active) {
           setItems(nextItems);
         }
@@ -36,7 +44,7 @@ export function WorkloadsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [fetchWorkloadsForDomain, workflowDomainId]);
 
   return (
     <ListPageShell
@@ -56,11 +64,11 @@ export function WorkloadsPage() {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Kind</TableCell>
-                <TableCell>Namespace</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Health</TableCell>
+                <TableCell>{copy('workloads.columns.name')}</TableCell>
+                <TableCell>{copy('workloads.columns.kind')}</TableCell>
+                <TableCell>{copy('workloads.columns.namespace')}</TableCell>
+                <TableCell>{copy('workloads.columns.status')}</TableCell>
+                <TableCell>{copy('workloads.columns.health')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>

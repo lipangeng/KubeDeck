@@ -76,7 +76,7 @@ function createKernelMetadataFetchMock() {
       );
     }
 
-    if (url.includes('/api/workflows/workloads/items?cluster=default')) {
+    if (url.includes('/api/workflows/workloads/items?workflowDomainId=workloads&cluster=default')) {
       return new Response(
         JSON.stringify([
           {

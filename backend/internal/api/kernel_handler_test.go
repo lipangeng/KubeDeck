@@ -59,7 +59,11 @@ func TestKernelHandlerSnapshot(t *testing.T) {
 }
 
 func TestKernelHandlerWorkloads(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/workflows/workloads/items?cluster=dev", nil)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/workflows/workloads/items?workflowDomainId=workloads&cluster=dev",
+		nil,
+	)
 	rec := httptest.NewRecorder()
 
 	NewKernelHandler().Workloads(rec, req)
