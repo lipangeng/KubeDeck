@@ -1,11 +1,15 @@
 package storage
 
 type postgresStore struct {
-	dsn string
+	dsn      string
+	userMenu UserMenuRepo
 }
 
 func newPostgresStore(dsn string) Store {
-	return &postgresStore{dsn: dsn}
+	return &postgresStore{
+		dsn:      dsn,
+		userMenu: newInMemoryUserMenuRepo(),
+	}
 }
 
 func (s *postgresStore) Driver() string {
@@ -13,7 +17,7 @@ func (s *postgresStore) Driver() string {
 }
 
 func (s *postgresStore) UserMenus() UserMenuRepo {
-	return defaultUserMenuRepo
+	return s.userMenu
 }
 
 func (s *postgresStore) UserPreferences() UserPreferenceRepo {

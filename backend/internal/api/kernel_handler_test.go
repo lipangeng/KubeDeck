@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -201,6 +202,111 @@ func TestNewKernelHandlerUsesRepositoryPluginsByDefaultWhenEnvUnset(t *testing.T
 	}
 	if want := "page.sample-ops-console"; !contains(rec.Body.String(), want) {
 		t.Fatalf("expected body to contain %q, got %s", want, rec.Body.String())
+	}
+}
+
+func TestKernelHandlerMenuPreferencesRoundTrip(t *testing.T) {
+	handler := NewKernelHandler()
+	putBody := `{
+  "globalOverrides": [
+    {
+      "scope": "global",
+      "moveEntryKeys": {
+        "operations": "core"
+      }
+    }
+  ],
+  "clusterOverrides": [
+    {
+      "scope": "cluster",
+      "pinEntryKeys": ["operations"]
+    }
+  ]
+}`
+
+	putReq := httptest.NewRequest(
+		http.MethodPut,
+		"/api/preferences/menu?cluster=prod-eu1",
+		bytes.NewBufferString(putBody),
+	)
+	putRec := httptest.NewRecorder()
+	handler.MenuPreferences(putRec, putReq)
+
+	if putRec.Code != http.StatusNoContent {
+		t.Fatalf("expected status 204, got %d", putRec.Code)
+	}
+
+	getReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/preferences/menu?cluster=prod-eu1",
+		nil,
+	)
+	getRec := httptest.NewRecorder()
+	handler.MenuPreferences(getRec, getReq)
+
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", getRec.Code)
+	}
+	body := getRec.Body.String()
+	if want := `"globalOverrides"`; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+	if want := `"operations":"core"`; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+	if want := `"clusterOverrides"`; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+	if want := `"pinEntryKeys":["operations"]`; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+}
+
+func TestKernelHandlerSnapshotAppliesClusterMenuOverrides(t *testing.T) {
+	handler := NewKernelHandler()
+	putBody := `{
+  "clusterOverrides": [
+    {
+      "scope": "cluster",
+      "moveEntryKeys": {
+        "operations": "core"
+      },
+      "pinEntryKeys": ["operations"]
+    }
+  ]
+}`
+
+	putReq := httptest.NewRequest(
+		http.MethodPut,
+		"/api/preferences/menu?cluster=prod-eu1",
+		bytes.NewBufferString(putBody),
+	)
+	putRec := httptest.NewRecorder()
+	handler.MenuPreferences(putRec, putReq)
+	if putRec.Code != http.StatusNoContent {
+		t.Fatalf("expected status 204, got %d", putRec.Code)
+	}
+
+	snapshotReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/meta/kernel?cluster=prod-eu1",
+		nil,
+	)
+	snapshotRec := httptest.NewRecorder()
+	handler.Snapshot(snapshotRec, snapshotReq)
+
+	if snapshotRec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", snapshotRec.Code)
+	}
+	body := snapshotRec.Body.String()
+	if want := `"menuOverrides"`; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+	if want := `"groupKey":"core"`; !contains(body, want) {
+		t.Fatalf("expected body to contain moved core group entry, got %s", body)
+	}
+	if want := `"pinned":true`; !contains(body, want) {
+		t.Fatalf("expected body to contain pinned entry, got %s", body)
 	}
 }
 

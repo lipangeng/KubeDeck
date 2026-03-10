@@ -44,6 +44,7 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
     namespaceScope,
     navigate,
     navigation,
+    switchCluster,
   } = useKernelRuntime();
   const ActiveComponent = activePage?.component;
 
@@ -72,6 +73,10 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
     });
   };
 
+  const cycleCluster = () => {
+    switchCluster(activeCluster === 'default' ? 'prod-eu1' : 'default');
+  };
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', color: 'text.primary' }}>
       <AppBar position="sticky" color="transparent" elevation={0}>
@@ -81,6 +86,9 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
           </Typography>
           <Button variant="outlined" onClick={cycleThemePreference}>
             {copy('app.themeLabel')}: {themePreference}
+          </Button>
+          <Button variant="outlined" onClick={cycleCluster}>
+            Cluster: {activeCluster}
           </Button>
         </Toolbar>
       </AppBar>
