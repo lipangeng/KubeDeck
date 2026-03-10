@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 
 	"kubedeck/backend/internal/core/builtins"
 	"kubedeck/backend/internal/plugins"
@@ -15,7 +17,7 @@ type KernelHandler struct {
 }
 
 func NewKernelHandler() *KernelHandler {
-	return NewKernelHandlerWithPluginRoot(os.Getenv("KUBEDECK_PLUGIN_DIR"))
+	return NewKernelHandlerWithPluginRoot(resolvePluginRoot(os.Getenv("KUBEDECK_PLUGIN_DIR")))
 }
 
 func NewKernelHandlerWithPluginRoot(pluginRoot string) *KernelHandler {
@@ -86,4 +88,28 @@ func (h *KernelHandler) ExecuteAction(w http.ResponseWriter, r *http.Request) {
 func writeJSON(w http.ResponseWriter, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func resolvePluginRoot(configured string) string {
+	if configured != "" {
+		return configured
+	}
+
+	candidates := make([]string, 0, 5)
+	if _, currentFile, _, ok := runtime.Caller(0); ok {
+		candidates = append(candidates, filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "plugins"))
+	}
+	candidates = append(candidates,
+		"plugins",
+		filepath.Join("..", "plugins"),
+		filepath.Join("..", "..", "plugins"),
+		filepath.Join("..", "..", "..", "plugins"),
+	)
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+
+	return ""
 }

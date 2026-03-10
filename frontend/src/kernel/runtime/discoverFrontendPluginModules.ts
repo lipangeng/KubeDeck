@@ -10,7 +10,10 @@ export function collectFrontendPluginModules(
   return Object.entries(discoveredModules)
     .filter(([path]) => !path.includes('/templates/'))
     .map(([, module]) => module.default)
-    .filter((module): module is FrontendCapabilityModule => Boolean(module));
+    .filter(
+      (module): module is FrontendCapabilityModule =>
+        Boolean(module) && typeof module?.pluginId === 'string' && module.pluginId.length > 0,
+    );
 }
 
 export function discoverFrontendPluginModules(): FrontendCapabilityModule[] {

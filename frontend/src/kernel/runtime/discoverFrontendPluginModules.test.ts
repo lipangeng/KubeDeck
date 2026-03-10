@@ -36,4 +36,27 @@ describe('collectFrontendPluginModules', () => {
     expect(discovered.some((module) => module.pluginId === 'plugin.sample-ops-console')).toBe(true);
     expect(discovered.some((module) => module.pluginId === 'example-frontend-plugin')).toBe(false);
   });
+
+  it('skips discovered modules that do not expose a valid pluginId', () => {
+    const pluginModule: FrontendCapabilityModule = {
+      pluginId: 'plugin.valid',
+      registerPages: () => [],
+      registerMenus: () => [],
+      registerActions: () => [],
+      registerSlots: () => [],
+    };
+
+    const discovered = collectFrontendPluginModules({
+      '../../../../plugins/invalid/src/index.ts': {
+        default: {
+          registerPages: () => [],
+        } as unknown as FrontendCapabilityModule,
+      },
+      '../../../../plugins/valid/src/index.ts': {
+        default: pluginModule,
+      },
+    });
+
+    expect(discovered).toEqual([pluginModule]);
+  });
 });
