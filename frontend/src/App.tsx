@@ -8,6 +8,7 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { copy } from './i18n/copy';
 import type { FrontendCapabilityModule } from './kernel/sdk';
+import { discoverFrontendPluginModules } from './kernel/runtime/discoverFrontendPluginModules';
 import { KernelRuntimeProvider, useKernelRuntime } from './kernel/runtime/KernelRuntimeContext';
 import { type ThemePreference } from './themeMode';
 
@@ -18,8 +19,11 @@ interface AppProps {
 }
 
 function App({ themePreference, onThemePreferenceChange, pluginModules = [] }: AppProps) {
+  const resolvedPluginModules =
+    pluginModules.length > 0 ? pluginModules : discoverFrontendPluginModules();
+
   return (
-    <KernelRuntimeProvider pluginModules={pluginModules}>
+    <KernelRuntimeProvider pluginModules={resolvedPluginModules}>
       <AppShell
         themePreference={themePreference}
         onThemePreferenceChange={onThemePreferenceChange}

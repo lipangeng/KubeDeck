@@ -3,6 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import type { FrontendCapabilityModule, MenuContribution, PageContribution } from './kernel/sdk';
 
+vi.mock('./kernel/runtime/discoverFrontendPluginModules', () => ({
+  discoverFrontendPluginModules: vi.fn(() => []),
+}));
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -270,5 +274,51 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Operations Console' }));
 
     expect(screen.getByText('Local plugin page')).toBeTruthy();
+  });
+
+  it('discovers frontend plugin modules automatically when no pluginModules prop is provided', async () => {
+    const pluginPage: PageContribution = {
+      identity: {
+        source: 'plugin',
+        capabilityId: 'plugin.discovered',
+        contributionId: 'page.discovered',
+      },
+      workflowDomainId: 'discovered',
+      route: '/discovered',
+      entryKey: 'discovered',
+      title: { key: 'discovered.title', fallback: 'Discovered Plugin' },
+      component: () => <div>Discovered plugin page</div>,
+    };
+    const pluginMenu: MenuContribution = {
+      identity: {
+        source: 'plugin',
+        capabilityId: 'plugin.discovered',
+        contributionId: 'menu.discovered',
+      },
+      workflowDomainId: 'discovered',
+      entryKey: 'discovered',
+      placement: 'primary',
+      route: '/discovered',
+      title: { key: 'discovered.title', fallback: 'Discovered Plugin' },
+    };
+
+    const { discoverFrontendPluginModules } = await import('./kernel/runtime/discoverFrontendPluginModules');
+    vi.mocked(discoverFrontendPluginModules).mockReturnValue([
+      {
+        pluginId: 'plugin.discovered',
+        registerPages: () => [pluginPage],
+        registerMenus: () => [pluginMenu],
+        registerActions: () => [],
+        registerSlots: () => [],
+      },
+    ]);
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 500 })));
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: local-fallback')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Discovered Plugin' }));
+
+    expect(screen.getByText('Discovered plugin page')).toBeTruthy();
   });
 });
