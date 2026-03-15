@@ -27,6 +27,7 @@ export function WorkloadsPage() {
     enterResource,
     exitResource,
     fetchWorkloadsForDomain,
+    resourcePageExtensions,
   } = useKernelRuntime();
   const [items, setItems] = useState<WorkloadItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,6 +133,7 @@ export function WorkloadsPage() {
                 {`${currentResource.name}: application logs stream preview`}
               </Typography>
             ),
+            extensions: resourcePageExtensions,
           })}
         />
       </Stack>

@@ -273,6 +273,15 @@ function createKernelMetadataFetchMock() {
             health: 'Healthy',
             updatedAt: '2026-03-10T10:06:00Z',
           },
+          {
+            id: 'workload-api-service-default',
+            name: 'api-service',
+            kind: 'Service',
+            namespace: 'default',
+            status: 'Active',
+            health: 'Healthy',
+            updatedAt: '2026-03-10T10:07:00Z',
+          },
         ]),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
@@ -947,6 +956,39 @@ describe('App', () => {
     expect(screen.getByRole('tab', { name: 'YAML' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Logs' })).toBeTruthy();
     expect(screen.getByText('Pod-specific overview for api-7c9d8')).toBeTruthy();
+  });
+
+  it('renders plugin-provided resource page tabs through the kernel runtime', async () => {
+    vi.stubGlobal('fetch', createKernelMetadataFetchMock());
+    const pluginModule: FrontendCapabilityModule = {
+      pluginId: 'plugin.service-insights',
+      registerResourcePageExtensions: () => [
+        {
+          kind: 'Service',
+          createTab: () => ({
+            id: 'endpoints',
+            title: 'Endpoints',
+            capabilityType: 'tab',
+            content: 'Service endpoints from plugin',
+          }),
+        },
+      ],
+    };
+
+    render(
+      <App
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+        pluginModules={[pluginModule]}
+      />,
+    );
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Workloads' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'api-service' }));
+
+    expect(screen.getByRole('heading', { name: 'Service/api-service' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Endpoints' })).toBeTruthy();
   });
 
   it('completes the first workflow through resource action, result, and return', async () => {
