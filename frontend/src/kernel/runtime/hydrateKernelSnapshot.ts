@@ -15,7 +15,7 @@ import type {
   RemoteResourcePageExtensionDescriptor,
   RemoteSlotDescriptor,
 } from './transport';
-import type { ResourceTabExtension } from '../resource-pages/types';
+import type { ResourcePageExtension } from '../resource-pages/types';
 
 function toLocalizedText(text: { Key: string; Fallback: string; Description?: string }) {
   return {
@@ -176,23 +176,36 @@ function resourcePageExtensionKey(extension: {
 }
 
 function hydrateResourcePageExtensions(
-  localExtensions: ResourceTabExtension[],
+  localExtensions: ResourcePageExtension[],
   remoteExtensions: RemoteResourcePageExtensionDescriptor[],
-): ResourceTabExtension[] {
-  const hydratedRemote = remoteExtensions.map((extension) => ({
-    kind: extension.Kind,
-    capabilityType: extension.CapabilityType,
-    targetTabId: extension.TargetTabID,
-    tabId: extension.TabID,
-    createTab: (options: { resource?: { name: string } }) => ({
-      id: extension.TabID,
-      title: extension.Title.Fallback,
+): ResourcePageExtension[] {
+  const hydratedRemote = remoteExtensions.map((extension) => {
+    if (extension.CapabilityType === 'page-takeover') {
+      return {
+        kind: extension.Kind,
+        capabilityType: 'page-takeover' as const,
+        renderPage: (options: { resource?: { name: string } }) =>
+          options.resource?.name
+            ? `${extension.ContentFallback} for ${options.resource.name}`
+            : extension.ContentFallback,
+      };
+    }
+
+    return {
+      kind: extension.Kind,
       capabilityType: extension.CapabilityType,
-      content: options.resource?.name
-        ? `${extension.ContentFallback} for ${options.resource.name}`
-        : extension.ContentFallback,
-    }),
-  }));
+      targetTabId: extension.TargetTabID,
+      tabId: extension.TabID,
+      createTab: (options: { resource?: { name: string } }) => ({
+        id: extension.TabID,
+        title: extension.Title.Fallback,
+        capabilityType: extension.CapabilityType,
+        content: options.resource?.name
+          ? `${extension.ContentFallback} for ${options.resource.name}`
+          : extension.ContentFallback,
+      }),
+    };
+  });
 
   const merged = [...localExtensions];
   const existingKeys = new Set(
@@ -200,8 +213,8 @@ function hydrateResourcePageExtensions(
       resourcePageExtensionKey({
         kind: extension.kind,
         capabilityType: extension.capabilityType,
-        targetTabId: extension.targetTabId,
-        tabId: extension.tabId,
+        targetTabId: extension.capabilityType === 'page-takeover' ? undefined : extension.targetTabId,
+        tabId: extension.capabilityType === 'page-takeover' ? undefined : extension.tabId,
       }),
     ),
   );

@@ -9,7 +9,7 @@ describe('resource page tabs', () => {
   });
 
   it('adds a runtime tab for deployment resources without replacing overview and yaml', () => {
-    const tabs = resolveResourcePage({
+    const resolution = resolveResourcePage({
       resource: {
         kind: 'Deployment',
         name: 'api',
@@ -18,11 +18,12 @@ describe('resource page tabs', () => {
       extensions: registerBuiltInResourcePageExtensions(),
     });
 
-    expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'runtime']);
+    expect(resolution.tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'runtime']);
+    expect(resolution.takeoverContent).toBeNull();
   });
 
   it('applies registered tab extensions after the default tabs', () => {
-    const tabs = resolveResourcePage({
+    const resolution = resolveResourcePage({
       resource: {
         kind: 'Service',
         name: 'api',
@@ -41,11 +42,12 @@ describe('resource page tabs', () => {
       ],
     });
 
-    expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'endpoints']);
+    expect(resolution.tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'endpoints']);
+    expect(resolution.takeoverContent).toBeNull();
   });
 
   it('adds a logs tab for pod resources without replacing overview and yaml', () => {
-    const tabs = resolveResourcePage({
+    const resolution = resolveResourcePage({
       resource: {
         kind: 'Pod',
         name: 'api-7c9d8',
@@ -54,11 +56,12 @@ describe('resource page tabs', () => {
       extensions: registerBuiltInResourcePageExtensions(),
     });
 
-    expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'logs']);
+    expect(resolution.tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'logs']);
+    expect(resolution.takeoverContent).toBeNull();
   });
 
   it('replaces a default tab when a matching replacement is registered', () => {
-    const tabs = resolveResourcePage({
+    const resolution = resolveResourcePage({
       resource: {
         kind: 'Pod',
         name: 'api-7c9d8',
@@ -81,12 +84,12 @@ describe('resource page tabs', () => {
       ],
     });
 
-    expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'logs']);
-    expect(tabs[0]?.content).toBe('Pod overview replacement');
+    expect(resolution.tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'logs']);
+    expect(resolution.tabs[0]?.content).toBe('Pod overview replacement');
   });
 
   it('supports replacing the yaml tab with a resource-specific variant', () => {
-    const tabs = resolveResourcePage({
+    const resolution = resolveResourcePage({
       resource: {
         kind: 'Deployment',
         name: 'api',
@@ -97,8 +100,22 @@ describe('resource page tabs', () => {
       extensions: registerBuiltInResourcePageExtensions(),
     });
 
-    expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'runtime']);
-    expect(tabs[1]?.title).toBe('YAML v2');
-    expect(tabs[1]?.content).toBe('Deployment YAML v2 for api');
+    expect(resolution.tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'runtime']);
+    expect(resolution.tabs[1]?.title).toBe('YAML v2');
+    expect(resolution.tabs[1]?.content).toBe('Deployment YAML v2 for api');
+  });
+
+  it('returns a takeover page for statefulset resources', () => {
+    const resolution = resolveResourcePage({
+      resource: {
+        kind: 'StatefulSet',
+        name: 'db',
+        namespace: 'default',
+      },
+      extensions: registerBuiltInResourcePageExtensions(),
+    });
+
+    expect(resolution.tabs).toEqual([]);
+    expect(resolution.takeoverContent).toBe('StatefulSet takeover for db');
   });
 });

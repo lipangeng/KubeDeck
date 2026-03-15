@@ -62,6 +62,32 @@ export function WorkloadsPage() {
   }, [fetchWorkloadsForDomain, workflowDomainId]);
 
   if (currentResource) {
+    const resolvedPage = resolveResourcePage({
+      resource: currentResource,
+      overviewContent: <Typography>Resource overview for {currentResource.name}</Typography>,
+      yamlContent: (
+        <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
+          {`apiVersion: apps/v1\nkind: ${currentResource.kind}\nmetadata:\n  name: ${currentResource.name}\n  namespace: ${currentResource.namespace ?? 'default'}`}
+        </Typography>
+      ),
+      yamlVariantContent: (
+        <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
+          {`Deployment YAML v2 for ${currentResource.name}`}
+        </Typography>
+      ),
+      runtimeContent: (
+        <Typography color="text.secondary">
+          Runtime status and rollout details for {currentResource.name}
+        </Typography>
+      ),
+      logsContent: (
+        <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
+          {`${currentResource.name}: application logs stream preview`}
+        </Typography>
+      ),
+      extensions: resourcePageExtensions,
+    });
+
     const handleAction = async (actionId: string) => {
       const result = await executeAction({
         actionId,
@@ -103,39 +129,25 @@ export function WorkloadsPage() {
             </Stack>
           </Alert>
         ) : null}
-        <ResourcePageShell
-          title={`${currentResource.kind}/${currentResource.name}`}
-          summary={
+        {resolvedPage.takeoverContent ? (
+          <Stack spacing={1}>
+            <Typography variant="h6">{`${currentResource.kind}/${currentResource.name}`}</Typography>
             <Typography color="text.secondary">
               Namespace: {currentResource.namespace ?? 'cluster'}
             </Typography>
-          }
-          tabs={resolveResourcePage({
-            resource: currentResource,
-            overviewContent: <Typography>Resource overview for {currentResource.name}</Typography>,
-            yamlContent: (
-              <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
-                {`apiVersion: apps/v1\nkind: ${currentResource.kind}\nmetadata:\n  name: ${currentResource.name}\n  namespace: ${currentResource.namespace ?? 'default'}`}
-              </Typography>
-            ),
-            yamlVariantContent: (
-              <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
-                {`Deployment YAML v2 for ${currentResource.name}`}
-              </Typography>
-            ),
-            runtimeContent: (
+            <Typography>{resolvedPage.takeoverContent}</Typography>
+          </Stack>
+        ) : (
+          <ResourcePageShell
+            title={`${currentResource.kind}/${currentResource.name}`}
+            summary={
               <Typography color="text.secondary">
-                Runtime status and rollout details for {currentResource.name}
+                Namespace: {currentResource.namespace ?? 'cluster'}
               </Typography>
-            ),
-            logsContent: (
-              <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
-                {`${currentResource.name}: application logs stream preview`}
-              </Typography>
-            ),
-            extensions: resourcePageExtensions,
-          })}
-        />
+            }
+            tabs={resolvedPage.tabs}
+          />
+        )}
       </Stack>
     );
   }

@@ -1,6 +1,6 @@
-import type { ResourceTabExtension } from '../resource-pages/types';
+import type { ResourcePageExtension } from '../resource-pages/types';
 
-export function registerBuiltInResourcePageExtensions(): ResourceTabExtension[] {
+export function registerBuiltInResourcePageExtensions(): ResourcePageExtension[] {
   return [
     {
       kind: 'Deployment',
@@ -24,6 +24,11 @@ export function registerBuiltInResourcePageExtensions(): ResourceTabExtension[] 
         capabilityType: 'tab',
         content: options.runtimeContent ?? null,
       }),
+    },
+    {
+      kind: 'StatefulSet',
+      capabilityType: 'page-takeover',
+      renderPage: (options) => `StatefulSet takeover for ${options.resource?.name ?? 'statefulset'}`,
     },
     {
       kind: 'Pod',
