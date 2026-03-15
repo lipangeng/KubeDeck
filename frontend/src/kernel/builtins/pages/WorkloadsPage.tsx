@@ -135,7 +135,11 @@ export function WorkloadsPage() {
             <Typography color="text.secondary">
               Namespace: {currentResource.namespace ?? 'cluster'}
             </Typography>
-            <Typography>{resolvedPage.takeoverContent}</Typography>
+            {typeof resolvedPage.takeoverContent === 'string' ? (
+              <Typography>{resolvedPage.takeoverContent}</Typography>
+            ) : (
+              resolvedPage.takeoverContent
+            )}
           </Stack>
         ) : (
           <ResourcePageShell

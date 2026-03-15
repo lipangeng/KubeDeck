@@ -1024,14 +1024,32 @@ describe('App', () => {
 
   it('renders a resource page takeover when the resolver selects one', async () => {
     vi.stubGlobal('fetch', createKernelMetadataFetchMock());
-    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+    const pluginModule: FrontendCapabilityModule = {
+      pluginId: 'plugin.statefulset-takeover',
+      registerResourcePageExtensions: () => [
+        {
+          kind: 'StatefulSet',
+          capabilityType: 'page-takeover',
+          priority: 60,
+          renderPage: (options) =>
+            `Sample Ops Console StatefulSet takeover for ${options.resource?.name ?? 'statefulset'}`,
+        },
+      ],
+    };
+    render(
+      <App
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+        pluginModules={[pluginModule]}
+      />,
+    );
 
     expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Workloads' }));
     fireEvent.click(await screen.findByRole('button', { name: 'db' }));
 
     expect(screen.getByRole('heading', { name: 'StatefulSet/db' })).toBeTruthy();
-    expect(screen.getByText('StatefulSet takeover for db')).toBeTruthy();
+    expect(screen.getByText('Sample Ops Console StatefulSet takeover for db')).toBeTruthy();
   });
 
   it('completes the first workflow through resource action, result, and return', async () => {

@@ -3,7 +3,7 @@ import type {
   FrontendCapabilityModule,
   MenuContribution,
   PageContribution,
-  ResourceTabExtension,
+  ResourcePageExtension,
   SlotContribution,
 } from '../sdk';
 import { createLocalKernelSnapshot } from './createLocalKernelSnapshot';
@@ -58,7 +58,7 @@ function createPluginSlot(): SlotContribution {
 
 describe('createLocalKernelSnapshot', () => {
   it('registers external frontend capability modules alongside built-ins', () => {
-    const resourcePageExtension: ResourceTabExtension = {
+    const resourcePageExtension: ResourcePageExtension = {
       kind: 'Service',
       tabId: 'endpoints',
       createTab: () => ({
@@ -90,5 +90,27 @@ describe('createLocalKernelSnapshot', () => {
       snapshot.slots.some((slot) => slot.identity.capabilityId === 'plugin.ops-console'),
     ).toBe(true);
     expect(snapshot.resourcePageExtensions).toContain(resourcePageExtension);
+  });
+
+  it('keeps takeover extensions registered by frontend capability modules', () => {
+    const takeoverExtension: ResourcePageExtension = {
+      kind: 'StatefulSet',
+      capabilityType: 'page-takeover',
+      priority: 60,
+      renderPage: () => 'Plugin takeover component',
+    };
+
+    const pluginModule: FrontendCapabilityModule = {
+      pluginId: 'plugin.ops-console',
+      registerPages: () => [],
+      registerMenus: () => [],
+      registerActions: () => [],
+      registerSlots: () => [],
+      registerResourcePageExtensions: () => [takeoverExtension],
+    };
+
+    const snapshot = createLocalKernelSnapshot([pluginModule]);
+
+    expect(snapshot.resourcePageExtensions).toContain(takeoverExtension);
   });
 });

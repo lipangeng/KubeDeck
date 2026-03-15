@@ -3,6 +3,7 @@ import type {
   FrontendCapabilityModule,
   MenuContribution,
   PageContribution,
+  ResourcePageExtension,
   SlotContribution,
 } from '../../../frontend/src/kernel/sdk';
 
@@ -69,12 +70,27 @@ const slots = (): SlotContribution[] => [
   },
 ];
 
+const resourcePageExtensions = (): ResourcePageExtension[] => [
+  {
+    kind: 'StatefulSet',
+    capabilityType: 'page-takeover',
+    priority: 60,
+    renderPage: (options) =>
+      createElement(
+        'div',
+        null,
+        `Sample Ops Console StatefulSet takeover for ${options.resource?.name ?? 'statefulset'}`,
+      ),
+  },
+];
+
 const plugin: FrontendCapabilityModule = {
   pluginId: 'plugin.sample-ops-console',
   registerPages: pages,
   registerMenus: menus,
   registerActions: () => [],
   registerSlots: slots,
+  registerResourcePageExtensions: resourcePageExtensions,
 };
 
 export default plugin;

@@ -9,7 +9,15 @@ import type {
 const pages = (): PageContribution[] => [];
 const menus = (): MenuContribution[] => [];
 const slots = (): SlotContribution[] => [];
-const resourcePageExtensions = (): ResourcePageExtension[] => [];
+const resourcePageExtensions = (): ResourcePageExtension[] => [
+  {
+    kind: 'StatefulSet',
+    capabilityType: 'page-takeover',
+    priority: 50,
+    renderPage: (options) =>
+      `Example frontend plugin StatefulSet takeover for ${options.resource?.name ?? 'statefulset'}`,
+  },
+];
 
 const plugin: FrontendCapabilityModule = {
   pluginId: 'example-frontend-plugin',
