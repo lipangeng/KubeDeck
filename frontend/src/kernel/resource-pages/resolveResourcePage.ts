@@ -3,6 +3,7 @@ import type {
   ResolveDefaultTabsOptions,
   ResolvedResourcePage,
   ResourcePageExtension,
+  ResourcePageSummarySlotExtension,
   ResourceTabExtension,
 } from './types';
 
@@ -45,11 +46,24 @@ export function resolveResourcePage(options: ResolveDefaultTabsOptions = {}): Re
     return {
       tabs: [],
       takeoverContent: takeover.renderPage(options),
+      summaryContent: extensions
+        .filter(
+          (extension): extension is ResourcePageSummarySlotExtension =>
+            extension.kind === options.resource?.kind &&
+            extension.capabilityType === 'slot' &&
+            extension.placement === 'summary',
+        )
+        .map((extension) => extension.renderSlot(options)),
     };
   }
   const matchingExtensions = extensions.filter((extension) => extension.kind === options.resource?.kind);
   const tabExtensions = matchingExtensions.filter(
-    (extension): extension is ResourceTabExtension => extension.capabilityType !== 'page-takeover',
+    (extension): extension is ResourceTabExtension =>
+      extension.capabilityType !== 'page-takeover' && extension.capabilityType !== 'slot',
+  );
+  const summaryExtensions = matchingExtensions.filter(
+    (extension): extension is ResourcePageSummarySlotExtension =>
+      extension.capabilityType === 'slot' && extension.placement === 'summary',
   );
   const replacements = tabExtensions.filter((extension) => extension.capabilityType === 'tab-replace');
   for (const replacement of replacements) {
@@ -64,5 +78,6 @@ export function resolveResourcePage(options: ResolveDefaultTabsOptions = {}): Re
   return {
     tabs,
     takeoverContent: null,
+    summaryContent: summaryExtensions.map((extension) => extension.renderSlot(options)),
   };
 }

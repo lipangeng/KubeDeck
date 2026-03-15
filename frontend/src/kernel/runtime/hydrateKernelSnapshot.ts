@@ -192,8 +192,43 @@ function resourcePageExtensionKey(extension: {
   capabilityType?: string;
   targetTabId?: string;
   tabId?: string;
+  placement?: string;
 }) {
-  return `${extension.kind}:${extension.capabilityType ?? 'tab'}:${extension.targetTabId ?? ''}:${extension.tabId ?? ''}`;
+  return `${extension.kind}:${extension.capabilityType ?? 'tab'}:${extension.targetTabId ?? ''}:${extension.tabId ?? ''}:${extension.placement ?? ''}`;
+}
+
+function getResourcePageExtensionIdentity(extension: ResourcePageExtension) {
+  if (
+    extension.capabilityType === undefined ||
+    extension.capabilityType === 'tab' ||
+    extension.capabilityType === 'tab-replace'
+  ) {
+    return {
+      kind: extension.kind,
+      capabilityType: extension.capabilityType ?? 'tab',
+      targetTabId: extension.targetTabId,
+      tabId: extension.tabId,
+      placement: undefined,
+    };
+  }
+
+  if (extension.capabilityType === 'slot') {
+    return {
+      kind: extension.kind,
+      capabilityType: extension.capabilityType,
+      targetTabId: undefined,
+      tabId: undefined,
+      placement: extension.placement,
+    };
+  }
+
+  return {
+    kind: extension.kind,
+    capabilityType: extension.capabilityType,
+    targetTabId: undefined,
+    tabId: undefined,
+    placement: undefined,
+  };
 }
 
 function hydrateResourcePageExtensions(
@@ -234,14 +269,7 @@ function hydrateResourcePageExtensions(
 
   const merged = [...localExtensions];
   const existingKeys = new Set(
-    localExtensions.map((extension) =>
-      resourcePageExtensionKey({
-        kind: extension.kind,
-        capabilityType: extension.capabilityType,
-        targetTabId: extension.capabilityType === 'page-takeover' ? undefined : extension.targetTabId,
-        tabId: extension.capabilityType === 'page-takeover' ? undefined : extension.tabId,
-      }),
-    ),
+    localExtensions.map((extension) => resourcePageExtensionKey(getResourcePageExtensionIdentity(extension))),
   );
 
   for (const extension of hydratedRemote) {
