@@ -46,15 +46,32 @@ describe('hydrateKernelSnapshot', () => {
           Title: { Key: 'service.endpoints', Fallback: 'Endpoints' },
           ContentFallback: 'Remote endpoints',
         },
+        {
+          Kind: 'Deployment',
+          CapabilityType: 'action',
+          ActionID: 'restart-rollout',
+          Title: { Key: 'deployment.restart', Fallback: 'Restart Rollout' },
+        },
       ],
     });
 
-    expect(hydrated.resourcePageExtensions).toHaveLength(2);
+    expect(hydrated.resourcePageExtensions).toHaveLength(3);
     expect(
-      hydrated.resourcePageExtensions.filter((extension) => extension.kind === 'Deployment'),
+      hydrated.resourcePageExtensions.filter(
+        (extension) =>
+          extension.kind === 'Deployment' && extension.capabilityType === 'tab',
+      ),
     ).toHaveLength(1);
     expect(
       hydrated.resourcePageExtensions.some((extension) => extension.kind === 'Service'),
+    ).toBe(true);
+    expect(
+      hydrated.resourcePageExtensions.some(
+        (extension) =>
+          extension.kind === 'Deployment' &&
+          extension.capabilityType === 'action' &&
+          extension.actionId === 'restart-rollout',
+      ),
     ).toBe(true);
   });
 

@@ -242,6 +242,12 @@ function createKernelMetadataFetchMock() {
               Title: { Key: 'service.endpoints', Fallback: 'Endpoints' },
               ContentFallback: 'Service endpoints from backend',
             },
+            {
+              Kind: 'Deployment',
+              CapabilityType: 'action',
+              ActionID: 'restart-rollout',
+              Title: { Key: 'deployment.restart', Fallback: 'Restart Rollout' },
+            },
           ],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -1020,6 +1026,19 @@ describe('App', () => {
 
     expect(screen.getByRole('heading', { name: 'Service/api-service' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Endpoints' })).toBeTruthy();
+  });
+
+  it('renders and executes backend-provided resource-page actions from kernel metadata', async () => {
+    vi.stubGlobal('fetch', createKernelMetadataFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Workloads' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'api' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restart Rollout' }));
+
+    expect(await screen.findByText('apply accepted')).toBeTruthy();
   });
 
   it('renders a resource page takeover when the resolver selects one', async () => {

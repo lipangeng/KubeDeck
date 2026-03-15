@@ -73,6 +73,13 @@ func TestLoadManifestProvidersFromDirBuildsCapabilityDescriptors(t *testing.T) {
         "priority": 60,
         "title": { "key": "opsConsole.resource.statefulset", "fallback": "StatefulSet takeover" },
         "contentFallback": "Manifest StatefulSet takeover"
+      },
+      {
+        "kind": "Deployment",
+        "capabilityType": "action",
+        "actionId": "restart-rollout",
+        "priority": 40,
+        "title": { "key": "opsConsole.resource.restart", "fallback": "Restart Rollout" }
       }
     ]
   }
@@ -105,8 +112,8 @@ func TestLoadManifestProvidersFromDirBuildsCapabilityDescriptors(t *testing.T) {
 	if len(descriptor.Slots) != 1 || descriptor.Slots[0].Placement != "summary" {
 		t.Fatalf("expected one summary slot contribution, got %+v", descriptor.Slots)
 	}
-    if len(descriptor.ResourcePageExtensions) != 2 {
-        t.Fatalf("expected one resource page extension, got %+v", descriptor.ResourcePageExtensions)
+    if len(descriptor.ResourcePageExtensions) != 3 {
+        t.Fatalf("expected three resource page extensions, got %+v", descriptor.ResourcePageExtensions)
     }
     if descriptor.ResourcePageExtensions[0].TabID != "endpoints" {
         t.Fatalf("expected endpoints tab extension first, got %+v", descriptor.ResourcePageExtensions)
@@ -114,5 +121,9 @@ func TestLoadManifestProvidersFromDirBuildsCapabilityDescriptors(t *testing.T) {
     takeover := descriptor.ResourcePageExtensions[1]
     if takeover.CapabilityType != "page-takeover" || takeover.Priority != 60 {
         t.Fatalf("expected takeover extension with priority 60, got %+v", takeover)
+    }
+    action := descriptor.ResourcePageExtensions[2]
+    if action.CapabilityType != "action" || action.ActionID != "restart-rollout" {
+        t.Fatalf("expected action extension restart-rollout, got %+v", action)
     }
 }
