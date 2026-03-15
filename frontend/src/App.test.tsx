@@ -965,6 +965,7 @@ describe('App', () => {
       registerResourcePageExtensions: () => [
         {
           kind: 'Service',
+          tabId: 'endpoints',
           createTab: () => ({
             id: 'endpoints',
             title: 'Endpoints',

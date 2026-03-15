@@ -52,6 +52,38 @@ func (WorkloadsCapability) CapabilityDescriptor() sdk.CapabilityDescriptor {
 				Title:            sdk.TextRef{Key: "actions.apply", Fallback: "Apply"},
 			},
 		},
+		ResourcePageExtensions: []sdk.ResourcePageExtensionDescriptor{
+			{
+				Kind:            "Deployment",
+				CapabilityType:  sdk.ResourcePageExtensionTabReplace,
+				TargetTabID:     "yaml",
+				TabID:           "yaml",
+				Title:           sdk.TextRef{Key: "resource.yaml.v2", Fallback: "YAML v2"},
+				ContentFallback: "Deployment YAML v2",
+			},
+			{
+				Kind:            "Deployment",
+				CapabilityType:  sdk.ResourcePageExtensionTab,
+				TabID:           "runtime",
+				Title:           sdk.TextRef{Key: "resource.runtime", Fallback: "Runtime"},
+				ContentFallback: "Runtime status and rollout details",
+			},
+			{
+				Kind:            "Pod",
+				CapabilityType:  sdk.ResourcePageExtensionTabReplace,
+				TargetTabID:     "overview",
+				TabID:           "overview",
+				Title:           sdk.TextRef{Key: "resource.overview", Fallback: "Overview"},
+				ContentFallback: "Pod-specific overview",
+			},
+			{
+				Kind:            "Pod",
+				CapabilityType:  sdk.ResourcePageExtensionTab,
+				TabID:           "logs",
+				Title:           sdk.TextRef{Key: "resource.logs", Fallback: "Logs"},
+				ContentFallback: "Pod logs stream preview",
+			},
+		},
 	}
 }
 

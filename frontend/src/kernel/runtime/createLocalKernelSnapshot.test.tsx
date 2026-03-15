@@ -60,6 +60,7 @@ describe('createLocalKernelSnapshot', () => {
   it('registers external frontend capability modules alongside built-ins', () => {
     const resourcePageExtension: ResourceTabExtension = {
       kind: 'Service',
+      tabId: 'endpoints',
       createTab: () => ({
         id: 'endpoints',
         title: 'Endpoints',

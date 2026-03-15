@@ -128,6 +128,15 @@ export interface RemoteSlotDescriptor {
   Title?: RemoteTextRef;
 }
 
+export interface RemoteResourcePageExtensionDescriptor {
+  Kind: string;
+  CapabilityType: 'tab' | 'tab-replace';
+  TargetTabID?: string;
+  TabID: string;
+  Title: RemoteTextRef;
+  ContentFallback: string;
+}
+
 export interface RemoteKernelMetadata {
   pages: RemotePageDescriptor[];
   menus: RemoteMenuDescriptor[];
@@ -137,4 +146,5 @@ export interface RemoteKernelMetadata {
   menuGroups?: RemoteMenuGroup[];
   actions: RemoteActionDescriptor[];
   slots: RemoteSlotDescriptor[];
+  resourcePageExtensions?: RemoteResourcePageExtensionDescriptor[];
 }

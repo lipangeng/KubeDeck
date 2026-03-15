@@ -25,6 +25,7 @@ export interface ResourceTabExtension {
   kind: string;
   capabilityType?: 'tab' | 'tab-replace';
   targetTabId?: string;
+  tabId?: string;
   createTab: (options: ResolveDefaultTabsOptions) => ResourcePageTab;
 }
 
