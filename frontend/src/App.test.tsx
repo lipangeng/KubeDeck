@@ -922,6 +922,7 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: 'Deployment/api' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Overview' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'YAML' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Runtime' })).toBeTruthy();
   });
 
   it('completes the first workflow through resource action, result, and return', async () => {

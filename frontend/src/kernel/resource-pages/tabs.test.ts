@@ -1,8 +1,21 @@
 import { describe, expect, it } from 'vitest';
+import { resolveResourcePage } from './resolveResourcePage';
 import { resolveDefaultTabs } from './tabs';
 
 describe('resource page tabs', () => {
   it('resolves overview and yaml as the default tabs', () => {
     expect(resolveDefaultTabs().map((tab) => tab.id)).toEqual(['overview', 'yaml']);
+  });
+
+  it('adds a runtime tab for deployment resources without replacing overview and yaml', () => {
+    const tabs = resolveResourcePage({
+      resource: {
+        kind: 'Deployment',
+        name: 'api',
+        namespace: 'default',
+      },
+    });
+
+    expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'runtime']);
   });
 });
