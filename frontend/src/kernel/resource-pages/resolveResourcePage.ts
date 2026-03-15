@@ -1,17 +1,32 @@
 import { resolveDefaultTabs } from './tabs';
-import type { ResolveDefaultTabsOptions, ResourcePageTab } from './types';
+import type { ResolveDefaultTabsOptions, ResourcePageTab, ResourceTabExtension } from './types';
 
-export function resolveResourcePage(options: ResolveDefaultTabsOptions = {}): ResourcePageTab[] {
-  const tabs = resolveDefaultTabs(options);
-
-  if (options.resource?.kind === 'Deployment') {
-    tabs.push({
+const builtInTabExtensions: ResourceTabExtension[] = [
+  {
+    kind: 'Deployment',
+    createTab: (options) => ({
       id: 'runtime',
       title: 'Runtime',
       capabilityType: 'tab',
       content: options.runtimeContent ?? null,
-    });
-  }
+    }),
+  },
+  {
+    kind: 'Pod',
+    createTab: (options) => ({
+      id: 'logs',
+      title: 'Logs',
+      capabilityType: 'tab',
+      content: options.logsContent ?? null,
+    }),
+  },
+];
+
+export function resolveResourcePage(options: ResolveDefaultTabsOptions = {}): ResourcePageTab[] {
+  const tabs = resolveDefaultTabs(options);
+  const extensions = [...builtInTabExtensions, ...(options.extensions ?? [])];
+  const matchingExtensions = extensions.filter((extension) => extension.kind === options.resource?.kind);
+  tabs.push(...matchingExtensions.map((extension) => extension.createTab(options)));
 
   return tabs;
 }

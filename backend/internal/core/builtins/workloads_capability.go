@@ -84,6 +84,15 @@ func (WorkloadsCapability) ListWorkloads(cluster string) []sdk.WorkloadItem {
 			Health:    "Warning",
 			UpdatedAt: time.Date(2026, 3, 10, 10, 5, 0, 0, time.UTC).Format(time.RFC3339),
 		},
+		{
+			ID:        "workload-api-pod-" + suffix,
+			Name:      "api-7c9d8",
+			Kind:      "Pod",
+			Namespace: "default",
+			Status:    "Running",
+			Health:    "Healthy",
+			UpdatedAt: time.Date(2026, 3, 10, 10, 6, 0, 0, time.UTC).Format(time.RFC3339),
+		},
 	}
 }
 

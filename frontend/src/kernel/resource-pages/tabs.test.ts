@@ -18,4 +18,39 @@ describe('resource page tabs', () => {
 
     expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'runtime']);
   });
+
+  it('applies registered tab extensions after the default tabs', () => {
+    const tabs = resolveResourcePage({
+      resource: {
+        kind: 'Service',
+        name: 'api',
+        namespace: 'default',
+      },
+      extensions: [
+        {
+          kind: 'Service',
+          createTab: () => ({
+            id: 'endpoints',
+            title: 'Endpoints',
+            capabilityType: 'tab',
+            content: null,
+          }),
+        },
+      ],
+    });
+
+    expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'endpoints']);
+  });
+
+  it('adds a logs tab for pod resources without replacing overview and yaml', () => {
+    const tabs = resolveResourcePage({
+      resource: {
+        kind: 'Pod',
+        name: 'api-7c9d8',
+        namespace: 'default',
+      },
+    });
+
+    expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'logs']);
+  });
 });
