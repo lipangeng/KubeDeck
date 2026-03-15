@@ -502,6 +502,174 @@ function createClusterAwareKernelMetadataFetchMock() {
   });
 }
 
+function createScopedMenuSettingsFetchMock() {
+  const preferences = {
+    globalOverrides: [] as Array<Record<string, unknown>>,
+    clusterOverrides: [] as Array<Record<string, unknown>>,
+  };
+
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://localhost');
+
+    if (url.pathname === '/api/meta/kernel') {
+      const hiddenEntryKeys = new Set<string>();
+      for (const override of preferences.globalOverrides) {
+        if (Array.isArray(override.hiddenEntryKeys)) {
+          for (const entryKey of override.hiddenEntryKeys) {
+            hiddenEntryKeys.add(String(entryKey));
+          }
+        }
+      }
+      for (const override of preferences.clusterOverrides) {
+        if (Array.isArray(override.hiddenEntryKeys)) {
+          for (const entryKey of override.hiddenEntryKeys) {
+            hiddenEntryKeys.add(String(entryKey));
+          }
+        }
+      }
+
+      const workloadsVisible = !hiddenEntryKeys.has('workloads');
+      return new Response(
+        JSON.stringify({
+          pages: [
+            {
+              ID: 'page.homepage',
+              WorkflowDomainID: 'homepage',
+              Route: '/',
+              EntryKey: 'homepage',
+              Title: { Key: 'homepage.title', Fallback: 'Homepage' },
+            },
+            {
+              ID: 'page.workloads',
+              WorkflowDomainID: 'workloads',
+              Route: '/workloads',
+              EntryKey: 'workloads',
+              Title: { Key: 'workloads.title', Fallback: 'Workloads' },
+            },
+          ],
+          menus: [
+            {
+              ID: 'menu.homepage',
+              WorkflowDomainID: 'homepage',
+              EntryKey: 'homepage',
+              GroupKey: 'core',
+              Route: '/',
+              Placement: 'primary',
+              Availability: 'enabled',
+              Order: 10,
+              Visible: true,
+              Title: { Key: 'homepage.title', Fallback: 'Homepage' },
+            },
+            {
+              ID: 'menu.workloads',
+              WorkflowDomainID: 'workloads',
+              EntryKey: 'workloads',
+              GroupKey: 'core',
+              Route: '/workloads',
+              Placement: 'primary',
+              Availability: workloadsVisible ? 'enabled' : 'hidden',
+              Order: 20,
+              Visible: workloadsVisible,
+              Title: { Key: 'workloads.title', Fallback: 'Workloads' },
+            },
+          ],
+          menuBlueprint: {
+            groups: [
+              { key: 'core', order: 10, title: { Key: 'menu.group.core', Fallback: 'Core' } },
+            ],
+            entries: [],
+          },
+          menuMounts: [],
+          menuOverrides: [...preferences.globalOverrides, ...preferences.clusterOverrides],
+          menuGroups: [
+            {
+              key: 'core',
+              order: 10,
+              title: { Key: 'menu.group.core', Fallback: 'Core' },
+              entries: [
+                {
+                  ID: 'menu.homepage',
+                  CapabilityID: 'core.homepage',
+                  SourceType: 'builtin',
+                  WorkflowDomainID: 'homepage',
+                  EntryKey: 'homepage',
+                  GroupKey: 'core',
+                  Route: '/',
+                  Placement: 'primary',
+                  Availability: 'enabled',
+                  Order: 10,
+                  Visible: true,
+                  Mounted: true,
+                  Configured: true,
+                  Title: { Key: 'homepage.title', Fallback: 'Homepage' },
+                },
+                ...(workloadsVisible
+                  ? [
+                      {
+                        ID: 'menu.workloads',
+                        CapabilityID: 'core.workloads',
+                        SourceType: 'builtin',
+                        WorkflowDomainID: 'workloads',
+                        EntryKey: 'workloads',
+                        GroupKey: 'core',
+                        Route: '/workloads',
+                        Placement: 'primary',
+                        Availability: 'enabled',
+                        Order: 20,
+                        Visible: true,
+                        Mounted: true,
+                        Configured: true,
+                        Title: { Key: 'workloads.title', Fallback: 'Workloads' },
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          ],
+          actions: [],
+          slots: [],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+
+    if (url.pathname === '/api/preferences/menu' && init?.method === 'PUT') {
+      const payload = JSON.parse(String(init.body));
+      preferences.globalOverrides = payload.globalOverrides ?? [];
+      preferences.clusterOverrides = payload.clusterOverrides ?? [];
+      return new Response(null, { status: 204 });
+    }
+
+    if (url.pathname === '/api/preferences/menu') {
+      return new Response(JSON.stringify(preferences), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (url.pathname === '/api/workflows/workloads/items') {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (url.pathname === '/api/actions/execute') {
+      return new Response(
+        JSON.stringify({
+          Accepted: true,
+          Summary: 'apply accepted',
+          AffectedObjects: ['deployment/sample'],
+          FailedObjects: [],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+
+    throw new Error(`Unhandled fetch request: ${url}`);
+  });
+}
+
 describe('App', () => {
   it('renders the homepage built-in contribution by default', async () => {
     vi.stubGlobal('fetch', createKernelMetadataFetchMock());
@@ -641,6 +809,48 @@ describe('App', () => {
 
     expect(await screen.findByText('Active cluster: prod-eu1')).toBeTruthy();
     expect(screen.getByText('Platform')).toBeTruthy();
+  });
+
+  it('switches between work, system settings, and cluster settings menus', async () => {
+    vi.stubGlobal('fetch', createScopedMenuSettingsFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Workloads' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'System Settings' }));
+
+    expect(await screen.findByRole('button', { name: 'Back to Work' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Menu Settings' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Workloads' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Work' }));
+    expect(await screen.findByRole('button', { name: 'Workloads' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cluster Settings' }));
+
+    expect(await screen.findByRole('button', { name: 'Back to Work' })).toBeTruthy();
+    expect(screen.getByText('Scope: work-cluster')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Workloads' })).toBeNull();
+  });
+
+  it('hides one work menu entry from cluster settings and refreshes work navigation', async () => {
+    vi.stubGlobal('fetch', createScopedMenuSettingsFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Workloads' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cluster Settings' }));
+    expect(await screen.findByText('Scope: work-cluster')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Workloads' }));
+    expect(await screen.findByText('Saved menu settings for work-cluster')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Work' }));
+
+    expect(await screen.findByRole('button', { name: 'Homepage' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Workloads' })).toBeNull();
   });
 
   it('cycles the theme preference', () => {

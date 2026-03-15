@@ -44,6 +44,7 @@ func composeBlueprintEntries(
 					Description:      mount.Description,
 					Mounted:          true,
 					Configured:       true,
+					SortOrder:        item.Order,
 				},
 			})
 			continue
@@ -66,6 +67,7 @@ func composeBlueprintEntries(
 				Title:            item.Title,
 				Mounted:          false,
 				Configured:       true,
+				SortOrder:        item.Order,
 			},
 		})
 	}
@@ -100,6 +102,7 @@ func appendUnconfiguredMounts(
 				Description:      mount.Description,
 				Mounted:          true,
 				Configured:       false,
+				SortOrder:        mount.Order,
 			},
 		})
 	}
@@ -123,6 +126,14 @@ func applyMenuOverrides(entries []resolvedEntryState, overrides []MenuOverride) 
 					entries[index].entry.Pinned = true
 				}
 			}
+			if orderedEntryKeys, ok := override.ItemOrderOverrides[entries[index].entry.GroupKey]; ok {
+				for orderIndex, entryKey := range orderedEntryKeys {
+					if entries[index].entry.EntryKey == entryKey {
+						entries[index].entry.SortOrder = -1000 + orderIndex
+						break
+					}
+				}
+			}
 		}
 	}
 	return entries
@@ -131,6 +142,7 @@ func applyMenuOverrides(entries []resolvedEntryState, overrides []MenuOverride) 
 func buildMenuGroups(
 	blueprint MenuBlueprint,
 	entries []resolvedEntryState,
+	overrides []MenuOverride,
 ) []MenuResolvedGroup {
 	groupDefinitions := make(map[string]MenuResolvedGroup, len(blueprint.Groups))
 	groupOrders := groupOrderMap(blueprint.Groups)
@@ -158,6 +170,16 @@ func buildMenuGroups(
 		groupDefinitions[state.entry.GroupKey] = group
 		if _, ok := groupOrders[state.entry.GroupKey]; !ok {
 			groupOrders[state.entry.GroupKey] = group.Order
+		}
+	}
+
+	for _, override := range overrides {
+		for orderIndex, groupKey := range override.GroupOrderOverrides {
+			if group, ok := groupDefinitions[groupKey]; ok {
+				group.Order = orderIndex
+				groupDefinitions[groupKey] = group
+			}
+			groupOrders[groupKey] = orderIndex
 		}
 	}
 

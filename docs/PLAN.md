@@ -74,6 +74,8 @@ Start here when entering development mode:
 - V1 implementation boundary (ZH): `docs/product/releases/v1/implementation-boundary.zh.md`
 - V1 development plan: `docs/product/releases/v1/v1-development-plan.md`
 - V1 development plan (ZH): `docs/product/releases/v1/v1-development-plan.zh.md`
+- Scoped menu settings implementation plan: `docs/product/releases/v1/scoped-menu-settings-implementation-plan.md`
+- Scoped menu settings implementation plan (ZH): `docs/product/releases/v1/scoped-menu-settings-implementation-plan.zh.md`
 - Foundation architecture remediation plan: `docs/product/releases/v1/foundation-architecture-remediation-plan.md`
 - Foundation architecture remediation plan (ZH): `docs/product/releases/v1/foundation-architecture-remediation-plan.zh.md`
 

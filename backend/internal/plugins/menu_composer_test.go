@@ -169,3 +169,105 @@ func TestComposeMenusAppliesGlobalThenClusterOverrides(t *testing.T) {
 		}
 	}
 }
+
+func TestComposeMenusSupportsScopedOverridesAndOrderingReservations(t *testing.T) {
+	descriptors := []sdk.CapabilityDescriptor{
+		{
+			ID: "core.homepage",
+			Menus: []sdk.MenuDescriptor{
+				{
+					ID:               "menu.homepage",
+					WorkflowDomainID: "homepage",
+					EntryKey:         "homepage",
+					GroupKey:         "core",
+					Route:            "/",
+					Placement:        sdk.MenuPlacementPrimary,
+					Availability:     sdk.MenuAvailabilityEnabled,
+					Order:            10,
+					Visible:          true,
+					Title:            sdk.TextRef{Key: "homepage.title", Fallback: "Homepage"},
+				},
+			},
+		},
+		{
+			ID: "core.workloads",
+			Menus: []sdk.MenuDescriptor{
+				{
+					ID:               "menu.workloads",
+					WorkflowDomainID: "workloads",
+					EntryKey:         "workloads",
+					GroupKey:         "core",
+					Route:            "/workloads",
+					Placement:        sdk.MenuPlacementPrimary,
+					Availability:     sdk.MenuAvailabilityEnabled,
+					Order:            20,
+					Visible:          true,
+					Title:            sdk.TextRef{Key: "workloads.title", Fallback: "Workloads"},
+				},
+			},
+		},
+		{
+			ID: "plugin.sample-ops-console",
+			Menus: []sdk.MenuDescriptor{
+				{
+					ID:               "menu.sample-ops-console",
+					WorkflowDomainID: "sample-ops-console",
+					EntryKey:         "sample-ops-console",
+					GroupKey:         "extensions",
+					Route:            "/sample-ops-console",
+					Placement:        sdk.MenuPlacementPrimary,
+					Availability:     sdk.MenuAvailabilityEnabled,
+					Order:            30,
+					Visible:          true,
+					Title:            sdk.TextRef{Key: "sampleOps.title", Fallback: "Sample Ops Console"},
+				},
+			},
+		},
+	}
+
+	workGlobalOverrides := []MenuOverride{
+		{
+			Scope:               MenuOverrideScope("work-global"),
+			PinEntryKeys:        []string{"sample-ops-console"},
+			GroupOrderOverrides: []string{"extensions", "core", "platform", "resources"},
+			ItemOrderOverrides: map[string][]string{
+				"core": {"workloads", "homepage", "services"},
+			},
+		},
+	}
+	workClusterOverrides := []MenuOverride{
+		{
+			Scope:           MenuOverrideScope("work-cluster"),
+			HiddenEntryKeys: []string{"services"},
+		},
+	}
+
+	composed := ComposeMenuComposition(descriptors, workGlobalOverrides, workClusterOverrides)
+
+	if len(composed.Overrides) != 2 {
+		t.Fatalf("expected scoped overrides to be preserved, got %#v", composed.Overrides)
+	}
+	if composed.Overrides[0].Scope != MenuOverrideScope("work-global") {
+		t.Fatalf("expected work-global scope to survive composition, got %#v", composed.Overrides[0])
+	}
+
+	if composed.Groups[0].Key != "extensions" {
+		t.Fatalf("expected group order override to move extensions first, got %#v", composed.Groups)
+	}
+	if composed.Groups[1].Key != "core" {
+		t.Fatalf("expected core group after extensions, got %#v", composed.Groups)
+	}
+
+	coreGroup := composed.Groups[1]
+	if len(coreGroup.Entries) < 2 {
+		t.Fatalf("expected reordered core entries, got %#v", coreGroup.Entries)
+	}
+	if coreGroup.Entries[0].EntryKey != "workloads" || coreGroup.Entries[1].EntryKey != "homepage" {
+		t.Fatalf("expected item order override to reorder core entries, got %#v", coreGroup.Entries)
+	}
+	for _, entry := range coreGroup.Entries {
+		if entry.EntryKey == "services" {
+			t.Fatalf("expected work-cluster hidden entry to be removed from groups, got %#v", coreGroup.Entries)
+		}
+	}
+}

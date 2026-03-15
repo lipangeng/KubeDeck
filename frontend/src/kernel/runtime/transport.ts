@@ -69,10 +69,17 @@ export interface RemoteMenuMount {
 }
 
 export interface RemoteMenuOverride {
-  scope: 'global' | 'cluster';
+  scope: 'global' | 'cluster' | 'work-global' | 'work-cluster' | 'system' | 'cluster';
   hiddenEntryKeys?: string[];
   moveEntryKeys?: Record<string, string>;
   pinEntryKeys?: string[];
+  groupOrderOverrides?: string[];
+  itemOrderOverrides?: Record<string, string[]>;
+}
+
+export interface RemoteMenuPreferences {
+  globalOverrides: RemoteMenuOverride[];
+  clusterOverrides: RemoteMenuOverride[];
 }
 
 export interface RemoteResolvedMenuEntry {

@@ -21,7 +21,7 @@ func ComposeMenuComposition(
 		Blueprint: blueprint,
 		Mounts:    mounts,
 		Overrides: overrides,
-		Groups:    buildMenuGroups(blueprint, resolved),
+		Groups:    buildMenuGroups(blueprint, resolved, overrides),
 	}
 }
 
