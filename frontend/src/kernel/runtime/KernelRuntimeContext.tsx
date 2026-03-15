@@ -23,7 +23,7 @@ import {
 import type { NamespaceScope, ResourceIdentity } from './context/types';
 import type { KernelNavigationGroup } from './menu/types';
 import { createLocalKernelSnapshot } from './createLocalKernelSnapshot';
-import type { ResourceTabExtension } from '../resource-pages/types';
+import type { ResourcePageExtension } from '../resource-pages/types';
 import {
   executeKernelAction as executeKernelActionRequest,
   type KernelActionExecutionRequest,
@@ -51,7 +51,7 @@ interface KernelRuntimeContextValue {
   kernelSource: KernelSource;
   navigation: KernelNavigationGroup[];
   registrySnapshot: KernelRegistrySnapshot;
-  resourcePageExtensions: ResourceTabExtension[];
+  resourcePageExtensions: ResourcePageExtension[];
   navigate: (route: string) => void;
   reloadKernelMetadata: () => void;
   switchCluster: (cluster: string) => void;

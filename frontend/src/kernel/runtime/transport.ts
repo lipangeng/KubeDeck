@@ -130,7 +130,7 @@ export interface RemoteSlotDescriptor {
 
 export interface RemoteResourcePageExtensionDescriptor {
   Kind: string;
-  CapabilityType: 'tab' | 'tab-replace';
+  CapabilityType: 'tab' | 'tab-replace' | 'page-takeover';
   TargetTabID?: string;
   TabID: string;
   Title: RemoteTextRef;

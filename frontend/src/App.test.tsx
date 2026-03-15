@@ -291,6 +291,15 @@ function createKernelMetadataFetchMock() {
             health: 'Healthy',
             updatedAt: '2026-03-10T10:07:00Z',
           },
+          {
+            id: 'workload-db-default',
+            name: 'db',
+            kind: 'StatefulSet',
+            namespace: 'default',
+            status: 'Running',
+            health: 'Healthy',
+            updatedAt: '2026-03-10T10:08:00Z',
+          },
         ]),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
@@ -1011,6 +1020,18 @@ describe('App', () => {
 
     expect(screen.getByRole('heading', { name: 'Service/api-service' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Endpoints' })).toBeTruthy();
+  });
+
+  it('renders a resource page takeover when the resolver selects one', async () => {
+    vi.stubGlobal('fetch', createKernelMetadataFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Workloads' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'db' }));
+
+    expect(screen.getByRole('heading', { name: 'StatefulSet/db' })).toBeTruthy();
+    expect(screen.getByText('StatefulSet takeover for db')).toBeTruthy();
   });
 
   it('completes the first workflow through resource action, result, and return', async () => {

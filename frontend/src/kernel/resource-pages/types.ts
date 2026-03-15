@@ -29,6 +29,19 @@ export interface ResourceTabExtension {
   createTab: (options: ResolveDefaultTabsOptions) => ResourcePageTab;
 }
 
+export interface ResourcePageTakeoverExtension {
+  kind: string;
+  capabilityType: 'page-takeover';
+  renderPage: (options: ResolveDefaultTabsOptions) => ReactNode;
+}
+
+export type ResourcePageExtension = ResourceTabExtension | ResourcePageTakeoverExtension;
+
+export interface ResolvedResourcePage {
+  tabs: ResourcePageTab[];
+  takeoverContent: ReactNode | null;
+}
+
 export interface ResolveDefaultTabsOptions {
   resource?: ResourcePageIdentity;
   overviewContent?: ReactNode;
@@ -36,5 +49,5 @@ export interface ResolveDefaultTabsOptions {
   yamlVariantContent?: ReactNode;
   runtimeContent?: ReactNode;
   logsContent?: ReactNode;
-  extensions?: ResourceTabExtension[];
+  extensions?: ResourcePageExtension[];
 }

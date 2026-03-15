@@ -2,7 +2,7 @@ import type { ActionContribution } from '../contracts/actionContribution';
 import type { MenuContribution } from '../contracts/menuContribution';
 import type { PageContribution } from '../contracts/pageContribution';
 import type { SlotContribution } from '../contracts/slotContribution';
-import type { ResourceTabExtension } from '../resource-pages/types';
+import type { ResourcePageExtension } from '../resource-pages/types';
 import type { KernelNavigationGroup } from './menu/types';
 
 export interface KernelRegistrySnapshot {
@@ -11,5 +11,5 @@ export interface KernelRegistrySnapshot {
   menuGroups: KernelNavigationGroup[];
   actions: ActionContribution[];
   slots: SlotContribution[];
-  resourcePageExtensions: ResourceTabExtension[];
+  resourcePageExtensions: ResourcePageExtension[];
 }
