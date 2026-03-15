@@ -26,12 +26,16 @@ export interface ResourceTabExtension {
   capabilityType?: 'tab' | 'tab-replace';
   targetTabId?: string;
   tabId?: string;
+  priority?: number;
+  origin?: 'local' | 'remote';
   createTab: (options: ResolveDefaultTabsOptions) => ResourcePageTab;
 }
 
 export interface ResourcePageTakeoverExtension {
   kind: string;
   capabilityType: 'page-takeover';
+  priority?: number;
+  origin?: 'local' | 'remote';
   renderPage: (options: ResolveDefaultTabsOptions) => ReactNode;
 }
 

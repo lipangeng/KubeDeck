@@ -118,4 +118,56 @@ describe('resource page tabs', () => {
     expect(resolution.tabs).toEqual([]);
     expect(resolution.takeoverContent).toBe('StatefulSet takeover for db');
   });
+
+  it('prefers the highest-priority takeover when multiple takeovers match', () => {
+    const resolution = resolveResourcePage({
+      resource: {
+        kind: 'StatefulSet',
+        name: 'db',
+        namespace: 'default',
+      },
+      extensions: [
+        {
+          kind: 'StatefulSet',
+          capabilityType: 'page-takeover',
+          priority: 10,
+          renderPage: () => 'Lower-priority takeover',
+        },
+        {
+          kind: 'StatefulSet',
+          capabilityType: 'page-takeover',
+          priority: 50,
+          renderPage: () => 'Higher-priority takeover',
+        },
+      ],
+    });
+
+    expect(resolution.takeoverContent).toBe('Higher-priority takeover');
+  });
+
+  it('prefers the latest takeover when the source and priority are the same', () => {
+    const resolution = resolveResourcePage({
+      resource: {
+        kind: 'StatefulSet',
+        name: 'db',
+        namespace: 'default',
+      },
+      extensions: [
+        {
+          kind: 'StatefulSet',
+          capabilityType: 'page-takeover',
+          priority: 20,
+          renderPage: () => 'First takeover',
+        },
+        {
+          kind: 'StatefulSet',
+          capabilityType: 'page-takeover',
+          priority: 20,
+          renderPage: () => 'Latest takeover',
+        },
+      ],
+    });
+
+    expect(resolution.takeoverContent).toBe('Latest takeover');
+  });
 });

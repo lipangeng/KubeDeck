@@ -184,6 +184,8 @@ function hydrateResourcePageExtensions(
       return {
         kind: extension.Kind,
         capabilityType: 'page-takeover' as const,
+        priority: extension.Priority,
+        origin: 'remote' as const,
         renderPage: (options: { resource?: { name: string } }) =>
           options.resource?.name
             ? `${extension.ContentFallback} for ${options.resource.name}`
@@ -196,6 +198,8 @@ function hydrateResourcePageExtensions(
       capabilityType: extension.CapabilityType,
       targetTabId: extension.TargetTabID,
       tabId: extension.TabID,
+      priority: extension.Priority,
+      origin: 'remote' as const,
       createTab: (options: { resource?: { name: string } }) => ({
         id: extension.TabID,
         title: extension.Title.Fallback,
@@ -220,6 +224,10 @@ function hydrateResourcePageExtensions(
   );
 
   for (const extension of hydratedRemote) {
+    if (extension.capabilityType === 'page-takeover') {
+      merged.push(extension);
+      continue;
+    }
     const key = resourcePageExtensionKey(extension);
     if (!existingKeys.has(key)) {
       merged.push(extension);
