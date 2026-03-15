@@ -11,28 +11,48 @@ import type { ResourcePageTab } from './types';
 interface ResourcePageShellProps {
   title: string;
   summary?: ReactNode;
-  tabs: ResourcePageTab[];
+  actions?: ReactNode;
+  tabs?: ResourcePageTab[];
+  takeoverContent?: ReactNode;
 }
 
-export function ResourcePageShell({ title, summary, tabs }: ResourcePageShellProps) {
+export function ResourcePageShell({
+  title,
+  summary,
+  actions,
+  tabs = [],
+  takeoverContent,
+}: ResourcePageShellProps) {
   const [activeTabId, setActiveTabId] = useState(tabs[0]?.id ?? 'overview');
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? null;
 
   return (
     <Stack spacing={2}>
       <Paper variant="outlined" sx={{ p: 2 }}>
-        <Typography variant="h6" component="h2" sx={{ mb: summary ? 1 : 0 }}>
-          {title}
-        </Typography>
-        {summary ? <Box>{summary}</Box> : null}
+        <Stack spacing={summary || actions ? 1 : 0}>
+          <Typography variant="h6" component="h2">
+            {title}
+          </Typography>
+          {summary ? <Box>{summary}</Box> : null}
+          {actions ? <Box>{actions}</Box> : null}
+        </Stack>
       </Paper>
       <Paper variant="outlined" sx={{ p: 2 }}>
-        <Tabs value={activeTab?.id ?? false} onChange={(_, nextValue: string) => setActiveTabId(nextValue)}>
-          {tabs.map((tab) => (
-            <Tab key={tab.id} value={tab.id} label={tab.title} />
-          ))}
-        </Tabs>
-        <Box sx={{ pt: 2 }}>{activeTab?.content}</Box>
+        {takeoverContent ? (
+          <Box>{takeoverContent}</Box>
+        ) : (
+          <>
+            <Tabs
+              value={activeTab?.id ?? false}
+              onChange={(_, nextValue: string) => setActiveTabId(nextValue)}
+            >
+              {tabs.map((tab) => (
+                <Tab key={tab.id} value={tab.id} label={tab.title} />
+              ))}
+            </Tabs>
+            <Box sx={{ pt: 2 }}>{activeTab?.content}</Box>
+          </>
+        )}
       </Paper>
     </Stack>
   );

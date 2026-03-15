@@ -1049,6 +1049,8 @@ describe('App', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'db' }));
 
     expect(screen.getByRole('heading', { name: 'StatefulSet/db' })).toBeTruthy();
+    expect(screen.getByText('Namespace: default')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeTruthy();
     expect(screen.getByText('Sample Ops Console StatefulSet takeover for db')).toBeTruthy();
   });
 
