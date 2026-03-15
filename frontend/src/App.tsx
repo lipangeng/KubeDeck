@@ -126,7 +126,7 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
     return () => {
       active = false;
     };
-  }, [activeCluster, menuSurface, reloadKernelMetadata]);
+  }, [activeCluster, menuPreferences, menuSurface]);
 
   const cycleThemePreference = () => {
     const nextPreference: ThemePreference =

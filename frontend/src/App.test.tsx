@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import type { FrontendCapabilityModule, MenuContribution, PageContribution } from './kernel/sdk';
+import type { RemoteMenuOverride } from './kernel/runtime/transport';
 
 vi.mock('./kernel/runtime/discoverFrontendPluginModules', () => ({
   discoverFrontendPluginModules: vi.fn(() => []),
@@ -504,8 +505,8 @@ function createClusterAwareKernelMetadataFetchMock() {
 
 function createScopedMenuSettingsFetchMock() {
   const preferences = {
-    globalOverrides: [] as Array<Record<string, unknown>>,
-    clusterOverrides: [] as Array<Record<string, unknown>>,
+    globalOverrides: [] as RemoteMenuOverride[],
+    clusterOverrides: [] as RemoteMenuOverride[],
   };
 
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -545,7 +546,74 @@ function createScopedMenuSettingsFetchMock() {
           }
         }
       }
+      const systemHiddenEntryKeys = new Set<string>();
+      const systemPinnedEntryKeys = new Set<string>();
+      for (const override of preferences.globalOverrides) {
+        if (override.scope === 'system') {
+          for (const entryKey of override.hiddenEntryKeys ?? []) {
+            systemHiddenEntryKeys.add(String(entryKey));
+          }
+          for (const entryKey of override.pinEntryKeys ?? []) {
+            systemPinnedEntryKeys.add(String(entryKey));
+          }
+        }
+      }
+      const clusterHiddenEntryKeys = new Set<string>();
+      const clusterPinnedEntryKeys = new Set<string>();
+      for (const override of preferences.clusterOverrides) {
+        if (override.scope === 'cluster') {
+          for (const entryKey of override.hiddenEntryKeys ?? []) {
+            clusterHiddenEntryKeys.add(String(entryKey));
+          }
+          for (const entryKey of override.pinEntryKeys ?? []) {
+            clusterPinnedEntryKeys.add(String(entryKey));
+          }
+        }
+      }
       if (scope === 'system') {
+        const systemEntries = [
+          {
+            ID: 'menu.system.menu-settings',
+            CapabilityID: 'builtin.system.menu-settings',
+            SourceType: 'builtin',
+            WorkflowDomainID: 'system-menu-settings',
+            EntryKey: 'menu-settings',
+            GroupKey: 'config',
+            Route: '/settings/menu',
+            Placement: 'primary',
+            Availability: 'enabled',
+            Order: 10,
+            Visible: !systemHiddenEntryKeys.has('menu-settings'),
+            Mounted: true,
+            Configured: true,
+            Pinned: systemPinnedEntryKeys.has('menu-settings'),
+            Title: { Key: 'settings.menu.title', Fallback: 'System Menu Settings' },
+          },
+          {
+            ID: 'menu.system.plugin-settings',
+            CapabilityID: 'builtin.system.plugin-settings',
+            SourceType: 'builtin',
+            WorkflowDomainID: 'system-plugin-settings',
+            EntryKey: 'plugin-settings',
+            GroupKey: 'config',
+            Route: '/settings/plugins',
+            Placement: 'primary',
+            Availability: 'enabled',
+            Order: 20,
+            Visible: !systemHiddenEntryKeys.has('plugin-settings'),
+            Mounted: true,
+            Configured: true,
+            Pinned: systemPinnedEntryKeys.has('plugin-settings'),
+            Title: { Key: 'settings.plugins.title', Fallback: 'Plugin Settings' },
+          },
+        ]
+          .filter((entry) => entry.Visible)
+          .sort((left, right) => {
+            if (Boolean(left.Pinned) !== Boolean(right.Pinned)) {
+              return left.Pinned ? -1 : 1;
+            }
+            return left.Order - right.Order;
+          });
         return new Response(
           JSON.stringify({
             pages: [],
@@ -563,40 +631,7 @@ function createScopedMenuSettingsFetchMock() {
                 key: 'config',
                 order: 10,
                 title: { Key: 'menu.group.config', Fallback: 'Configuration' },
-                entries: [
-                  {
-                    ID: 'menu.system.menu-settings',
-                    CapabilityID: 'builtin.system.menu-settings',
-                    SourceType: 'builtin',
-                    WorkflowDomainID: 'system-menu-settings',
-                    EntryKey: 'menu-settings',
-                    GroupKey: 'config',
-                    Route: '/settings/menu',
-                    Placement: 'primary',
-                    Availability: 'enabled',
-                    Order: 10,
-                    Visible: true,
-                    Mounted: true,
-                    Configured: true,
-                    Title: { Key: 'settings.menu.title', Fallback: 'System Menu Settings' },
-                  },
-                  {
-                    ID: 'menu.system.plugin-settings',
-                    CapabilityID: 'builtin.system.plugin-settings',
-                    SourceType: 'builtin',
-                    WorkflowDomainID: 'system-plugin-settings',
-                    EntryKey: 'plugin-settings',
-                    GroupKey: 'config',
-                    Route: '/settings/plugins',
-                    Placement: 'primary',
-                    Availability: 'enabled',
-                    Order: 20,
-                    Visible: true,
-                    Mounted: true,
-                    Configured: true,
-                    Title: { Key: 'settings.plugins.title', Fallback: 'Plugin Settings' },
-                  },
-                ],
+                entries: systemEntries,
               },
             ],
             actions: [],
@@ -606,6 +641,49 @@ function createScopedMenuSettingsFetchMock() {
         );
       }
       if (scope === 'cluster') {
+        const clusterEntries = [
+          {
+            ID: 'menu.cluster.menu-settings',
+            CapabilityID: 'builtin.cluster.menu-settings',
+            SourceType: 'builtin',
+            WorkflowDomainID: 'cluster-menu-settings',
+            EntryKey: 'menu-settings',
+            GroupKey: 'config',
+            Route: '/settings/menu',
+            Placement: 'primary',
+            Availability: 'enabled',
+            Order: 10,
+            Visible: !clusterHiddenEntryKeys.has('menu-settings'),
+            Mounted: true,
+            Configured: true,
+            Pinned: clusterPinnedEntryKeys.has('menu-settings'),
+            Title: { Key: 'settings.menu.cluster.title', Fallback: 'Cluster Menu Settings' },
+          },
+          {
+            ID: 'menu.cluster.extensions',
+            CapabilityID: 'builtin.cluster.extensions',
+            SourceType: 'builtin',
+            WorkflowDomainID: 'cluster-extensions',
+            EntryKey: 'extensions',
+            GroupKey: 'config',
+            Route: '/settings/extensions',
+            Placement: 'primary',
+            Availability: 'enabled',
+            Order: 20,
+            Visible: !clusterHiddenEntryKeys.has('extensions'),
+            Mounted: true,
+            Configured: true,
+            Pinned: clusterPinnedEntryKeys.has('extensions'),
+            Title: { Key: 'settings.extensions.title', Fallback: 'Cluster Extensions' },
+          },
+        ]
+          .filter((entry) => entry.Visible)
+          .sort((left, right) => {
+            if (Boolean(left.Pinned) !== Boolean(right.Pinned)) {
+              return left.Pinned ? -1 : 1;
+            }
+            return left.Order - right.Order;
+          });
         return new Response(
           JSON.stringify({
             pages: [],
@@ -623,40 +701,7 @@ function createScopedMenuSettingsFetchMock() {
                 key: 'config',
                 order: 10,
                 title: { Key: 'menu.group.config', Fallback: 'Configuration' },
-                entries: [
-                  {
-                    ID: 'menu.cluster.menu-settings',
-                    CapabilityID: 'builtin.cluster.menu-settings',
-                    SourceType: 'builtin',
-                    WorkflowDomainID: 'cluster-menu-settings',
-                    EntryKey: 'menu-settings',
-                    GroupKey: 'config',
-                    Route: '/settings/menu',
-                    Placement: 'primary',
-                    Availability: 'enabled',
-                    Order: 10,
-                    Visible: true,
-                    Mounted: true,
-                    Configured: true,
-                    Title: { Key: 'settings.menu.cluster.title', Fallback: 'Cluster Menu Settings' },
-                  },
-                  {
-                    ID: 'menu.cluster.extensions',
-                    CapabilityID: 'builtin.cluster.extensions',
-                    SourceType: 'builtin',
-                    WorkflowDomainID: 'cluster-extensions',
-                    EntryKey: 'extensions',
-                    GroupKey: 'config',
-                    Route: '/settings/extensions',
-                    Placement: 'primary',
-                    Availability: 'enabled',
-                    Order: 20,
-                    Visible: true,
-                    Mounted: true,
-                    Configured: true,
-                    Title: { Key: 'settings.extensions.title', Fallback: 'Cluster Extensions' },
-                  },
-                ],
+                entries: clusterEntries,
               },
             ],
             actions: [],
@@ -1032,6 +1077,62 @@ describe('App', () => {
       .map((button) => button.textContent)
       .filter((label): label is string => label === 'Homepage' || label === 'Workloads');
     expect(resetButtons.slice(0, 2)).toEqual(['Homepage', 'Workloads']);
+  });
+
+  it('hides one system menu entry and reset restores the system config menu', async () => {
+    vi.stubGlobal('fetch', createScopedMenuSettingsFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'System Settings' }));
+    expect(await screen.findByRole('button', { name: 'System Menu Settings' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'system' }));
+    expect(await screen.findByText('Scope: system')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Plugin Settings' }));
+    expect(await screen.findByText('Saved menu settings for system')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Plugin Settings' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Current Scope' }));
+    expect(await screen.findByText('Saved menu settings for system')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Plugin Settings' })).toBeTruthy();
+  });
+
+  it('pins one cluster config entry and reset restores cluster config order', async () => {
+    vi.stubGlobal('fetch', createScopedMenuSettingsFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cluster Settings' }));
+    expect(await screen.findByRole('button', { name: 'Cluster Menu Settings' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'cluster' }));
+    expect(await screen.findByText('Scope: cluster')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pin Cluster Extensions' }));
+    expect(await screen.findByText('Saved menu settings for cluster')).toBeTruthy();
+
+    const clusterButtons = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent)
+      .filter(
+        (label): label is string =>
+          label === 'Cluster Menu Settings' || label === 'Cluster Extensions',
+      );
+    expect(clusterButtons.slice(0, 2)).toEqual(['Cluster Extensions', 'Cluster Menu Settings']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Current Scope' }));
+    expect(await screen.findByText('Saved menu settings for cluster')).toBeTruthy();
+
+    const resetClusterButtons = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent)
+      .filter(
+        (label): label is string =>
+          label === 'Cluster Menu Settings' || label === 'Cluster Extensions',
+      );
+    expect(resetClusterButtons.slice(0, 2)).toEqual(['Cluster Menu Settings', 'Cluster Extensions']);
   });
 
   it('cycles the theme preference', () => {
