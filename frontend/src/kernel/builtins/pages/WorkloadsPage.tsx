@@ -13,7 +13,7 @@ import Button from '@mui/material/Button';
 import { ListPageShell } from '../../../components/page-shell/ResourcePageShell';
 import { copy } from '../../../i18n/copy';
 import { ResourcePageShell } from '../../resource-pages/ResourcePageShell';
-import { resolveDefaultTabs } from '../../resource-pages/tabs';
+import { resolveResourcePage } from '../../resource-pages/resolveResourcePage';
 import { useKernelRuntime } from '../../runtime/KernelRuntimeContext';
 import type { KernelActionExecutionResult } from '../../runtime/executeKernelAction';
 import type { WorkloadItem } from '../../runtime/fetchWorkloads';
@@ -109,11 +109,17 @@ export function WorkloadsPage() {
               Namespace: {currentResource.namespace ?? 'cluster'}
             </Typography>
           }
-          tabs={resolveDefaultTabs({
+          tabs={resolveResourcePage({
+            resource: currentResource,
             overviewContent: <Typography>Resource overview for {currentResource.name}</Typography>,
             yamlContent: (
               <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
                 {`apiVersion: apps/v1\nkind: ${currentResource.kind}\nmetadata:\n  name: ${currentResource.name}\n  namespace: ${currentResource.namespace ?? 'default'}`}
+              </Typography>
+            ),
+            runtimeContent: (
+              <Typography color="text.secondary">
+                Runtime status and rollout details for {currentResource.name}
               </Typography>
             ),
           })}
