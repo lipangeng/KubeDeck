@@ -930,7 +930,7 @@ describe('App', () => {
 
     expect(screen.getByRole('heading', { name: 'Deployment/api' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Overview' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'YAML' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'YAML v2' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Runtime' })).toBeTruthy();
   });
 

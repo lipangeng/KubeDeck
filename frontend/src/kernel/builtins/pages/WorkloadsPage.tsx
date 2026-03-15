@@ -117,6 +117,11 @@ export function WorkloadsPage() {
                 {`apiVersion: apps/v1\nkind: ${currentResource.kind}\nmetadata:\n  name: ${currentResource.name}\n  namespace: ${currentResource.namespace ?? 'default'}`}
               </Typography>
             ),
+            yamlVariantContent: (
+              <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
+                {`Deployment YAML v2 for ${currentResource.name}`}
+              </Typography>
+            ),
             runtimeContent: (
               <Typography color="text.secondary">
                 Runtime status and rollout details for {currentResource.name}

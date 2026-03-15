@@ -32,6 +32,7 @@ export interface ResolveDefaultTabsOptions {
   resource?: ResourcePageIdentity;
   overviewContent?: ReactNode;
   yamlContent?: ReactNode;
+  yamlVariantContent?: ReactNode;
   runtimeContent?: ReactNode;
   logsContent?: ReactNode;
   extensions?: ResourceTabExtension[];
