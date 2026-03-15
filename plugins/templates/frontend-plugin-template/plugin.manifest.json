@@ -6,7 +6,8 @@
     "pages": [],
     "menus": [],
     "actions": [],
-    "slots": []
+    "slots": [],
+    "resourcePageExtensions": []
   },
   "requiredCapabilities": []
 }

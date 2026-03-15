@@ -58,6 +58,18 @@
           "fallback": "Sample Ops Console Summary"
         }
       }
+    ],
+    "resourcePageExtensions": [
+      {
+        "kind": "Service",
+        "capabilityType": "tab",
+        "tabId": "endpoints",
+        "title": {
+          "key": "sampleOpsConsole.resource.endpoints",
+          "fallback": "Endpoints"
+        },
+        "contentFallback": "Service endpoints from sample plugin"
+      }
     ]
   },
   "requiredCapabilities": []

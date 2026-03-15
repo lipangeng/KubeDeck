@@ -19,6 +19,7 @@ type contributionShape struct {
 	Menus   []json.RawMessage `json:"menus"`
 	Actions []json.RawMessage `json:"actions"`
 	Slots   []json.RawMessage `json:"slots"`
+	ResourcePageExtensions []json.RawMessage `json:"resourcePageExtensions"`
 
 	Extensions json.RawMessage `json:"extensions"`
 	Resources  json.RawMessage `json:"resources"`
@@ -73,6 +74,9 @@ func TestTemplateManifestShape(t *testing.T) {
 			}
 			if contributions.Slots == nil {
 				t.Fatal("contributions.slots is required")
+			}
+			if contributions.ResourcePageExtensions == nil {
+				t.Fatal("contributions.resourcePageExtensions is required")
 			}
 			if len(contributions.Extensions) > 0 {
 				t.Fatal("contributions.extensions must not be used in the kernel template")
