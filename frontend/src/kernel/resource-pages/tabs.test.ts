@@ -53,4 +53,31 @@ describe('resource page tabs', () => {
 
     expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'logs']);
   });
+
+  it('replaces a default tab when a matching replacement is registered', () => {
+    const tabs = resolveResourcePage({
+      resource: {
+        kind: 'Pod',
+        name: 'api-7c9d8',
+        namespace: 'default',
+      },
+      overviewContent: 'Generic overview',
+      extensions: [
+        {
+          kind: 'Pod',
+          targetTabId: 'overview',
+          capabilityType: 'tab-replace',
+          createTab: () => ({
+            id: 'overview',
+            title: 'Overview',
+            capabilityType: 'tab-replace',
+            content: 'Pod overview replacement',
+          }),
+        },
+      ],
+    });
+
+    expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'logs']);
+    expect(tabs[0]?.content).toBe('Pod overview replacement');
+  });
 });

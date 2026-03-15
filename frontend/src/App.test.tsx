@@ -946,6 +946,7 @@ describe('App', () => {
     expect(screen.getByRole('tab', { name: 'Overview' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'YAML' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Logs' })).toBeTruthy();
+    expect(screen.getByText('Pod-specific overview for api-7c9d8')).toBeTruthy();
   });
 
   it('completes the first workflow through resource action, result, and return', async () => {
