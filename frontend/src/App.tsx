@@ -200,6 +200,37 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
     await saveMenuOverride(editableScope, () => ({ scope: editableScope }));
   };
 
+  const handleMoveEntry = async (
+    groupKey: string,
+    entryKey: string,
+    direction: 'up' | 'down',
+  ) => {
+    const group = editableGroups.find((item) => item.key === groupKey);
+    if (!group) {
+      return;
+    }
+    const currentOrder = group.entries.map((entry) => entry.entryKey);
+    const currentIndex = currentOrder.indexOf(entryKey);
+    if (currentIndex < 0) {
+      return;
+    }
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= currentOrder.length) {
+      return;
+    }
+    const nextOrder = [...currentOrder];
+    const [moved] = nextOrder.splice(currentIndex, 1);
+    nextOrder.splice(targetIndex, 0, moved);
+
+    await saveMenuOverride(editableScope, (current) => ({
+      ...current,
+      itemOrderOverrides: {
+        ...(current.itemOrderOverrides ?? {}),
+        [groupKey]: nextOrder,
+      },
+    }));
+  };
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', color: 'text.primary' }}>
       <AppBar position="sticky" color="transparent" elevation={0}>
@@ -316,6 +347,7 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
               menuSurface={menuSurface}
               message={settingsMessage}
               onHideEntry={handleHideEntry}
+              onMoveEntry={handleMoveEntry}
               onPinEntry={handlePinEntry}
               onResetScope={handleResetScope}
               onScopeChange={setEditableScope}
@@ -333,6 +365,7 @@ interface MenuSettingsPanelProps {
   menuSurface: Exclude<MenuSurface, 'work'>;
   message: string | null;
   onHideEntry: (entryKey: string) => Promise<void>;
+  onMoveEntry: (groupKey: string, entryKey: string, direction: 'up' | 'down') => Promise<void>;
   onPinEntry: (entryKey: string) => Promise<void>;
   onResetScope: () => Promise<void>;
   onScopeChange: (scope: MenuPreferenceScope) => void;
@@ -344,6 +377,7 @@ function MenuSettingsPanel({
   menuSurface,
   message,
   onHideEntry,
+  onMoveEntry,
   onPinEntry,
   onResetScope,
   onScopeChange,
@@ -382,6 +416,20 @@ function MenuSettingsPanel({
                 </Button>
                 <Button variant="outlined" size="small" onClick={() => void onHideEntry(entry.entryKey)}>
                   Hide {entry.title.fallback}
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => void onMoveEntry(group.key, entry.entryKey, 'up')}
+                >
+                  Move Up {entry.title.fallback}
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => void onMoveEntry(group.key, entry.entryKey, 'down')}
+                >
+                  Move Down {entry.title.fallback}
                 </Button>
               </Stack>
             ))}

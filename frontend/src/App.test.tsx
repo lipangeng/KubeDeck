@@ -509,6 +509,33 @@ function createScopedMenuSettingsFetchMock() {
     clusterOverrides: [] as RemoteMenuOverride[],
   };
 
+  function applyOrdering<T extends { EntryKey: string; Pinned?: boolean; Order: number }>(
+    entries: T[],
+    orderedEntryKeys: string[] | undefined,
+  ): T[] {
+    const orderIndex = new Map<string, number>();
+    for (const [index, entryKey] of (orderedEntryKeys ?? []).entries()) {
+      orderIndex.set(entryKey, index)
+    }
+    return [...entries].sort((left, right) => {
+      if (Boolean(left.Pinned) !== Boolean(right.Pinned)) {
+        return left.Pinned ? -1 : 1;
+      }
+      const leftIndex = orderIndex.get(left.EntryKey);
+      const rightIndex = orderIndex.get(right.EntryKey);
+      if (leftIndex !== undefined || rightIndex !== undefined) {
+        if (leftIndex === undefined) {
+          return 1;
+        }
+        if (rightIndex === undefined) {
+          return -1;
+        }
+        return leftIndex - rightIndex;
+      }
+      return left.Order - right.Order;
+    });
+  }
+
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), 'http://localhost');
 
@@ -548,6 +575,7 @@ function createScopedMenuSettingsFetchMock() {
       }
       const systemHiddenEntryKeys = new Set<string>();
       const systemPinnedEntryKeys = new Set<string>();
+      let systemOrderOverrides: string[] | undefined;
       for (const override of preferences.globalOverrides) {
         if (override.scope === 'system') {
           for (const entryKey of override.hiddenEntryKeys ?? []) {
@@ -556,10 +584,12 @@ function createScopedMenuSettingsFetchMock() {
           for (const entryKey of override.pinEntryKeys ?? []) {
             systemPinnedEntryKeys.add(String(entryKey));
           }
+          systemOrderOverrides = override.itemOrderOverrides?.config;
         }
       }
       const clusterHiddenEntryKeys = new Set<string>();
       const clusterPinnedEntryKeys = new Set<string>();
+      let clusterOrderOverrides: string[] | undefined;
       for (const override of preferences.clusterOverrides) {
         if (override.scope === 'cluster') {
           for (const entryKey of override.hiddenEntryKeys ?? []) {
@@ -568,10 +598,17 @@ function createScopedMenuSettingsFetchMock() {
           for (const entryKey of override.pinEntryKeys ?? []) {
             clusterPinnedEntryKeys.add(String(entryKey));
           }
+          clusterOrderOverrides = override.itemOrderOverrides?.config;
+        }
+      }
+      let workOrderOverrides: string[] | undefined;
+      for (const override of preferences.clusterOverrides) {
+        if (override.scope === 'work-cluster' && override.itemOrderOverrides?.core) {
+          workOrderOverrides = override.itemOrderOverrides.core;
         }
       }
       if (scope === 'system') {
-        const systemEntries = [
+        const systemEntries = applyOrdering([
           {
             ID: 'menu.system.menu-settings',
             CapabilityID: 'builtin.system.menu-settings',
@@ -606,14 +643,7 @@ function createScopedMenuSettingsFetchMock() {
             Pinned: systemPinnedEntryKeys.has('plugin-settings'),
             Title: { Key: 'settings.plugins.title', Fallback: 'Plugin Settings' },
           },
-        ]
-          .filter((entry) => entry.Visible)
-          .sort((left, right) => {
-            if (Boolean(left.Pinned) !== Boolean(right.Pinned)) {
-              return left.Pinned ? -1 : 1;
-            }
-            return left.Order - right.Order;
-          });
+        ].filter((entry) => entry.Visible), systemOrderOverrides);
         return new Response(
           JSON.stringify({
             pages: [],
@@ -641,7 +671,7 @@ function createScopedMenuSettingsFetchMock() {
         );
       }
       if (scope === 'cluster') {
-        const clusterEntries = [
+        const clusterEntries = applyOrdering([
           {
             ID: 'menu.cluster.menu-settings',
             CapabilityID: 'builtin.cluster.menu-settings',
@@ -676,14 +706,7 @@ function createScopedMenuSettingsFetchMock() {
             Pinned: clusterPinnedEntryKeys.has('extensions'),
             Title: { Key: 'settings.extensions.title', Fallback: 'Cluster Extensions' },
           },
-        ]
-          .filter((entry) => entry.Visible)
-          .sort((left, right) => {
-            if (Boolean(left.Pinned) !== Boolean(right.Pinned)) {
-              return left.Pinned ? -1 : 1;
-            }
-            return left.Order - right.Order;
-          });
+        ].filter((entry) => entry.Visible), clusterOrderOverrides);
         return new Response(
           JSON.stringify({
             pages: [],
@@ -711,7 +734,7 @@ function createScopedMenuSettingsFetchMock() {
         );
       }
 
-      const workEntries = [
+      const workEntries = applyOrdering([
         {
           ID: 'menu.homepage',
           CapabilityID: 'core.homepage',
@@ -750,12 +773,7 @@ function createScopedMenuSettingsFetchMock() {
               },
             ]
           : []),
-      ].sort((left, right) => {
-        if (Boolean(left.Pinned) !== Boolean(right.Pinned)) {
-          return left.Pinned ? -1 : 1;
-        }
-        return left.Order - right.Order;
-      });
+      ], workOrderOverrides);
 
       return new Response(
         JSON.stringify({
@@ -1133,6 +1151,61 @@ describe('App', () => {
           label === 'Cluster Menu Settings' || label === 'Cluster Extensions',
       );
     expect(resetClusterButtons.slice(0, 2)).toEqual(['Cluster Menu Settings', 'Cluster Extensions']);
+  });
+
+  it('moves one work menu entry up and down through item order overrides', async () => {
+    vi.stubGlobal('fetch', createScopedMenuSettingsFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cluster Settings' }));
+    expect(await screen.findByText('Scope: work-cluster')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Up Workloads' }));
+    expect(await screen.findByText('Saved menu settings for work-cluster')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Work' }));
+    let workButtons = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent)
+      .filter((label): label is string => label === 'Homepage' || label === 'Workloads');
+    expect(workButtons.slice(0, 2)).toEqual(['Workloads', 'Homepage']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cluster Settings' }));
+    expect(await screen.findByText('Scope: work-cluster')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Move Down Workloads' }));
+    expect(await screen.findByText('Saved menu settings for work-cluster')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Work' }));
+    workButtons = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent)
+      .filter((label): label is string => label === 'Homepage' || label === 'Workloads');
+    expect(workButtons.slice(0, 2)).toEqual(['Homepage', 'Workloads']);
+  });
+
+  it('moves one system config entry up through item order overrides', async () => {
+    vi.stubGlobal('fetch', createScopedMenuSettingsFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'System Settings' }));
+    expect(await screen.findByRole('button', { name: 'System Menu Settings' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'system' }));
+    expect(await screen.findByText('Scope: system')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Up Plugin Settings' }));
+    expect(await screen.findByText('Saved menu settings for system')).toBeTruthy();
+
+    const systemButtons = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent)
+      .filter(
+        (label): label is string =>
+          label === 'System Menu Settings' || label === 'Plugin Settings',
+      );
+    expect(systemButtons.slice(0, 2)).toEqual(['Plugin Settings', 'System Menu Settings']);
   });
 
   it('cycles the theme preference', () => {
