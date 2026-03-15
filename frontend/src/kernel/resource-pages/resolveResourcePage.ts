@@ -1,5 +1,6 @@
 import { resolveDefaultTabs } from './tabs';
 import type {
+  ResourcePageActionExtension,
   ResolveDefaultTabsOptions,
   ResolvedResourcePage,
   ResourcePageExtension,
@@ -54,16 +55,27 @@ export function resolveResourcePage(options: ResolveDefaultTabsOptions = {}): Re
             extension.placement === 'summary',
         )
         .map((extension) => extension.renderSlot(options)),
+      actions: extensions
+        .filter(
+          (extension): extension is ResourcePageActionExtension =>
+            extension.kind === options.resource?.kind && extension.capabilityType === 'action',
+        )
+        .map((extension) => extension.createAction(options)),
     };
   }
   const matchingExtensions = extensions.filter((extension) => extension.kind === options.resource?.kind);
   const tabExtensions = matchingExtensions.filter(
     (extension): extension is ResourceTabExtension =>
-      extension.capabilityType !== 'page-takeover' && extension.capabilityType !== 'slot',
+      extension.capabilityType !== 'page-takeover' &&
+      extension.capabilityType !== 'slot' &&
+      extension.capabilityType !== 'action',
   );
   const summaryExtensions = matchingExtensions.filter(
     (extension): extension is ResourcePageSummarySlotExtension =>
       extension.capabilityType === 'slot' && extension.placement === 'summary',
+  );
+  const actionExtensions = matchingExtensions.filter(
+    (extension): extension is ResourcePageActionExtension => extension.capabilityType === 'action',
   );
   const replacements = tabExtensions.filter((extension) => extension.capabilityType === 'tab-replace');
   for (const replacement of replacements) {
@@ -79,5 +91,6 @@ export function resolveResourcePage(options: ResolveDefaultTabsOptions = {}): Re
     tabs,
     takeoverContent: null,
     summaryContent: summaryExtensions.map((extension) => extension.renderSlot(options)),
+    actions: actionExtensions.map((extension) => extension.createAction(options)),
   };
 }

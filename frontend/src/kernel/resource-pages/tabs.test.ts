@@ -199,4 +199,36 @@ describe('resource page tabs', () => {
     expect(resolution.summaryContent).toEqual(['StatefulSet summary slot']);
     expect(resolution.takeoverContent).toBeNull();
   });
+
+  it('returns resource-page actions for matching resources', () => {
+    const resolution = resolveResourcePage({
+      resource: {
+        kind: 'Deployment',
+        name: 'api',
+        namespace: 'default',
+      },
+      extensions: [
+        {
+          kind: 'Deployment',
+          capabilityType: 'action',
+          actionId: 'restart-rollout',
+          createAction: () => ({
+            id: 'restart-rollout',
+            title: 'Restart Rollout',
+            actionId: 'restart-rollout',
+          }),
+        },
+      ],
+    });
+
+    expect(resolution.actions).toEqual([
+      {
+        id: 'restart-rollout',
+        title: 'Restart Rollout',
+        actionId: 'restart-rollout',
+      },
+    ]);
+    expect(resolution.takeoverContent).toBeNull();
+    expect(resolution.summaryContent).toEqual([]);
+  });
 });

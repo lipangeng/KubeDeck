@@ -137,6 +137,15 @@ export function WorkloadsPage() {
           }
           actions={
             <Stack direction="row" spacing={1}>
+              {resolvedPage.actions.map((action) => (
+                <Button
+                  key={action.id}
+                  variant="outlined"
+                  onClick={() => void handleAction(action.actionId)}
+                >
+                  {action.title}
+                </Button>
+              ))}
               {activeActions.map((action, index) => (
                 <Button
                   key={action.identity.contributionId}
