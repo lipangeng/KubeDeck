@@ -263,15 +263,30 @@ function hydrateResourcePageExtensions(
       };
     }
 
+    if (extension.CapabilityType === 'action') {
+      return {
+        kind: extension.Kind,
+        capabilityType: 'action' as const,
+        actionId: extension.ActionID ?? '',
+        priority: extension.Priority,
+        origin: 'remote' as const,
+        createAction: (options: { resource?: { name: string } }) => ({
+          id: `${extension.ActionID ?? 'resource-action'}:${options.resource?.name ?? 'resource'}`,
+          title: extension.Title.Fallback,
+          actionId: extension.ActionID ?? '',
+        }),
+      };
+    }
+
     return {
       kind: extension.Kind,
       capabilityType: extension.CapabilityType,
       targetTabId: extension.TargetTabID,
-      tabId: extension.TabID,
+      tabId: extension.TabID ?? `${extension.Kind.toLowerCase()}.remote-tab`,
       priority: extension.Priority,
       origin: 'remote' as const,
       createTab: (options: { resource?: { name: string } }) => ({
-        id: extension.TabID,
+        id: extension.TabID ?? `${extension.Kind.toLowerCase()}.remote-tab`,
         title: extension.Title.Fallback,
         capabilityType: extension.CapabilityType,
         content: options.resource?.name
