@@ -48,15 +48,32 @@ export interface ResourcePageSummarySlotExtension {
   renderSlot: (options: ResolveDefaultTabsOptions) => ReactNode;
 }
 
+export interface ResourcePageResolvedAction {
+  id: string;
+  title: string;
+  actionId: string;
+}
+
+export interface ResourcePageActionExtension {
+  kind: string;
+  capabilityType: 'action';
+  actionId: string;
+  priority?: number;
+  origin?: 'local' | 'remote';
+  createAction: (options: ResolveDefaultTabsOptions) => ResourcePageResolvedAction;
+}
+
 export type ResourcePageExtension =
   | ResourceTabExtension
   | ResourcePageTakeoverExtension
-  | ResourcePageSummarySlotExtension;
+  | ResourcePageSummarySlotExtension
+  | ResourcePageActionExtension;
 
 export interface ResolvedResourcePage {
   tabs: ResourcePageTab[];
   takeoverContent: ReactNode | null;
   summaryContent: ReactNode[];
+  actions: ResourcePageResolvedAction[];
 }
 
 export interface ResolveDefaultTabsOptions {

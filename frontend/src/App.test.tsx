@@ -1153,6 +1153,41 @@ describe('App', () => {
     expect(screen.getByText('Resource summary takeover for db')).toBeTruthy();
   });
 
+  it('renders and executes resource-page actions separate from workflow actions', async () => {
+    vi.stubGlobal('fetch', createKernelMetadataFetchMock());
+    const pluginModule: FrontendCapabilityModule = {
+      pluginId: 'plugin.resource-actions',
+      registerResourcePageExtensions: () => [
+        {
+          kind: 'Deployment',
+          capabilityType: 'action',
+          actionId: 'restart-rollout',
+          createAction: (options) => ({
+            id: `restart-rollout-${options.resource?.name ?? 'resource'}`,
+            title: 'Restart Rollout',
+            actionId: 'restart-rollout',
+          }),
+        },
+      ],
+    };
+
+    render(
+      <App
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+        pluginModules={[pluginModule]}
+      />,
+    );
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Workloads' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'api' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restart Rollout' }));
+
+    expect(await screen.findByText('apply accepted')).toBeTruthy();
+  });
+
   it('completes the first workflow through resource action, result, and return', async () => {
     vi.stubGlobal('fetch', createKernelMetadataFetchMock());
     render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);

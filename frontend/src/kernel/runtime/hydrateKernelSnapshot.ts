@@ -193,8 +193,9 @@ function resourcePageExtensionKey(extension: {
   targetTabId?: string;
   tabId?: string;
   placement?: string;
+  actionId?: string;
 }) {
-  return `${extension.kind}:${extension.capabilityType ?? 'tab'}:${extension.targetTabId ?? ''}:${extension.tabId ?? ''}:${extension.placement ?? ''}`;
+  return `${extension.kind}:${extension.capabilityType ?? 'tab'}:${extension.targetTabId ?? ''}:${extension.tabId ?? ''}:${extension.placement ?? ''}:${extension.actionId ?? ''}`;
 }
 
 function getResourcePageExtensionIdentity(extension: ResourcePageExtension) {
@@ -219,6 +220,18 @@ function getResourcePageExtensionIdentity(extension: ResourcePageExtension) {
       targetTabId: undefined,
       tabId: undefined,
       placement: extension.placement,
+      actionId: undefined,
+    };
+  }
+
+  if (extension.capabilityType === 'action') {
+    return {
+      kind: extension.kind,
+      capabilityType: extension.capabilityType,
+      targetTabId: undefined,
+      tabId: undefined,
+      placement: undefined,
+      actionId: extension.actionId,
     };
   }
 
@@ -228,6 +241,7 @@ function getResourcePageExtensionIdentity(extension: ResourcePageExtension) {
     targetTabId: undefined,
     tabId: undefined,
     placement: undefined,
+    actionId: undefined,
   };
 }
 
