@@ -90,6 +90,17 @@
           "key": "sampleOpsConsole.resource.restart",
           "fallback": "Restart Rollout"
         }
+      },
+      {
+        "kind": "Deployment",
+        "capabilityType": "slot",
+        "placement": "summary",
+        "priority": 30,
+        "title": {
+          "key": "sampleOpsConsole.resource.summary",
+          "fallback": "Deployment Summary"
+        },
+        "contentFallback": "Deployment summary slot from sample plugin"
       }
     ]
   },

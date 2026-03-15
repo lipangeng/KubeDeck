@@ -28,6 +28,17 @@
           "key": "exampleFrontendPlugin.resource.restart",
           "fallback": "Restart Rollout"
         }
+      },
+      {
+        "kind": "Deployment",
+        "capabilityType": "slot",
+        "placement": "summary",
+        "priority": 30,
+        "title": {
+          "key": "exampleFrontendPlugin.resource.summary",
+          "fallback": "Deployment Summary"
+        },
+        "contentFallback": "Example frontend plugin deployment summary"
       }
     ]
   },

@@ -7,6 +7,7 @@ const (
 	ResourcePageExtensionTabReplace ResourcePageExtensionCapabilityType = "tab-replace"
 	ResourcePageExtensionPageTakeover ResourcePageExtensionCapabilityType = "page-takeover"
 	ResourcePageExtensionAction     ResourcePageExtensionCapabilityType = "action"
+	ResourcePageExtensionSlot      ResourcePageExtensionCapabilityType = "slot"
 )
 
 // ResourcePageExtensionDescriptor declares one resource-page capability exposed by a backend capability.
@@ -16,6 +17,7 @@ type ResourcePageExtensionDescriptor struct {
 	TargetTabID     string
 	TabID           string
 	ActionID        string
+	Placement       string
 	Priority        int
 	Title           TextRef
 	ContentFallback string

@@ -86,6 +86,17 @@ func (Capability) CapabilityDescriptor() sdk.CapabilityDescriptor {
 					Fallback: "Restart Rollout",
 				},
 			},
+			{
+				Kind:           "Deployment",
+				CapabilityType: sdk.ResourcePageExtensionSlot,
+				Placement:      "summary",
+				Priority:       30,
+				Title: sdk.TextRef{
+					Key:      "exampleBackendPlugin.resource.summary",
+					Fallback: "Deployment Summary",
+				},
+				ContentFallback: "Example backend plugin deployment summary",
+			},
 		},
 	}
 }

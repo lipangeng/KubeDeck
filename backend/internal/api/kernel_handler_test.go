@@ -186,6 +186,9 @@ func TestKernelHandlerSnapshotLoadsRepositorySamplePluginAndSkipsTemplates(t *te
 	if want := `"ActionID":"restart-rollout"`; !contains(body, want) {
 		t.Fatalf("expected body to contain %q, got %s", want, body)
 	}
+	if want := `"Placement":"summary"`; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
 	if unwanted := "example-frontend-plugin"; contains(body, unwanted) {
 		t.Fatalf("expected body not to contain template plugin %q, got %s", unwanted, body)
 	}

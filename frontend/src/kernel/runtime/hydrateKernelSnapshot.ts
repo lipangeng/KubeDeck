@@ -278,6 +278,20 @@ function hydrateResourcePageExtensions(
       };
     }
 
+    if (extension.CapabilityType === 'slot') {
+      return {
+        kind: extension.Kind,
+        capabilityType: 'slot' as const,
+        placement: 'summary' as const,
+        priority: extension.Priority,
+        origin: 'remote' as const,
+        renderSlot: (options: { resource?: { name: string } }) =>
+          options.resource?.name
+            ? `${extension.ContentFallback ?? extension.Title.Fallback} for ${options.resource.name}`
+            : (extension.ContentFallback ?? extension.Title.Fallback),
+      };
+    }
+
     return {
       kind: extension.Kind,
       capabilityType: extension.CapabilityType,
