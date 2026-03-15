@@ -42,6 +42,9 @@ func TestFrontendTemplateUsesKernelContributions(t *testing.T) {
 	if !strings.Contains(source, "registerResourcePageExtensions") {
 		t.Fatal("frontend template must expose registerResourcePageExtensions")
 	}
+	if !strings.Contains(source, "createAction") {
+		t.Fatal("frontend template should demonstrate resource-page action extensions")
+	}
 }
 
 func TestBackendTemplateShowsResourcePageExtensions(t *testing.T) {
@@ -55,5 +58,8 @@ func TestBackendTemplateShowsResourcePageExtensions(t *testing.T) {
 	source := string(content)
 	if !strings.Contains(source, "ResourcePageExtensions") {
 		t.Fatal("backend template should demonstrate ResourcePageExtensions")
+	}
+	if !strings.Contains(source, "ResourcePageExtensionAction") {
+		t.Fatal("backend template should demonstrate resource-page action descriptors")
 	}
 }

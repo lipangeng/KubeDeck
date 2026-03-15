@@ -80,6 +80,16 @@
           "fallback": "StatefulSet takeover"
         },
         "contentFallback": "Sample plugin StatefulSet takeover"
+      },
+      {
+        "kind": "Deployment",
+        "capabilityType": "action",
+        "actionId": "restart-rollout",
+        "priority": 40,
+        "title": {
+          "key": "sampleOpsConsole.resource.restart",
+          "fallback": "Restart Rollout"
+        }
       }
     ]
   },

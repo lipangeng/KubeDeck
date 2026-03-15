@@ -25,6 +25,11 @@ type contributionShape struct {
 	Resources  json.RawMessage `json:"resources"`
 }
 
+type resourcePageExtensionShape struct {
+	CapabilityType string `json:"capabilityType"`
+	ActionID       string `json:"actionId"`
+}
+
 func TestTemplateManifestShape(t *testing.T) {
 	t.Helper()
 
@@ -77,6 +82,19 @@ func TestTemplateManifestShape(t *testing.T) {
 			}
 			if contributions.ResourcePageExtensions == nil {
 				t.Fatal("contributions.resourcePageExtensions is required")
+			}
+			hasActionExtension := false
+			for _, rawExtension := range contributions.ResourcePageExtensions {
+				var extension resourcePageExtensionShape
+				if err := json.Unmarshal(rawExtension, &extension); err != nil {
+					t.Fatalf("unmarshal resourcePageExtension: %v", err)
+				}
+				if extension.CapabilityType == "action" && extension.ActionID != "" {
+					hasActionExtension = true
+				}
+			}
+			if !hasActionExtension {
+				t.Fatal("contributions.resourcePageExtensions must include an action example")
 			}
 			if len(contributions.Extensions) > 0 {
 				t.Fatal("contributions.extensions must not be used in the kernel template")

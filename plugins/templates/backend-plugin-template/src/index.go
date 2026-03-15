@@ -76,6 +76,16 @@ func (Capability) CapabilityDescriptor() sdk.CapabilityDescriptor {
 				},
 				ContentFallback: "Example backend plugin StatefulSet takeover",
 			},
+			{
+				Kind:           "Deployment",
+				CapabilityType: sdk.ResourcePageExtensionAction,
+				ActionID:       "restart-rollout",
+				Priority:       40,
+				Title: sdk.TextRef{
+					Key:      "exampleBackendPlugin.resource.restart",
+					Fallback: "Restart Rollout",
+				},
+			},
 		},
 	}
 }

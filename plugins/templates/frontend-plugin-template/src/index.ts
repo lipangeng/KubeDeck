@@ -17,6 +17,16 @@ const resourcePageExtensions = (): ResourcePageExtension[] => [
     renderPage: (options) =>
       `Example frontend plugin StatefulSet takeover for ${options.resource?.name ?? 'statefulset'}`,
   },
+  {
+    kind: 'Deployment',
+    capabilityType: 'action',
+    actionId: 'restart-rollout',
+    createAction: (options) => ({
+      id: `restart-rollout-${options.resource?.name ?? 'resource'}`,
+      title: 'Restart Rollout',
+      actionId: 'restart-rollout',
+    }),
+  },
 ];
 
 const plugin: FrontendCapabilityModule = {
