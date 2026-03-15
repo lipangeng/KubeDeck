@@ -64,5 +64,18 @@ func (Capability) CapabilityDescriptor() sdk.CapabilityDescriptor {
 				},
 			},
 		},
+		ResourcePageExtensions: []sdk.ResourcePageExtensionDescriptor{
+			{
+				Kind:           "StatefulSet",
+				CapabilityType: sdk.ResourcePageExtensionPageTakeover,
+				TabID:          "example.statefulset.takeover",
+				Priority:       50,
+				Title: sdk.TextRef{
+					Key:      "exampleBackendPlugin.resource.statefulset",
+					Fallback: "StatefulSet takeover",
+				},
+				ContentFallback: "Example backend plugin StatefulSet takeover",
+			},
+		},
 	}
 }

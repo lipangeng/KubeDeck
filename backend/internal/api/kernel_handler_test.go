@@ -177,6 +177,12 @@ func TestKernelHandlerSnapshotLoadsRepositorySamplePluginAndSkipsTemplates(t *te
 	if want := `"TabID":"endpoints"`; !contains(body, want) {
 		t.Fatalf("expected body to contain %q, got %s", want, body)
 	}
+	if want := `"CapabilityType":"page-takeover"`; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+	if want := `"Priority":60`; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
 	if unwanted := "example-frontend-plugin"; contains(body, unwanted) {
 		t.Fatalf("expected body not to contain template plugin %q, got %s", unwanted, body)
 	}
