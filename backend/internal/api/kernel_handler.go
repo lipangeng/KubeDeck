@@ -54,9 +54,11 @@ func NewKernelHandlerWithDependencies(
 }
 
 func (h *KernelHandler) Menus(w http.ResponseWriter, r *http.Request) {
-	globalOverrides, clusterOverrides := h.menuOverridesForCluster(r.URL.Query().Get("cluster"))
-	writeJSON(w, plugins.ComposeKernelSnapshotWithOverrides(
+	scope := r.URL.Query().Get("scope")
+	globalOverrides, clusterOverrides := h.menuOverridesForCluster(r.URL.Query().Get("cluster"), scope)
+	writeJSON(w, plugins.ComposeScopedKernelSnapshotWithOverrides(
 		h.registry.Descriptors(),
+		scope,
 		globalOverrides,
 		clusterOverrides,
 	).Menus)
@@ -75,9 +77,11 @@ func (h *KernelHandler) Slots(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *KernelHandler) Snapshot(w http.ResponseWriter, r *http.Request) {
-	globalOverrides, clusterOverrides := h.menuOverridesForCluster(r.URL.Query().Get("cluster"))
-	writeJSON(w, plugins.ComposeKernelSnapshotWithOverrides(
+	scope := r.URL.Query().Get("scope")
+	globalOverrides, clusterOverrides := h.menuOverridesForCluster(r.URL.Query().Get("cluster"), scope)
+	writeJSON(w, plugins.ComposeScopedKernelSnapshotWithOverrides(
 		h.registry.Descriptors(),
+		scope,
 		globalOverrides,
 		clusterOverrides,
 	))
@@ -156,11 +160,39 @@ func writeJSON(w http.ResponseWriter, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-func (h *KernelHandler) menuOverridesForCluster(cluster string) ([]plugins.MenuOverride, []plugins.MenuOverride) {
+func (h *KernelHandler) menuOverridesForCluster(cluster string, scope string) ([]plugins.MenuOverride, []plugins.MenuOverride) {
 	if h.menuRepo == nil {
 		return nil, nil
 	}
-	return h.menuRepo.GetGlobalOverrides(defaultMenuUserID), h.menuRepo.GetClusterOverrides(defaultMenuUserID, cluster)
+	return filterMenuOverridesForScope(h.menuRepo.GetGlobalOverrides(defaultMenuUserID), scope),
+		filterMenuOverridesForScope(h.menuRepo.GetClusterOverrides(defaultMenuUserID, cluster), scope)
+}
+
+func filterMenuOverridesForScope(overrides []plugins.MenuOverride, scope string) []plugins.MenuOverride {
+	if len(overrides) == 0 {
+		return nil
+	}
+	filtered := make([]plugins.MenuOverride, 0, len(overrides))
+	for _, override := range overrides {
+		switch scope {
+		case "system":
+			if override.Scope == plugins.MenuOverrideScopeSystem {
+				filtered = append(filtered, override)
+			}
+		case "cluster":
+			if override.Scope == plugins.MenuOverrideScopeCluster || override.Scope == plugins.MenuOverrideScopeClusterMenu {
+				filtered = append(filtered, override)
+			}
+		default:
+			if override.Scope == plugins.MenuOverrideScopeGlobal ||
+				override.Scope == plugins.MenuOverrideScopeWorkGlobal ||
+				override.Scope == plugins.MenuOverrideScopeCluster ||
+				override.Scope == plugins.MenuOverrideScopeWorkCluster {
+				filtered = append(filtered, override)
+			}
+		}
+	}
+	return filtered
 }
 
 func resolvePluginRoot(configured string) string {

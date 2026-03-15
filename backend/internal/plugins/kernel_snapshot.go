@@ -22,7 +22,16 @@ func ComposeKernelSnapshotWithOverrides(
 	globalOverrides []MenuOverride,
 	clusterOverrides []MenuOverride,
 ) KernelSnapshot {
-	menuComposition := ComposeMenuComposition(descriptors, globalOverrides, clusterOverrides)
+	return ComposeScopedKernelSnapshotWithOverrides(descriptors, "", globalOverrides, clusterOverrides)
+}
+
+func ComposeScopedKernelSnapshotWithOverrides(
+	descriptors []sdk.CapabilityDescriptor,
+	scope string,
+	globalOverrides []MenuOverride,
+	clusterOverrides []MenuOverride,
+) KernelSnapshot {
+	menuComposition := ComposeScopedMenuComposition(descriptors, scope, globalOverrides, clusterOverrides)
 	return KernelSnapshot{
 		Pages:         ComposePages(descriptors),
 		Menus:         flattenMenuGroups(menuComposition.Groups),
