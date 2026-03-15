@@ -4,6 +4,7 @@ import type { ResolveDefaultTabsOptions, ResourcePageTab, ResourceTabExtension }
 const builtInTabExtensions: ResourceTabExtension[] = [
   {
     kind: 'Deployment',
+    capabilityType: 'tab',
     createTab: (options) => ({
       id: 'runtime',
       title: 'Runtime',
@@ -13,6 +14,18 @@ const builtInTabExtensions: ResourceTabExtension[] = [
   },
   {
     kind: 'Pod',
+    capabilityType: 'tab-replace',
+    targetTabId: 'overview',
+    createTab: (options) => ({
+      id: 'overview',
+      title: 'Overview',
+      capabilityType: 'tab-replace',
+      content: `Pod-specific overview for ${options.resource?.name ?? 'pod'}`,
+    }),
+  },
+  {
+    kind: 'Pod',
+    capabilityType: 'tab',
     createTab: (options) => ({
       id: 'logs',
       title: 'Logs',
@@ -23,10 +36,18 @@ const builtInTabExtensions: ResourceTabExtension[] = [
 ];
 
 export function resolveResourcePage(options: ResolveDefaultTabsOptions = {}): ResourcePageTab[] {
-  const tabs = resolveDefaultTabs(options);
+  let tabs = resolveDefaultTabs(options);
   const extensions = [...builtInTabExtensions, ...(options.extensions ?? [])];
   const matchingExtensions = extensions.filter((extension) => extension.kind === options.resource?.kind);
-  tabs.push(...matchingExtensions.map((extension) => extension.createTab(options)));
+  const replacements = matchingExtensions.filter((extension) => extension.capabilityType === 'tab-replace');
+  for (const replacement of replacements) {
+    const replacementTab = replacement.createTab(options);
+    tabs = tabs.map((tab) => (tab.id === replacement.targetTabId ? replacementTab : tab));
+  }
+  const appendedTabs = matchingExtensions
+    .filter((extension) => extension.capabilityType !== 'tab-replace')
+    .map((extension) => extension.createTab(options));
+  tabs.push(...appendedTabs);
 
   return tabs;
 }
