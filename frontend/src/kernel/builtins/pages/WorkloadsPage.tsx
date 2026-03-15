@@ -106,17 +106,6 @@ export function WorkloadsPage() {
 
     return (
       <Stack spacing={2}>
-        <Stack direction="row" spacing={1}>
-          <Button variant="contained" onClick={() => void handleAction('apply')}>
-            Apply
-          </Button>
-          <Button variant="outlined" onClick={() => void handleAction('create')}>
-            Create
-          </Button>
-          <Button variant="text" onClick={exitResource}>
-            Back to Workloads
-          </Button>
-        </Stack>
         {actionResult ? (
           <Alert severity="success">
             <Stack spacing={0.5}>
@@ -129,29 +118,29 @@ export function WorkloadsPage() {
             </Stack>
           </Alert>
         ) : null}
-        {resolvedPage.takeoverContent ? (
-          <Stack spacing={1}>
-            <Typography variant="h6">{`${currentResource.kind}/${currentResource.name}`}</Typography>
+        <ResourcePageShell
+          title={`${currentResource.kind}/${currentResource.name}`}
+          summary={
             <Typography color="text.secondary">
               Namespace: {currentResource.namespace ?? 'cluster'}
             </Typography>
-            {typeof resolvedPage.takeoverContent === 'string' ? (
-              <Typography>{resolvedPage.takeoverContent}</Typography>
-            ) : (
-              resolvedPage.takeoverContent
-            )}
-          </Stack>
-        ) : (
-          <ResourcePageShell
-            title={`${currentResource.kind}/${currentResource.name}`}
-            summary={
-              <Typography color="text.secondary">
-                Namespace: {currentResource.namespace ?? 'cluster'}
-              </Typography>
-            }
-            tabs={resolvedPage.tabs}
-          />
-        )}
+          }
+          actions={
+            <Stack direction="row" spacing={1}>
+              <Button variant="contained" onClick={() => void handleAction('apply')}>
+                Apply
+              </Button>
+              <Button variant="outlined" onClick={() => void handleAction('create')}>
+                Create
+              </Button>
+              <Button variant="text" onClick={exitResource}>
+                Back to Workloads
+              </Button>
+            </Stack>
+          }
+          tabs={resolvedPage.tabs}
+          takeoverContent={resolvedPage.takeoverContent}
+        />
       </Stack>
     );
   }
