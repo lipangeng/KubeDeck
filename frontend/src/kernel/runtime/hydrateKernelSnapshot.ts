@@ -113,10 +113,13 @@ export function hydrateRemoteMenuGroups(remoteGroups: RemoteMenuGroup[]): Kernel
   }));
 }
 
-function hydrateActions(remoteActions: RemoteActionDescriptor[]): ActionContribution[] {
-  return remoteActions.map((action) => ({
+function hydrateActions(
+  localActions: ActionContribution[],
+  remoteActions: RemoteActionDescriptor[],
+): ActionContribution[] {
+  const hydratedRemote = remoteActions.map((action) => ({
     identity: {
-      source: 'builtin',
+      source: 'builtin' as const,
       capabilityId: `server.${action.WorkflowDomainID}`,
       contributionId: action.ID,
     },
@@ -128,6 +131,15 @@ function hydrateActions(remoteActions: RemoteActionDescriptor[]): ActionContribu
     title: toLocalizedText(action.Title),
     description: action.Description ? toLocalizedText(action.Description) : undefined,
   }));
+
+  const merged = [...localActions];
+  const existingIds = new Set(localActions.map((action) => action.actionId));
+  for (const action of hydratedRemote) {
+    if (!existingIds.has(action.actionId)) {
+      merged.push(action);
+    }
+  }
+  return merged;
 }
 
 function hydrateSlots(
@@ -135,7 +147,7 @@ function hydrateSlots(
   remoteSlots: RemoteSlotDescriptor[],
 ): SlotContribution[] {
   const localBySlotId = new Map(localSlots.map((slot) => [slot.slotId, slot]));
-  return remoteSlots.map((slot) => {
+  const hydratedRemote = remoteSlots.map((slot) => {
     const title = slot.Title ? toLocalizedText(slot.Title) : undefined;
     const local = localBySlotId.get(slot.SlotID);
     if (local) {
@@ -164,6 +176,15 @@ function hydrateSlots(
     };
     return remoteSlot;
   });
+
+  const merged = [...localSlots];
+  const existingSlotIds = new Set(localSlots.map((slot) => slot.slotId));
+  for (const slot of hydratedRemote) {
+    if (!existingSlotIds.has(slot.slotId)) {
+      merged.push(slot);
+    }
+  }
+  return merged;
 }
 
 function resourcePageExtensionKey(extension: {
@@ -250,7 +271,7 @@ export function hydrateKernelSnapshot(
       remoteMetadata.menuGroups && remoteMetadata.menuGroups.length > 0
         ? hydrateRemoteMenuGroups(remoteMetadata.menuGroups)
         : localSnapshot.menuGroups,
-    actions: hydrateActions(remoteMetadata.actions),
+    actions: hydrateActions(localSnapshot.actions, remoteMetadata.actions),
     slots: hydrateSlots(localSnapshot.slots, remoteMetadata.slots),
     resourcePageExtensions: hydrateResourcePageExtensions(
       localSnapshot.resourcePageExtensions,

@@ -149,4 +149,52 @@ describe('hydrateKernelSnapshot', () => {
 
     expect(resolution.takeoverContent).toBe('Remote takeover for db');
   });
+
+  it('keeps local workflow actions and summary slots when backend metadata does not replace them', () => {
+    const localSnapshot: KernelRegistrySnapshot = {
+      pages: [],
+      menus: [],
+      menuGroups: [],
+      actions: [
+        {
+          identity: {
+            source: 'plugin',
+            capabilityId: 'plugin.workflow-shell',
+            contributionId: 'action.inspect',
+          },
+          workflowDomainId: 'workloads',
+          actionId: 'inspect',
+          title: { key: 'actions.inspect', fallback: 'Inspect' },
+          surface: 'inline',
+          visible: true,
+        },
+      ],
+      slots: [
+        {
+          identity: {
+            source: 'plugin',
+            capabilityId: 'plugin.workflow-shell',
+            contributionId: 'slot.workloads.summary.workflow-shell',
+          },
+          workflowDomainId: 'workloads',
+          slotId: 'workloads.summary.workflow-shell',
+          placement: 'summary',
+          visible: true,
+          component: () => null,
+        },
+      ],
+      resourcePageExtensions: [],
+    };
+
+    const hydrated = hydrateKernelSnapshot(localSnapshot, {
+      pages: [],
+      menus: [],
+      actions: [],
+      slots: [],
+      resourcePageExtensions: [],
+    });
+
+    expect(hydrated.actions.some((action) => action.actionId === 'inspect')).toBe(true);
+    expect(hydrated.slots.some((slot) => slot.slotId === 'workloads.summary.workflow-shell')).toBe(true);
+  });
 });

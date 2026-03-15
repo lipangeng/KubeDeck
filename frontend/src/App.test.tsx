@@ -1054,6 +1054,67 @@ describe('App', () => {
     expect(screen.getByText('Sample Ops Console StatefulSet takeover for db')).toBeTruthy();
   });
 
+  it('renders workflow summary slots and actions inside takeover pages', async () => {
+    vi.stubGlobal('fetch', createKernelMetadataFetchMock());
+    const pluginModule: FrontendCapabilityModule = {
+      pluginId: 'plugin.workflow-shell',
+      registerActions: () => [
+        {
+          identity: {
+            source: 'plugin',
+            capabilityId: 'plugin.workflow-shell',
+            contributionId: 'action.inspect',
+          },
+          workflowDomainId: 'workloads',
+          actionId: 'inspect',
+          title: { key: 'actions.inspect', fallback: 'Inspect' },
+          surface: 'inline',
+          visible: true,
+          order: 30,
+        },
+      ],
+      registerSlots: () => [
+        {
+          identity: {
+            source: 'plugin',
+            capabilityId: 'plugin.workflow-shell',
+            contributionId: 'slot.workloads.summary.workflow-shell',
+          },
+          workflowDomainId: 'workloads',
+          slotId: 'workloads.summary.workflow-shell',
+          placement: 'summary',
+          visible: true,
+          component: () => <div>Workflow summary slot</div>,
+        },
+      ],
+      registerResourcePageExtensions: () => [
+        {
+          kind: 'StatefulSet',
+          capabilityType: 'page-takeover',
+          priority: 60,
+          renderPage: (options) =>
+            `Workflow shell takeover for ${options.resource?.name ?? 'statefulset'}`,
+        },
+      ],
+    };
+
+    render(
+      <App
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+        pluginModules={[pluginModule]}
+      />,
+    );
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Workloads' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'db' }));
+
+    expect(screen.getByText('Workflow summary slot')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Inspect' })).toBeTruthy();
+    expect(screen.getByText('Workflow shell takeover for db')).toBeTruthy();
+  });
+
   it('completes the first workflow through resource action, result, and return', async () => {
     vi.stubGlobal('fetch', createKernelMetadataFetchMock());
     render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
