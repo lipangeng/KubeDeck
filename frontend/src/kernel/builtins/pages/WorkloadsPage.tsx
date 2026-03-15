@@ -20,6 +20,7 @@ import type { WorkloadItem } from '../../runtime/fetchWorkloads';
 
 export function WorkloadsPage() {
   const {
+    activeActions,
     activePage,
     activeSummarySlots,
     currentResource,
@@ -121,18 +122,27 @@ export function WorkloadsPage() {
         <ResourcePageShell
           title={`${currentResource.kind}/${currentResource.name}`}
           summary={
-            <Typography color="text.secondary">
-              Namespace: {currentResource.namespace ?? 'cluster'}
-            </Typography>
+            <Stack spacing={1}>
+              <Typography color="text.secondary">
+                Namespace: {currentResource.namespace ?? 'cluster'}
+              </Typography>
+              {activeSummarySlots.map((slot) => {
+                const SlotComponent = slot.component;
+                return <SlotComponent key={slot.identity.contributionId} />;
+              })}
+            </Stack>
           }
           actions={
             <Stack direction="row" spacing={1}>
-              <Button variant="contained" onClick={() => void handleAction('apply')}>
-                Apply
-              </Button>
-              <Button variant="outlined" onClick={() => void handleAction('create')}>
-                Create
-              </Button>
+              {activeActions.map((action, index) => (
+                <Button
+                  key={action.identity.contributionId}
+                  variant={index === 0 ? 'contained' : 'outlined'}
+                  onClick={() => void handleAction(action.actionId)}
+                >
+                  {action.title.fallback}
+                </Button>
+              ))}
               <Button variant="text" onClick={exitResource}>
                 Back to Workloads
               </Button>
