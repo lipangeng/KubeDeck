@@ -234,6 +234,15 @@ function createKernelMetadataFetchMock() {
               Title: { Key: 'workloads.insights.title', Fallback: 'Kernel Insights' },
             },
           ],
+          resourcePageExtensions: [
+            {
+              Kind: 'Service',
+              CapabilityType: 'tab',
+              TabID: 'endpoints',
+              Title: { Key: 'service.endpoints', Fallback: 'Endpoints' },
+              ContentFallback: 'Service endpoints from backend',
+            },
+          ],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
@@ -983,6 +992,18 @@ describe('App', () => {
         pluginModules={[pluginModule]}
       />,
     );
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Workloads' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'api-service' }));
+
+    expect(screen.getByRole('heading', { name: 'Service/api-service' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Endpoints' })).toBeTruthy();
+  });
+
+  it('renders backend-provided resource page extensions from kernel metadata', async () => {
+    vi.stubGlobal('fetch', createKernelMetadataFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
 
     expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Workloads' }));

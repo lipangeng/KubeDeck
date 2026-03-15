@@ -57,6 +57,15 @@ func TestLoadManifestProvidersFromDirBuildsCapabilityDescriptors(t *testing.T) {
         "visible": true,
         "title": { "key": "opsConsole.slots.summary", "fallback": "Operations Summary" }
       }
+    ],
+    "resourcePageExtensions": [
+      {
+        "kind": "Service",
+        "capabilityType": "tab",
+        "tabId": "endpoints",
+        "title": { "key": "opsConsole.resource.endpoints", "fallback": "Endpoints" },
+        "contentFallback": "Service endpoints from manifest"
+      }
     ]
   }
 }`
@@ -87,5 +96,8 @@ func TestLoadManifestProvidersFromDirBuildsCapabilityDescriptors(t *testing.T) {
 	}
 	if len(descriptor.Slots) != 1 || descriptor.Slots[0].Placement != "summary" {
 		t.Fatalf("expected one summary slot contribution, got %+v", descriptor.Slots)
+	}
+	if len(descriptor.ResourcePageExtensions) != 1 || descriptor.ResourcePageExtensions[0].TabID != "endpoints" {
+		t.Fatalf("expected one resource page extension, got %+v", descriptor.ResourcePageExtensions)
 	}
 }

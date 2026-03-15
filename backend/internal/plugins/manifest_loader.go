@@ -54,11 +54,21 @@ type manifestSlot struct {
 	Title            *manifestTextRef `json:"title"`
 }
 
+type manifestResourcePageExtension struct {
+	Kind            string          `json:"kind"`
+	CapabilityType  string          `json:"capabilityType"`
+	TargetTabID     string          `json:"targetTabId"`
+	TabID           string          `json:"tabId"`
+	Title           manifestTextRef `json:"title"`
+	ContentFallback string          `json:"contentFallback"`
+}
+
 type manifestContributions struct {
-	Pages   []manifestPage   `json:"pages"`
-	Menus   []manifestMenu   `json:"menus"`
-	Actions []manifestAction `json:"actions"`
-	Slots   []manifestSlot   `json:"slots"`
+	Pages                  []manifestPage                  `json:"pages"`
+	Menus                  []manifestMenu                  `json:"menus"`
+	Actions                []manifestAction                `json:"actions"`
+	Slots                  []manifestSlot                  `json:"slots"`
+	ResourcePageExtensions []manifestResourcePageExtension `json:"resourcePageExtensions"`
 }
 
 type pluginManifest struct {
@@ -117,6 +127,9 @@ func LoadManifestProvidersFromDir(root string) ([]sdk.CapabilityProvider, error)
 				Menus:   toMenuDescriptors(manifest.Contributions.Menus),
 				Actions: toActionDescriptors(manifest.Contributions.Actions),
 				Slots:   toSlotDescriptors(manifest.Contributions.Slots),
+				ResourcePageExtensions: toResourcePageExtensionDescriptors(
+					manifest.Contributions.ResourcePageExtensions,
+				),
 			},
 		})
 	}
@@ -210,4 +223,21 @@ func toSlotDescriptors(items []manifestSlot) []sdk.SlotDescriptor {
 		slots = append(slots, slot)
 	}
 	return slots
+}
+
+func toResourcePageExtensionDescriptors(
+	items []manifestResourcePageExtension,
+) []sdk.ResourcePageExtensionDescriptor {
+	extensions := make([]sdk.ResourcePageExtensionDescriptor, 0, len(items))
+	for _, item := range items {
+		extensions = append(extensions, sdk.ResourcePageExtensionDescriptor{
+			Kind:            item.Kind,
+			CapabilityType:  sdk.ResourcePageExtensionCapabilityType(item.CapabilityType),
+			TargetTabID:     item.TargetTabID,
+			TabID:           item.TabID,
+			Title:           toTextRef(item.Title),
+			ContentFallback: item.ContentFallback,
+		})
+	}
+	return extensions
 }
