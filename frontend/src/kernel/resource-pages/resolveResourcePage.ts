@@ -9,9 +9,37 @@ import type {
 export function resolveResourcePage(options: ResolveDefaultTabsOptions = {}): ResolvedResourcePage {
   let tabs = resolveDefaultTabs(options);
   const extensions = options.extensions ?? [];
-  const takeover = extensions.find(
+  const takeovers = extensions.filter(
     (extension): extension is Extract<ResourcePageExtension, { capabilityType: 'page-takeover' }> =>
       extension.kind === options.resource?.kind && extension.capabilityType === 'page-takeover',
+  );
+  const takeover = takeovers.reduce<Extract<ResourcePageExtension, { capabilityType: 'page-takeover' }> | null>(
+    (currentBest, candidate) => {
+      if (!currentBest) {
+        return candidate;
+      }
+
+      const bestPriority = currentBest.priority ?? 0;
+      const candidatePriority = candidate.priority ?? 0;
+      if (candidatePriority > bestPriority) {
+        return candidate;
+      }
+      if (candidatePriority < bestPriority) {
+        return currentBest;
+      }
+
+      const bestSourceRank = currentBest.origin === 'remote' ? 0 : 1;
+      const candidateSourceRank = candidate.origin === 'remote' ? 0 : 1;
+      if (candidateSourceRank > bestSourceRank) {
+        return candidate;
+      }
+      if (candidateSourceRank < bestSourceRank) {
+        return currentBest;
+      }
+
+      return candidate;
+    },
+    null,
   );
   if (takeover) {
     return {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { hydrateKernelSnapshot } from './hydrateKernelSnapshot';
 import type { KernelRegistrySnapshot } from './types';
+import { resolveResourcePage } from '../resource-pages/resolveResourcePage';
 
 describe('hydrateKernelSnapshot', () => {
   it('keeps local built-in resource page extensions and appends remote-only extensions', () => {
@@ -55,5 +56,97 @@ describe('hydrateKernelSnapshot', () => {
     expect(
       hydrated.resourcePageExtensions.some((extension) => extension.kind === 'Service'),
     ).toBe(true);
+  });
+
+  it('prefers a local takeover over an equal-priority remote takeover', () => {
+    const localSnapshot: KernelRegistrySnapshot = {
+      pages: [],
+      menus: [],
+      menuGroups: [],
+      actions: [],
+      slots: [],
+      resourcePageExtensions: [
+        {
+          kind: 'StatefulSet',
+          capabilityType: 'page-takeover',
+          priority: 20,
+          renderPage: () => 'Local takeover',
+        },
+      ],
+    };
+
+    const hydrated = hydrateKernelSnapshot(localSnapshot, {
+      pages: [],
+      menus: [],
+      actions: [],
+      slots: [],
+      resourcePageExtensions: [
+        {
+          Kind: 'StatefulSet',
+          CapabilityType: 'page-takeover',
+          TabID: 'statefulset.takeover',
+          Title: { Key: 'statefulset.takeover', Fallback: 'StatefulSet takeover' },
+          ContentFallback: 'Remote takeover',
+          Priority: 20,
+        },
+      ],
+    });
+
+    const resolution = resolveResourcePage({
+      resource: {
+        kind: 'StatefulSet',
+        name: 'db',
+        namespace: 'default',
+      },
+      extensions: hydrated.resourcePageExtensions,
+    });
+
+    expect(resolution.takeoverContent).toBe('Local takeover');
+  });
+
+  it('allows a higher-priority remote takeover to override a local takeover', () => {
+    const localSnapshot: KernelRegistrySnapshot = {
+      pages: [],
+      menus: [],
+      menuGroups: [],
+      actions: [],
+      slots: [],
+      resourcePageExtensions: [
+        {
+          kind: 'StatefulSet',
+          capabilityType: 'page-takeover',
+          priority: 20,
+          renderPage: () => 'Local takeover',
+        },
+      ],
+    };
+
+    const hydrated = hydrateKernelSnapshot(localSnapshot, {
+      pages: [],
+      menus: [],
+      actions: [],
+      slots: [],
+      resourcePageExtensions: [
+        {
+          Kind: 'StatefulSet',
+          CapabilityType: 'page-takeover',
+          TabID: 'statefulset.takeover',
+          Title: { Key: 'statefulset.takeover', Fallback: 'StatefulSet takeover' },
+          ContentFallback: 'Remote takeover',
+          Priority: 80,
+        },
+      ],
+    });
+
+    const resolution = resolveResourcePage({
+      resource: {
+        kind: 'StatefulSet',
+        name: 'db',
+        namespace: 'default',
+      },
+      extensions: hydrated.resourcePageExtensions,
+    });
+
+    expect(resolution.takeoverContent).toBe('Remote takeover for db');
   });
 });

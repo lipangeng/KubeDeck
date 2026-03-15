@@ -59,6 +59,7 @@ type manifestResourcePageExtension struct {
 	CapabilityType  string          `json:"capabilityType"`
 	TargetTabID     string          `json:"targetTabId"`
 	TabID           string          `json:"tabId"`
+	Priority        int             `json:"priority"`
 	Title           manifestTextRef `json:"title"`
 	ContentFallback string          `json:"contentFallback"`
 }
@@ -235,6 +236,7 @@ func toResourcePageExtensionDescriptors(
 			CapabilityType:  sdk.ResourcePageExtensionCapabilityType(item.CapabilityType),
 			TargetTabID:     item.TargetTabID,
 			TabID:           item.TabID,
+			Priority:        item.Priority,
 			Title:           toTextRef(item.Title),
 			ContentFallback: item.ContentFallback,
 		})

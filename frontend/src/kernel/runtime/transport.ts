@@ -133,6 +133,7 @@ export interface RemoteResourcePageExtensionDescriptor {
   CapabilityType: 'tab' | 'tab-replace' | 'page-takeover';
   TargetTabID?: string;
   TabID: string;
+  Priority?: number;
   Title: RemoteTextRef;
   ContentFallback: string;
 }
