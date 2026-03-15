@@ -57,6 +57,11 @@ V1 开发必须遵循“架构优先”的顺序：
 - 实际渲染的导航来自组合结果，
 - 显式配置的 CRD 与 plugin mounts 落在同一运行时家族内，
 - 不可用但已配置的入口依然稳定可见。
+- 工作菜单、系统配置菜单、集群配置菜单共享同一套动态菜单模型。
+
+本阶段下一段具体实现顺序请使用：
+
+- `docs/product/releases/v1/scoped-menu-settings-implementation-plan.zh.md`
 
 ## 5. 阶段 3：实现资源页外壳
 

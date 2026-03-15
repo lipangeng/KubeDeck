@@ -85,14 +85,21 @@ func cloneMenuOverrides(overrides []plugins.MenuOverride) []plugins.MenuOverride
 	cloned := make([]plugins.MenuOverride, 0, len(overrides))
 	for _, override := range overrides {
 		copyOverride := plugins.MenuOverride{
-			Scope:           override.Scope,
-			HiddenEntryKeys: append([]string(nil), override.HiddenEntryKeys...),
-			PinEntryKeys:    append([]string(nil), override.PinEntryKeys...),
+			Scope:               override.Scope,
+			HiddenEntryKeys:     append([]string(nil), override.HiddenEntryKeys...),
+			PinEntryKeys:        append([]string(nil), override.PinEntryKeys...),
+			GroupOrderOverrides: append([]string(nil), override.GroupOrderOverrides...),
 		}
 		if len(override.MoveEntryKeys) > 0 {
 			copyOverride.MoveEntryKeys = make(map[string]string, len(override.MoveEntryKeys))
 			for key, value := range override.MoveEntryKeys {
 				copyOverride.MoveEntryKeys[key] = value
+			}
+		}
+		if len(override.ItemOrderOverrides) > 0 {
+			copyOverride.ItemOrderOverrides = make(map[string][]string, len(override.ItemOrderOverrides))
+			for groupKey, entryKeys := range override.ItemOrderOverrides {
+				copyOverride.ItemOrderOverrides[groupKey] = append([]string(nil), entryKeys...)
 			}
 		}
 		cloned = append(cloned, copyOverride)

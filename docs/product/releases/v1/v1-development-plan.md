@@ -57,6 +57,11 @@ Exit criteria:
 - the rendered navigation is a composed result,
 - explicit CRD and plugin mounts fit the same runtime family,
 - unavailable configured entries remain stable and visible.
+- work, system, and cluster menu spaces share one dynamic menu model.
+
+For the next implementation sequence inside this stage, use:
+
+- `docs/product/releases/v1/scoped-menu-settings-implementation-plan.md`
 
 ## 5. Stage 3: Implement Resource Page Shell
 

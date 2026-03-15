@@ -92,10 +92,20 @@ This is the only layer consumed by the frontend navigation renderer.
 
 User customization on top of the composed result.
 
-Two override scopes are required:
+Override data must be keyed by one unified `scope` model instead of separate navigation-mode and scope flags.
 
-- global user override
-- cluster-local override
+Required first-wave scopes:
+
+- `work-global`
+- `work-cluster`
+- `system`
+- `cluster`
+
+This keeps the menu system uniform across:
+
+- normal work navigation,
+- system configuration navigation,
+- and cluster configuration navigation.
 
 ## 5. Default Menu Skeleton
 
@@ -204,11 +214,11 @@ The entry is suppressed by policy or user override.
 
 ## 9. User Override Model
 
-Two override levels are required.
+The menu model must support all four current scopes, even if some scopes only contain minimal menu data in the first product version.
 
-### 9.1 Global Override
+### 9.1 `work-global`
 
-Applies to all clusters for one user.
+Applies to the normal work menu across all clusters for one user.
 
 Allowed operations:
 
@@ -219,9 +229,9 @@ Allowed operations:
 - pin an item
 - optionally assign a display alias
 
-### 9.2 Cluster Override
+### 9.2 `work-cluster`
 
-Applies only to one cluster for one user.
+Applies only to the normal work menu for one cluster.
 
 Used for:
 
@@ -230,14 +240,104 @@ Used for:
 - cluster-specific move
 - cluster-specific pin
 
-The final composition order must be:
+### 9.3 `system`
+
+Applies to the dedicated system-configuration menu space.
+
+This scope is not a separate menu mechanism.
+It uses the same dynamic menu model, but resolves a different menu space.
+
+### 9.4 `cluster`
+
+Applies to the dedicated cluster-configuration menu space.
+
+This scope is also not a separate mechanism.
+It reuses the same dynamic menu model and targets the current active cluster configuration space.
+
+The final composition order within one scope must be:
 
 1. system blueprint
 2. dynamic mount resolution
 3. global override
 4. cluster override
 
-## 10. Guardrails
+For `system` and `cluster` scopes, there may be only one effective override layer in the first version, but the composition engine should still treat them as regular scoped menu results.
+
+## 10. Scoped Menu Spaces
+
+The left navigation must support three visible menu spaces:
+
+1. work menu
+2. system configuration menu
+3. cluster configuration menu
+
+These spaces must not use separate menu systems.
+They all resolve through the same blueprint, mount, and override pipeline.
+
+### 10.1 Work Menu
+
+This is the default product navigation.
+
+It renders the normal workflow menu groups such as:
+
+- `Core`
+- `Platform`
+- `Extensions`
+- `Resources`
+
+### 10.2 System Configuration Menu
+
+Entered from a dedicated top-right entry.
+
+Once entered:
+
+- the left menu must switch to system configuration navigation,
+- a clear `Back to Work` path must remain visible,
+- and the main area must render system configuration pages only.
+
+### 10.3 Cluster Configuration Menu
+
+Entered from a dedicated, visually distinct entry at the bottom of the left navigation.
+
+Once entered:
+
+- the left menu must switch to cluster configuration navigation,
+- a clear `Back to Work` path must remain visible,
+- and the main area must render cluster configuration pages only.
+
+### 10.4 Design Rule
+
+System menus and cluster menus must be customizable through the same menu model as work menus.
+
+The first version must include all scopes and all top-level entry paths, even if the actual menu data inside some scopes remains intentionally small.
+
+## 11. Menu Settings
+
+`Menu Settings` is not a standalone special-case editor for work menus only.
+
+It is one menu configuration surface that operates on the currently selected scope.
+
+### 11.1 First-Wave Supported Actions
+
+The first version should support:
+
+- `pin`
+- `hide`
+- `reset current scope`
+
+### 11.2 Required Model Fields
+
+Even before drag-and-drop UI exists, override contracts must already support:
+
+- `hiddenEntryKeys`
+- `pinEntryKeys`
+- `groupOrderOverrides`
+- `itemOrderOverrides`
+
+The first UI only needs to manipulate the first two fields.
+The latter two are required so the model does not need to change when ordering UI arrives later.
+
+## 12. Guardrails
 
 The override system must not allow users to:
 
@@ -248,7 +348,7 @@ The override system must not allow users to:
 
 The override system is for menu composition only, not capability definition.
 
-## 11. Implications For Current Architecture
+## 13. Implications For Current Architecture
 
 The current system already provides useful groundwork:
 

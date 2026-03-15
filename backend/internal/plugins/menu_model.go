@@ -59,15 +59,21 @@ type MenuMount struct {
 type MenuOverrideScope string
 
 const (
-	MenuOverrideScopeGlobal  MenuOverrideScope = "global"
-	MenuOverrideScopeCluster MenuOverrideScope = "cluster"
+	MenuOverrideScopeGlobal      MenuOverrideScope = "global"
+	MenuOverrideScopeCluster     MenuOverrideScope = "cluster"
+	MenuOverrideScopeWorkGlobal  MenuOverrideScope = "work-global"
+	MenuOverrideScopeWorkCluster MenuOverrideScope = "work-cluster"
+	MenuOverrideScopeSystem      MenuOverrideScope = "system"
+	MenuOverrideScopeClusterMenu MenuOverrideScope = "cluster"
 )
 
 type MenuOverride struct {
-	Scope           MenuOverrideScope `json:"scope"`
-	HiddenEntryKeys []string          `json:"hiddenEntryKeys,omitempty"`
-	MoveEntryKeys   map[string]string `json:"moveEntryKeys,omitempty"`
-	PinEntryKeys    []string          `json:"pinEntryKeys,omitempty"`
+	Scope               MenuOverrideScope    `json:"scope"`
+	HiddenEntryKeys     []string             `json:"hiddenEntryKeys,omitempty"`
+	MoveEntryKeys       map[string]string    `json:"moveEntryKeys,omitempty"`
+	PinEntryKeys        []string             `json:"pinEntryKeys,omitempty"`
+	GroupOrderOverrides []string             `json:"groupOrderOverrides,omitempty"`
+	ItemOrderOverrides  map[string][]string  `json:"itemOrderOverrides,omitempty"`
 }
 
 type MenuResolvedEntry struct {
@@ -88,6 +94,7 @@ type MenuResolvedEntry struct {
 	Mounted          bool                 `json:"mounted"`
 	Configured       bool                 `json:"configured"`
 	Pinned           bool                 `json:"pinned,omitempty"`
+	SortOrder        int                  `json:"-"`
 }
 
 type MenuResolvedGroup struct {
@@ -127,6 +134,9 @@ func sortResolvedEntries(entries []MenuResolvedEntry) {
 	sort.SliceStable(entries, func(i, j int) bool {
 		if entries[i].Pinned != entries[j].Pinned {
 			return entries[i].Pinned
+		}
+		if entries[i].SortOrder != entries[j].SortOrder {
+			return entries[i].SortOrder < entries[j].SortOrder
 		}
 		if entries[i].Order != entries[j].Order {
 			return entries[i].Order < entries[j].Order

@@ -51,6 +51,7 @@ interface KernelRuntimeContextValue {
   navigation: KernelNavigationGroup[];
   registrySnapshot: KernelRegistrySnapshot;
   navigate: (route: string) => void;
+  reloadKernelMetadata: () => void;
   switchCluster: (cluster: string) => void;
   enterResource: (resource: ResourceIdentity) => void;
   exitResource: () => void;
@@ -72,6 +73,7 @@ export function KernelRuntimeProvider({
   const [runtimeSnapshot, setRuntimeSnapshot] = useState<KernelRegistrySnapshot | null>(null);
   const [kernelSource, setKernelSource] = useState<KernelSource>('loading');
   const [actionSummary, setActionSummary] = useState<string | null>(null);
+  const [reloadGeneration, setReloadGeneration] = useState(0);
   const [workingContext, dispatchWorkingContext] = useReducer(
     reduceWorkingContext,
     undefined,
@@ -105,7 +107,7 @@ export function KernelRuntimeProvider({
     return () => {
       active = false;
     };
-  }, [activeCluster, localSnapshot]);
+  }, [activeCluster, localSnapshot, reloadGeneration]);
 
   const registrySnapshot = runtimeSnapshot ?? localSnapshot;
   const navigation = useMemo(
@@ -169,6 +171,10 @@ export function KernelRuntimeProvider({
     dispatchWorkingContext({ type: 'request_cluster_switch', cluster });
   }, []);
 
+  const reloadKernelMetadata = useCallback(() => {
+    setReloadGeneration((current) => current + 1);
+  }, []);
+
   const value = useMemo<KernelRuntimeContextValue>(
     () => ({
       activeRoute,
@@ -184,6 +190,7 @@ export function KernelRuntimeProvider({
       navigation,
       registrySnapshot,
       navigate,
+      reloadKernelMetadata,
       switchCluster,
       enterResource,
       exitResource,
@@ -204,6 +211,7 @@ export function KernelRuntimeProvider({
       kernelSource,
       navigate,
       navigation,
+      reloadKernelMetadata,
       registrySnapshot,
       switchCluster,
       workingContext,

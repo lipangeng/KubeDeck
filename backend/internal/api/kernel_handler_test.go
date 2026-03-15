@@ -310,6 +310,69 @@ func TestKernelHandlerSnapshotAppliesClusterMenuOverrides(t *testing.T) {
 	}
 }
 
+func TestKernelHandlerMenuPreferencesRoundTripPreservesScopedOrderingFields(t *testing.T) {
+	handler := NewKernelHandler()
+	putBody := `{
+  "globalOverrides": [
+    {
+      "scope": "work-global",
+      "pinEntryKeys": ["operations"],
+      "groupOrderOverrides": ["extensions", "core", "platform", "resources"],
+      "itemOrderOverrides": {
+        "core": ["operations", "workloads", "homepage"]
+      }
+    }
+  ],
+  "clusterOverrides": [
+    {
+      "scope": "work-cluster",
+      "hiddenEntryKeys": ["services"]
+    },
+    {
+      "scope": "cluster",
+      "pinEntryKeys": ["menu-settings"]
+    }
+  ]
+}`
+
+	putReq := httptest.NewRequest(
+		http.MethodPut,
+		"/api/preferences/menu?cluster=prod-eu1",
+		bytes.NewBufferString(putBody),
+	)
+	putRec := httptest.NewRecorder()
+	handler.MenuPreferences(putRec, putReq)
+
+	if putRec.Code != http.StatusNoContent {
+		t.Fatalf("expected status 204, got %d", putRec.Code)
+	}
+
+	getReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/preferences/menu?cluster=prod-eu1",
+		nil,
+	)
+	getRec := httptest.NewRecorder()
+	handler.MenuPreferences(getRec, getReq)
+
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", getRec.Code)
+	}
+	body := getRec.Body.String()
+	if want := `"scope":"work-global"`; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+	if want := `"groupOrderOverrides":["extensions","core","platform","resources"]`; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+	if want := `"itemOrderOverrides":{"core":["operations","workloads","homepage"]}`; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+	if want := `"scope":"cluster"`; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
+}
+
 func contains(body string, want string) bool {
 	return len(body) >= len(want) && (body == want || len(body) > len(want) && (index(body, want) >= 0))
 }

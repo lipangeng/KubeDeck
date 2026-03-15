@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -9,7 +10,16 @@ import Typography from '@mui/material/Typography';
 import { copy } from './i18n/copy';
 import type { FrontendCapabilityModule } from './kernel/sdk';
 import { discoverFrontendPluginModules } from './kernel/runtime/discoverFrontendPluginModules';
+import {
+  fetchMenuPreferences,
+  isClusterScopedMenuPreference,
+  saveMenuPreferences,
+  type MenuPreferenceScope,
+  upsertMenuOverride,
+} from './kernel/runtime/menuPreferences';
 import { KernelRuntimeProvider, useKernelRuntime } from './kernel/runtime/KernelRuntimeContext';
+import type { KernelNavigationGroup } from './kernel/runtime/menu/types';
+import type { RemoteMenuPreferences } from './kernel/runtime/transport';
 import { type ThemePreference } from './themeMode';
 
 interface AppProps {
@@ -17,6 +27,8 @@ interface AppProps {
   onThemePreferenceChange: (next: ThemePreference) => void;
   pluginModules?: FrontendCapabilityModule[];
 }
+
+type MenuSurface = 'work' | 'system' | 'cluster';
 
 function App({ themePreference, onThemePreferenceChange, pluginModules = [] }: AppProps) {
   const resolvedPluginModules =
@@ -44,9 +56,48 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
     namespaceScope,
     navigate,
     navigation,
+    registrySnapshot,
+    reloadKernelMetadata,
     switchCluster,
   } = useKernelRuntime();
   const ActiveComponent = activePage?.component;
+  const [menuSurface, setMenuSurface] = useState<MenuSurface>('work');
+  const [menuPreferences, setMenuPreferences] = useState<RemoteMenuPreferences>({
+    globalOverrides: [],
+    clusterOverrides: [],
+  });
+  const [editableScope, setEditableScope] = useState<MenuPreferenceScope>('work-global');
+  const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEditableScope(menuSurface === 'cluster' ? 'work-cluster' : 'work-global');
+    setSettingsMessage(null);
+  }, [menuSurface]);
+
+  useEffect(() => {
+    if (menuSurface === 'work') {
+      return;
+    }
+    let active = true;
+
+    async function loadPreferences() {
+      try {
+        const preferences = await fetchMenuPreferences(activeCluster);
+        if (active) {
+          setMenuPreferences(preferences);
+        }
+      } catch {
+        if (active) {
+          setMenuPreferences({ globalOverrides: [], clusterOverrides: [] });
+        }
+      }
+    }
+
+    void loadPreferences();
+    return () => {
+      active = false;
+    };
+  }, [activeCluster, menuSurface]);
 
   const cycleThemePreference = () => {
     const nextPreference: ThemePreference =
@@ -63,8 +114,8 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
       actionId,
       workflowDomainId: activePage?.workflowDomainId ?? 'homepage',
       target: {
-        cluster: 'default',
-        namespace: 'default',
+        cluster: activeCluster,
+        namespace: namespaceScope.namespaces[0] ?? 'default',
         scope: 'namespace',
       },
       input: {
@@ -75,6 +126,76 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
 
   const cycleCluster = () => {
     switchCluster(activeCluster === 'default' ? 'prod-eu1' : 'default');
+  };
+
+  const configNavigation = useMemo<KernelNavigationGroup[]>(() => {
+    if (menuSurface === 'work') {
+      return navigation;
+    }
+    return [
+      {
+        key: 'config',
+        order: 10,
+        title: { key: 'menu.group.config', fallback: 'Configuration' },
+        entries: [
+          {
+            identity: {
+              source: 'builtin',
+              capabilityId: `builtin.${menuSurface}.menu-settings`,
+              contributionId: `menu.${menuSurface}.menu-settings`,
+            },
+            workflowDomainId: `${menuSurface}-settings`,
+            entryKey: 'menu-settings',
+            groupKey: 'config',
+            placement: 'primary',
+            availability: 'enabled',
+            route: '/settings/menu',
+            title: { key: 'settings.menu.title', fallback: 'Menu Settings' },
+          },
+        ],
+      },
+    ];
+  }, [menuSurface, navigation]);
+
+  const visibleNavigation = menuSurface === 'work' ? navigation : configNavigation;
+  const editableGroups =
+    editableScope === 'work-global' || editableScope === 'work-cluster' ? registrySnapshot.menuGroups : configNavigation;
+
+  const saveMenuOverride = async (
+    scope: MenuPreferenceScope,
+    update: Parameters<typeof upsertMenuOverride>[2],
+  ) => {
+    const nextPreferences: RemoteMenuPreferences = isClusterScopedMenuPreference(scope)
+      ? {
+          ...menuPreferences,
+          clusterOverrides: upsertMenuOverride(menuPreferences.clusterOverrides, scope, update),
+        }
+      : {
+          ...menuPreferences,
+          globalOverrides: upsertMenuOverride(menuPreferences.globalOverrides, scope, update),
+        };
+    await saveMenuPreferences(activeCluster, nextPreferences);
+    setMenuPreferences(nextPreferences);
+    setSettingsMessage(`Saved menu settings for ${scope}`);
+    reloadKernelMetadata();
+  };
+
+  const handleHideEntry = async (entryKey: string) => {
+    await saveMenuOverride(editableScope, (current) => ({
+      ...current,
+      hiddenEntryKeys: Array.from(new Set([...(current.hiddenEntryKeys ?? []), entryKey])),
+    }));
+  };
+
+  const handlePinEntry = async (entryKey: string) => {
+    await saveMenuOverride(editableScope, (current) => ({
+      ...current,
+      pinEntryKeys: Array.from(new Set([...(current.pinEntryKeys ?? []), entryKey])),
+    }));
+  };
+
+  const handleResetScope = async () => {
+    await saveMenuOverride(editableScope, () => ({ scope: editableScope }));
   };
 
   return (
@@ -89,6 +210,9 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
           </Button>
           <Button variant="outlined" onClick={cycleCluster}>
             Cluster: {activeCluster}
+          </Button>
+          <Button variant="outlined" onClick={() => setMenuSurface('system')}>
+            System Settings
           </Button>
         </Toolbar>
       </AppBar>
@@ -107,7 +231,12 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
               {copy('app.kernelNavigation')}
             </Typography>
-            {navigation.map((group) => (
+            {menuSurface === 'work' ? null : (
+              <Button variant="outlined" onClick={() => setMenuSurface('work')}>
+                Back to Work
+              </Button>
+            )}
+            {visibleNavigation.map((group) => (
               <Stack key={group.key} spacing={1}>
                 <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
                   {group.title.fallback}
@@ -115,15 +244,27 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
                 {group.entries.map((entry) => (
                   <Button
                     key={entry.identity.contributionId}
-                    variant={entry.route === activePage?.route ? 'contained' : 'outlined'}
+                    variant={entry.route === activePage?.route && menuSurface === 'work' ? 'contained' : 'outlined'}
                     disabled={entry.availability !== 'enabled'}
-                    onClick={() => navigate(entry.route ?? '/')}
+                    onClick={() => {
+                      if (menuSurface === 'work') {
+                        navigate(entry.route ?? '/');
+                      }
+                    }}
                   >
                     {entry.title.fallback}
                   </Button>
                 ))}
               </Stack>
             ))}
+            {menuSurface === 'work' ? (
+              <>
+                <Divider />
+                <Button variant="contained" color="secondary" onClick={() => setMenuSurface('cluster')}>
+                  Cluster Settings
+                </Button>
+              </>
+            ) : null}
             <Divider />
             <Typography variant="caption" color="text.secondary">
               {copy('app.registeredActions')}:{' '}
@@ -142,17 +283,19 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
             <Typography variant="caption" color="text.secondary">
               {copy('app.activeWorkflow')}: {currentWorkflowDomainId ?? copy('app.none')}
             </Typography>
-            {activeActions.map((action) => (
-              <Button
-                key={action.identity.contributionId}
-                variant="text"
-                onClick={() => {
-                  void handleExecuteAction(action.actionId);
-                }}
-              >
-                {copy('app.runAction')} {action.title.fallback}
-              </Button>
-            ))}
+            {menuSurface === 'work'
+              ? activeActions.map((action) => (
+                  <Button
+                    key={action.identity.contributionId}
+                    variant="text"
+                    onClick={() => {
+                      void handleExecuteAction(action.actionId);
+                    }}
+                  >
+                    {copy('app.runAction')} {action.title.fallback}
+                  </Button>
+                ))
+              : null}
             {actionSummary ? (
               <Typography variant="caption" color="text.secondary">
                 {copy('app.lastActionResult')}: {actionSummary}
@@ -161,9 +304,93 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
           </Stack>
         </Paper>
 
-        <Box>{ActiveComponent ? <ActiveComponent /> : null}</Box>
+        <Box>
+          {menuSurface === 'work' ? (
+            ActiveComponent ? <ActiveComponent /> : null
+          ) : (
+            <MenuSettingsPanel
+              editableGroups={editableGroups}
+              editableScope={editableScope}
+              menuSurface={menuSurface}
+              message={settingsMessage}
+              onHideEntry={handleHideEntry}
+              onPinEntry={handlePinEntry}
+              onResetScope={handleResetScope}
+              onScopeChange={setEditableScope}
+            />
+          )}
+        </Box>
       </Box>
     </Box>
+  );
+}
+
+interface MenuSettingsPanelProps {
+  editableGroups: KernelNavigationGroup[];
+  editableScope: MenuPreferenceScope;
+  menuSurface: Exclude<MenuSurface, 'work'>;
+  message: string | null;
+  onHideEntry: (entryKey: string) => Promise<void>;
+  onPinEntry: (entryKey: string) => Promise<void>;
+  onResetScope: () => Promise<void>;
+  onScopeChange: (scope: MenuPreferenceScope) => void;
+}
+
+function MenuSettingsPanel({
+  editableGroups,
+  editableScope,
+  menuSurface,
+  message,
+  onHideEntry,
+  onPinEntry,
+  onResetScope,
+  onScopeChange,
+}: MenuSettingsPanelProps) {
+  const scopeOptions =
+    menuSurface === 'system'
+      ? (['work-global', 'system'] as const)
+      : (['work-cluster', 'cluster'] as const);
+
+  return (
+    <Paper variant="outlined" sx={{ p: 3 }}>
+      <Stack spacing={2}>
+        <Typography variant="h5">Menu Settings</Typography>
+        <Typography variant="body2">Scope: {editableScope}</Typography>
+        <Stack direction="row" spacing={1}>
+          {scopeOptions.map((scope) => (
+            <Button
+              key={scope}
+              variant={scope === editableScope ? 'contained' : 'outlined'}
+              onClick={() => onScopeChange(scope)}
+            >
+              {scope}
+            </Button>
+          ))}
+        </Stack>
+        {editableGroups.map((group) => (
+          <Stack key={group.key} spacing={1}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              {group.title.fallback}
+            </Typography>
+            {group.entries.map((entry) => (
+              <Stack key={entry.identity.contributionId} direction="row" spacing={1} alignItems="center">
+                <Typography sx={{ minWidth: 160 }}>{entry.title.fallback}</Typography>
+                <Button variant="outlined" size="small" onClick={() => void onPinEntry(entry.entryKey)}>
+                  Pin {entry.title.fallback}
+                </Button>
+                <Button variant="outlined" size="small" onClick={() => void onHideEntry(entry.entryKey)}>
+                  Hide {entry.title.fallback}
+                </Button>
+              </Stack>
+            ))}
+          </Stack>
+        ))}
+        <Button variant="text" onClick={() => void onResetScope()}>
+          Reset Current Scope
+        </Button>
+        {message ? <Typography color="text.secondary">{message}</Typography> : null}
+      </Stack>
+    </Paper>
   );
 }
 
