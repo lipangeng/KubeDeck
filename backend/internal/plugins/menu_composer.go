@@ -7,8 +7,17 @@ func ComposeMenuComposition(
 	globalOverrides []MenuOverride,
 	clusterOverrides []MenuOverride,
 ) MenuComposition {
-	blueprint := defaultMenuBlueprint()
-	mounts := buildMenuMounts(descriptors)
+	return ComposeScopedMenuComposition(descriptors, "", globalOverrides, clusterOverrides)
+}
+
+func ComposeScopedMenuComposition(
+	descriptors []sdk.CapabilityDescriptor,
+	scope string,
+	globalOverrides []MenuOverride,
+	clusterOverrides []MenuOverride,
+) MenuComposition {
+	blueprint := defaultMenuBlueprintForScope(scope)
+	mounts := buildMenuMountsForScope(descriptors, scope)
 	resolved, usedMounts := composeBlueprintEntries(blueprint, mounts)
 	resolved = appendUnconfiguredMounts(resolved, mounts, usedMounts)
 

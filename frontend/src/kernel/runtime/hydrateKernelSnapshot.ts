@@ -85,7 +85,7 @@ function hydrateMenus(remoteMenus: RemoteMenuDescriptor[]): MenuContribution[] {
   }));
 }
 
-function hydrateMenuGroups(remoteGroups: RemoteMenuGroup[]): KernelNavigationGroup[] {
+export function hydrateRemoteMenuGroups(remoteGroups: RemoteMenuGroup[]): KernelNavigationGroup[] {
   return remoteGroups.map((group) => ({
     key: group.key,
     order: group.order,
@@ -174,7 +174,7 @@ export function hydrateKernelSnapshot(
     menus: hydrateMenus(remoteMetadata.menus),
     menuGroups:
       remoteMetadata.menuGroups && remoteMetadata.menuGroups.length > 0
-        ? hydrateMenuGroups(remoteMetadata.menuGroups)
+        ? hydrateRemoteMenuGroups(remoteMetadata.menuGroups)
         : localSnapshot.menuGroups,
     actions: hydrateActions(remoteMetadata.actions),
     slots: hydrateSlots(localSnapshot.slots, remoteMetadata.slots),

@@ -512,6 +512,7 @@ function createScopedMenuSettingsFetchMock() {
     const url = new URL(String(input), 'http://localhost');
 
     if (url.pathname === '/api/meta/kernel') {
+      const scope = url.searchParams.get('scope') ?? 'work';
       const hiddenEntryKeys = new Set<string>();
       for (const override of preferences.globalOverrides) {
         if (Array.isArray(override.hiddenEntryKeys)) {
@@ -529,6 +530,188 @@ function createScopedMenuSettingsFetchMock() {
       }
 
       const workloadsVisible = !hiddenEntryKeys.has('workloads');
+      const pinnedEntryKeys = new Set<string>();
+      for (const override of preferences.globalOverrides) {
+        if (Array.isArray(override.pinEntryKeys)) {
+          for (const entryKey of override.pinEntryKeys) {
+            pinnedEntryKeys.add(String(entryKey));
+          }
+        }
+      }
+      for (const override of preferences.clusterOverrides) {
+        if (Array.isArray(override.pinEntryKeys)) {
+          for (const entryKey of override.pinEntryKeys) {
+            pinnedEntryKeys.add(String(entryKey));
+          }
+        }
+      }
+      if (scope === 'system') {
+        return new Response(
+          JSON.stringify({
+            pages: [],
+            menus: [],
+            menuBlueprint: {
+              groups: [
+                { key: 'config', order: 10, title: { Key: 'menu.group.config', Fallback: 'Configuration' } },
+              ],
+              entries: [],
+            },
+            menuMounts: [],
+            menuOverrides: preferences.globalOverrides,
+            menuGroups: [
+              {
+                key: 'config',
+                order: 10,
+                title: { Key: 'menu.group.config', Fallback: 'Configuration' },
+                entries: [
+                  {
+                    ID: 'menu.system.menu-settings',
+                    CapabilityID: 'builtin.system.menu-settings',
+                    SourceType: 'builtin',
+                    WorkflowDomainID: 'system-menu-settings',
+                    EntryKey: 'menu-settings',
+                    GroupKey: 'config',
+                    Route: '/settings/menu',
+                    Placement: 'primary',
+                    Availability: 'enabled',
+                    Order: 10,
+                    Visible: true,
+                    Mounted: true,
+                    Configured: true,
+                    Title: { Key: 'settings.menu.title', Fallback: 'System Menu Settings' },
+                  },
+                  {
+                    ID: 'menu.system.plugin-settings',
+                    CapabilityID: 'builtin.system.plugin-settings',
+                    SourceType: 'builtin',
+                    WorkflowDomainID: 'system-plugin-settings',
+                    EntryKey: 'plugin-settings',
+                    GroupKey: 'config',
+                    Route: '/settings/plugins',
+                    Placement: 'primary',
+                    Availability: 'enabled',
+                    Order: 20,
+                    Visible: true,
+                    Mounted: true,
+                    Configured: true,
+                    Title: { Key: 'settings.plugins.title', Fallback: 'Plugin Settings' },
+                  },
+                ],
+              },
+            ],
+            actions: [],
+            slots: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (scope === 'cluster') {
+        return new Response(
+          JSON.stringify({
+            pages: [],
+            menus: [],
+            menuBlueprint: {
+              groups: [
+                { key: 'config', order: 10, title: { Key: 'menu.group.config', Fallback: 'Configuration' } },
+              ],
+              entries: [],
+            },
+            menuMounts: [],
+            menuOverrides: preferences.clusterOverrides,
+            menuGroups: [
+              {
+                key: 'config',
+                order: 10,
+                title: { Key: 'menu.group.config', Fallback: 'Configuration' },
+                entries: [
+                  {
+                    ID: 'menu.cluster.menu-settings',
+                    CapabilityID: 'builtin.cluster.menu-settings',
+                    SourceType: 'builtin',
+                    WorkflowDomainID: 'cluster-menu-settings',
+                    EntryKey: 'menu-settings',
+                    GroupKey: 'config',
+                    Route: '/settings/menu',
+                    Placement: 'primary',
+                    Availability: 'enabled',
+                    Order: 10,
+                    Visible: true,
+                    Mounted: true,
+                    Configured: true,
+                    Title: { Key: 'settings.menu.cluster.title', Fallback: 'Cluster Menu Settings' },
+                  },
+                  {
+                    ID: 'menu.cluster.extensions',
+                    CapabilityID: 'builtin.cluster.extensions',
+                    SourceType: 'builtin',
+                    WorkflowDomainID: 'cluster-extensions',
+                    EntryKey: 'extensions',
+                    GroupKey: 'config',
+                    Route: '/settings/extensions',
+                    Placement: 'primary',
+                    Availability: 'enabled',
+                    Order: 20,
+                    Visible: true,
+                    Mounted: true,
+                    Configured: true,
+                    Title: { Key: 'settings.extensions.title', Fallback: 'Cluster Extensions' },
+                  },
+                ],
+              },
+            ],
+            actions: [],
+            slots: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const workEntries = [
+        {
+          ID: 'menu.homepage',
+          CapabilityID: 'core.homepage',
+          SourceType: 'builtin',
+          WorkflowDomainID: 'homepage',
+          EntryKey: 'homepage',
+          GroupKey: 'core',
+          Route: '/',
+          Placement: 'primary',
+          Availability: 'enabled',
+          Order: 10,
+          Visible: true,
+          Mounted: true,
+          Configured: true,
+          Pinned: pinnedEntryKeys.has('homepage'),
+          Title: { Key: 'homepage.title', Fallback: 'Homepage' },
+        },
+        ...(workloadsVisible
+          ? [
+              {
+                ID: 'menu.workloads',
+                CapabilityID: 'core.workloads',
+                SourceType: 'builtin',
+                WorkflowDomainID: 'workloads',
+                EntryKey: 'workloads',
+                GroupKey: 'core',
+                Route: '/workloads',
+                Placement: 'primary',
+                Availability: 'enabled',
+                Order: 20,
+                Visible: true,
+                Mounted: true,
+                Configured: true,
+                Pinned: pinnedEntryKeys.has('workloads'),
+                Title: { Key: 'workloads.title', Fallback: 'Workloads' },
+              },
+            ]
+          : []),
+      ].sort((left, right) => {
+        if (Boolean(left.Pinned) !== Boolean(right.Pinned)) {
+          return left.Pinned ? -1 : 1;
+        }
+        return left.Order - right.Order;
+      });
+
       return new Response(
         JSON.stringify({
           pages: [
@@ -586,44 +769,7 @@ function createScopedMenuSettingsFetchMock() {
               key: 'core',
               order: 10,
               title: { Key: 'menu.group.core', Fallback: 'Core' },
-              entries: [
-                {
-                  ID: 'menu.homepage',
-                  CapabilityID: 'core.homepage',
-                  SourceType: 'builtin',
-                  WorkflowDomainID: 'homepage',
-                  EntryKey: 'homepage',
-                  GroupKey: 'core',
-                  Route: '/',
-                  Placement: 'primary',
-                  Availability: 'enabled',
-                  Order: 10,
-                  Visible: true,
-                  Mounted: true,
-                  Configured: true,
-                  Title: { Key: 'homepage.title', Fallback: 'Homepage' },
-                },
-                ...(workloadsVisible
-                  ? [
-                      {
-                        ID: 'menu.workloads',
-                        CapabilityID: 'core.workloads',
-                        SourceType: 'builtin',
-                        WorkflowDomainID: 'workloads',
-                        EntryKey: 'workloads',
-                        GroupKey: 'core',
-                        Route: '/workloads',
-                        Placement: 'primary',
-                        Availability: 'enabled',
-                        Order: 20,
-                        Visible: true,
-                        Mounted: true,
-                        Configured: true,
-                        Title: { Key: 'workloads.title', Fallback: 'Workloads' },
-                      },
-                    ]
-                  : []),
-              ],
+              entries: workEntries,
             },
           ],
           actions: [],
@@ -821,7 +967,8 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'System Settings' }));
 
     expect(await screen.findByRole('button', { name: 'Back to Work' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Menu Settings' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'System Menu Settings' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Plugin Settings' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Workloads' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to Work' }));
@@ -830,6 +977,8 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cluster Settings' }));
 
     expect(await screen.findByRole('button', { name: 'Back to Work' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Cluster Menu Settings' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Cluster Extensions' })).toBeTruthy();
     expect(screen.getByText('Scope: work-cluster')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Workloads' })).toBeNull();
   });
@@ -851,6 +1000,38 @@ describe('App', () => {
 
     expect(await screen.findByRole('button', { name: 'Homepage' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Workloads' })).toBeNull();
+  });
+
+  it('pins one work menu entry and reset restores the work menu', async () => {
+    vi.stubGlobal('fetch', createScopedMenuSettingsFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cluster Settings' }));
+    expect(await screen.findByText('Scope: work-cluster')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pin Workloads' }));
+    expect(await screen.findByText('Saved menu settings for work-cluster')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Work' }));
+
+    const workButtons = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent)
+      .filter((label): label is string => label === 'Homepage' || label === 'Workloads');
+    expect(workButtons.slice(0, 2)).toEqual(['Workloads', 'Homepage']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cluster Settings' }));
+    expect(await screen.findByText('Scope: work-cluster')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Current Scope' }));
+    expect(await screen.findByText('Saved menu settings for work-cluster')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Work' }));
+    const resetButtons = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent)
+      .filter((label): label is string => label === 'Homepage' || label === 'Workloads');
+    expect(resetButtons.slice(0, 2)).toEqual(['Homepage', 'Workloads']);
   });
 
   it('cycles the theme preference', () => {

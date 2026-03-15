@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -10,6 +10,8 @@ import Typography from '@mui/material/Typography';
 import { copy } from './i18n/copy';
 import type { FrontendCapabilityModule } from './kernel/sdk';
 import { discoverFrontendPluginModules } from './kernel/runtime/discoverFrontendPluginModules';
+import { fetchKernelMetadata } from './kernel/runtime/fetchKernelMetadata';
+import { hydrateRemoteMenuGroups } from './kernel/runtime/hydrateKernelSnapshot';
 import {
   fetchMenuPreferences,
   isClusterScopedMenuPreference,
@@ -66,6 +68,7 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
     globalOverrides: [],
     clusterOverrides: [],
   });
+  const [scopedConfigNavigation, setScopedConfigNavigation] = useState<KernelNavigationGroup[]>([]);
   const [editableScope, setEditableScope] = useState<MenuPreferenceScope>('work-global');
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
 
@@ -99,6 +102,32 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
     };
   }, [activeCluster, menuSurface]);
 
+  useEffect(() => {
+    if (menuSurface === 'work') {
+      setScopedConfigNavigation([]);
+      return;
+    }
+    let active = true;
+
+    async function loadScopedNavigation() {
+      try {
+        const metadata = await fetchKernelMetadata(activeCluster, menuSurface);
+        if (active) {
+          setScopedConfigNavigation(hydrateRemoteMenuGroups(metadata.menuGroups ?? []));
+        }
+      } catch {
+        if (active) {
+          setScopedConfigNavigation([]);
+        }
+      }
+    }
+
+    void loadScopedNavigation();
+    return () => {
+      active = false;
+    };
+  }, [activeCluster, menuSurface, reloadKernelMetadata]);
+
   const cycleThemePreference = () => {
     const nextPreference: ThemePreference =
       themePreference === 'system'
@@ -128,38 +157,11 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
     switchCluster(activeCluster === 'default' ? 'prod-eu1' : 'default');
   };
 
-  const configNavigation = useMemo<KernelNavigationGroup[]>(() => {
-    if (menuSurface === 'work') {
-      return navigation;
-    }
-    return [
-      {
-        key: 'config',
-        order: 10,
-        title: { key: 'menu.group.config', fallback: 'Configuration' },
-        entries: [
-          {
-            identity: {
-              source: 'builtin',
-              capabilityId: `builtin.${menuSurface}.menu-settings`,
-              contributionId: `menu.${menuSurface}.menu-settings`,
-            },
-            workflowDomainId: `${menuSurface}-settings`,
-            entryKey: 'menu-settings',
-            groupKey: 'config',
-            placement: 'primary',
-            availability: 'enabled',
-            route: '/settings/menu',
-            title: { key: 'settings.menu.title', fallback: 'Menu Settings' },
-          },
-        ],
-      },
-    ];
-  }, [menuSurface, navigation]);
-
-  const visibleNavigation = menuSurface === 'work' ? navigation : configNavigation;
+  const visibleNavigation = menuSurface === 'work' ? navigation : scopedConfigNavigation;
   const editableGroups =
-    editableScope === 'work-global' || editableScope === 'work-cluster' ? registrySnapshot.menuGroups : configNavigation;
+    editableScope === 'work-global' || editableScope === 'work-cluster'
+      ? registrySnapshot.menuGroups
+      : scopedConfigNavigation;
 
   const saveMenuOverride = async (
     scope: MenuPreferenceScope,

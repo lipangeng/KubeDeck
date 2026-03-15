@@ -373,6 +373,48 @@ func TestKernelHandlerMenuPreferencesRoundTripPreservesScopedOrderingFields(t *t
 	}
 }
 
+func TestKernelHandlerSnapshotSupportsScopedConfigurationMenus(t *testing.T) {
+	handler := NewKernelHandler()
+
+	systemReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/meta/kernel?cluster=prod-eu1&scope=system",
+		nil,
+	)
+	systemRec := httptest.NewRecorder()
+	handler.Snapshot(systemRec, systemReq)
+
+	if systemRec.Code != http.StatusOK {
+		t.Fatalf("expected system snapshot status 200, got %d", systemRec.Code)
+	}
+	systemBody := systemRec.Body.String()
+	if want := `"entryKey":"menu-settings"`; !contains(systemBody, want) {
+		t.Fatalf("expected system snapshot to contain %q, got %s", want, systemBody)
+	}
+	if want := `"entryKey":"plugin-settings"`; !contains(systemBody, want) {
+		t.Fatalf("expected system snapshot to contain %q, got %s", want, systemBody)
+	}
+
+	clusterReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/meta/kernel?cluster=prod-eu1&scope=cluster",
+		nil,
+	)
+	clusterRec := httptest.NewRecorder()
+	handler.Snapshot(clusterRec, clusterReq)
+
+	if clusterRec.Code != http.StatusOK {
+		t.Fatalf("expected cluster snapshot status 200, got %d", clusterRec.Code)
+	}
+	clusterBody := clusterRec.Body.String()
+	if want := `"entryKey":"menu-settings"`; !contains(clusterBody, want) {
+		t.Fatalf("expected cluster snapshot to contain %q, got %s", want, clusterBody)
+	}
+	if want := `"entryKey":"extensions"`; !contains(clusterBody, want) {
+		t.Fatalf("expected cluster snapshot to contain %q, got %s", want, clusterBody)
+	}
+}
+
 func contains(body string, want string) bool {
 	return len(body) >= len(want) && (body == want || len(body) > len(want) && (index(body, want) >= 0))
 }
