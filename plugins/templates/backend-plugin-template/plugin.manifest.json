@@ -18,6 +18,16 @@
           "fallback": "StatefulSet takeover"
         },
         "contentFallback": "Example backend plugin StatefulSet takeover"
+      },
+      {
+        "kind": "Deployment",
+        "capabilityType": "action",
+        "actionId": "restart-rollout",
+        "priority": 40,
+        "title": {
+          "key": "exampleBackendPlugin.resource.restart",
+          "fallback": "Restart Rollout"
+        }
       }
     ]
   },
