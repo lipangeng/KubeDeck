@@ -39,11 +39,24 @@ export interface ResourcePageTakeoverExtension {
   renderPage: (options: ResolveDefaultTabsOptions) => ReactNode;
 }
 
-export type ResourcePageExtension = ResourceTabExtension | ResourcePageTakeoverExtension;
+export interface ResourcePageSummarySlotExtension {
+  kind: string;
+  capabilityType: 'slot';
+  placement: 'summary';
+  priority?: number;
+  origin?: 'local' | 'remote';
+  renderSlot: (options: ResolveDefaultTabsOptions) => ReactNode;
+}
+
+export type ResourcePageExtension =
+  | ResourceTabExtension
+  | ResourcePageTakeoverExtension
+  | ResourcePageSummarySlotExtension;
 
 export interface ResolvedResourcePage {
   tabs: ResourcePageTab[];
   takeoverContent: ReactNode | null;
+  summaryContent: ReactNode[];
 }
 
 export interface ResolveDefaultTabsOptions {

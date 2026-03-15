@@ -1115,6 +1115,44 @@ describe('App', () => {
     expect(screen.getByText('Workflow shell takeover for db')).toBeTruthy();
   });
 
+  it('renders resource-page summary slots inside takeover pages', async () => {
+    vi.stubGlobal('fetch', createKernelMetadataFetchMock());
+    const pluginModule: FrontendCapabilityModule = {
+      pluginId: 'plugin.resource-summary',
+      registerResourcePageExtensions: () => [
+        {
+          kind: 'StatefulSet',
+          capabilityType: 'slot',
+          placement: 'summary',
+          renderSlot: (options) =>
+            `Resource summary slot for ${options.resource?.name ?? 'statefulset'}`,
+        },
+        {
+          kind: 'StatefulSet',
+          capabilityType: 'page-takeover',
+          priority: 60,
+          renderPage: (options) =>
+            `Resource summary takeover for ${options.resource?.name ?? 'statefulset'}`,
+        },
+      ],
+    };
+
+    render(
+      <App
+        themePreference="system"
+        onThemePreferenceChange={vi.fn()}
+        pluginModules={[pluginModule]}
+      />,
+    );
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Workloads' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'db' }));
+
+    expect(screen.getByText('Resource summary slot for db')).toBeTruthy();
+    expect(screen.getByText('Resource summary takeover for db')).toBeTruthy();
+  });
+
   it('completes the first workflow through resource action, result, and return', async () => {
     vi.stubGlobal('fetch', createKernelMetadataFetchMock());
     render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);

@@ -20,6 +20,7 @@ describe('resource page tabs', () => {
 
     expect(resolution.tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'runtime']);
     expect(resolution.takeoverContent).toBeNull();
+    expect(resolution.summaryContent).toEqual([]);
   });
 
   it('applies registered tab extensions after the default tabs', () => {
@@ -44,6 +45,7 @@ describe('resource page tabs', () => {
 
     expect(resolution.tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'endpoints']);
     expect(resolution.takeoverContent).toBeNull();
+    expect(resolution.summaryContent).toEqual([]);
   });
 
   it('adds a logs tab for pod resources without replacing overview and yaml', () => {
@@ -58,6 +60,7 @@ describe('resource page tabs', () => {
 
     expect(resolution.tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'logs']);
     expect(resolution.takeoverContent).toBeNull();
+    expect(resolution.summaryContent).toEqual([]);
   });
 
   it('replaces a default tab when a matching replacement is registered', () => {
@@ -86,6 +89,7 @@ describe('resource page tabs', () => {
 
     expect(resolution.tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'logs']);
     expect(resolution.tabs[0]?.content).toBe('Pod overview replacement');
+    expect(resolution.summaryContent).toEqual([]);
   });
 
   it('supports replacing the yaml tab with a resource-specific variant', () => {
@@ -103,6 +107,7 @@ describe('resource page tabs', () => {
     expect(resolution.tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'runtime']);
     expect(resolution.tabs[1]?.title).toBe('YAML v2');
     expect(resolution.tabs[1]?.content).toBe('Deployment YAML v2 for api');
+    expect(resolution.summaryContent).toEqual([]);
   });
 
   it('returns a takeover page for statefulset resources', () => {
@@ -117,6 +122,7 @@ describe('resource page tabs', () => {
 
     expect(resolution.tabs).toEqual([]);
     expect(resolution.takeoverContent).toBe('StatefulSet takeover for db');
+    expect(resolution.summaryContent).toEqual([]);
   });
 
   it('prefers the highest-priority takeover when multiple takeovers match', () => {
@@ -143,6 +149,7 @@ describe('resource page tabs', () => {
     });
 
     expect(resolution.takeoverContent).toBe('Higher-priority takeover');
+    expect(resolution.summaryContent).toEqual([]);
   });
 
   it('prefers the latest takeover when the source and priority are the same', () => {
@@ -169,5 +176,27 @@ describe('resource page tabs', () => {
     });
 
     expect(resolution.takeoverContent).toBe('Latest takeover');
+    expect(resolution.summaryContent).toEqual([]);
+  });
+
+  it('returns resource-page summary slot content for matching resources', () => {
+    const resolution = resolveResourcePage({
+      resource: {
+        kind: 'StatefulSet',
+        name: 'db',
+        namespace: 'default',
+      },
+      extensions: [
+        {
+          kind: 'StatefulSet',
+          capabilityType: 'slot',
+          placement: 'summary',
+          renderSlot: () => 'StatefulSet summary slot',
+        },
+      ],
+    });
+
+    expect(resolution.summaryContent).toEqual(['StatefulSet summary slot']);
+    expect(resolution.takeoverContent).toBeNull();
   });
 });

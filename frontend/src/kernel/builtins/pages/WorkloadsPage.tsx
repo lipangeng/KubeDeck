@@ -126,6 +126,9 @@ export function WorkloadsPage() {
               <Typography color="text.secondary">
                 Namespace: {currentResource.namespace ?? 'cluster'}
               </Typography>
+              {resolvedPage.summaryContent.map((content, index) => (
+                <div key={`resource-summary-${index}`}>{content}</div>
+              ))}
               {activeSummarySlots.map((slot) => {
                 const SlotComponent = slot.component;
                 return <SlotComponent key={slot.identity.contributionId} />;
