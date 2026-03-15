@@ -21,9 +21,16 @@ export interface ResourcePageIdentity {
   namespace?: string;
 }
 
+export interface ResourceTabExtension {
+  kind: string;
+  createTab: (options: ResolveDefaultTabsOptions) => ResourcePageTab;
+}
+
 export interface ResolveDefaultTabsOptions {
   resource?: ResourcePageIdentity;
   overviewContent?: ReactNode;
   yamlContent?: ReactNode;
   runtimeContent?: ReactNode;
+  logsContent?: ReactNode;
+  extensions?: ResourceTabExtension[];
 }

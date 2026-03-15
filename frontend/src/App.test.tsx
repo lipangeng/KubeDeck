@@ -264,6 +264,15 @@ function createKernelMetadataFetchMock() {
             health: 'Warning',
             updatedAt: '2026-03-10T10:05:00Z',
           },
+          {
+            id: 'workload-api-pod-default',
+            name: 'api-7c9d8',
+            kind: 'Pod',
+            namespace: 'default',
+            status: 'Running',
+            health: 'Healthy',
+            updatedAt: '2026-03-10T10:06:00Z',
+          },
         ]),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
@@ -923,6 +932,20 @@ describe('App', () => {
     expect(screen.getByRole('tab', { name: 'Overview' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'YAML' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Runtime' })).toBeTruthy();
+  });
+
+  it('opens one pod resource through the shared resource page shell with a logs tab', async () => {
+    vi.stubGlobal('fetch', createKernelMetadataFetchMock());
+    render(<App themePreference="system" onThemePreferenceChange={vi.fn()} />);
+
+    expect(await screen.findByText('Kernel metadata source: backend')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Workloads' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'api-7c9d8' }));
+
+    expect(screen.getByRole('heading', { name: 'Pod/api-7c9d8' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'YAML' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Logs' })).toBeTruthy();
   });
 
   it('completes the first workflow through resource action, result, and return', async () => {

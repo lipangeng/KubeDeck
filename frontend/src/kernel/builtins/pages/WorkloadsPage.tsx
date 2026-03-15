@@ -122,6 +122,11 @@ export function WorkloadsPage() {
                 Runtime status and rollout details for {currentResource.name}
               </Typography>
             ),
+            logsContent: (
+              <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
+                {`${currentResource.name}: application logs stream preview`}
+              </Typography>
+            ),
           })}
         />
       </Stack>
