@@ -69,6 +69,17 @@
           "fallback": "Endpoints"
         },
         "contentFallback": "Service endpoints from sample plugin"
+      },
+      {
+        "kind": "StatefulSet",
+        "capabilityType": "page-takeover",
+        "tabId": "statefulset.takeover",
+        "priority": 60,
+        "title": {
+          "key": "sampleOpsConsole.resource.statefulset",
+          "fallback": "StatefulSet takeover"
+        },
+        "contentFallback": "Sample plugin StatefulSet takeover"
       }
     ]
   },

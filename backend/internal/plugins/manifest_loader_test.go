@@ -65,6 +65,14 @@ func TestLoadManifestProvidersFromDirBuildsCapabilityDescriptors(t *testing.T) {
         "tabId": "endpoints",
         "title": { "key": "opsConsole.resource.endpoints", "fallback": "Endpoints" },
         "contentFallback": "Service endpoints from manifest"
+      },
+      {
+        "kind": "StatefulSet",
+        "capabilityType": "page-takeover",
+        "tabId": "statefulset.takeover",
+        "priority": 60,
+        "title": { "key": "opsConsole.resource.statefulset", "fallback": "StatefulSet takeover" },
+        "contentFallback": "Manifest StatefulSet takeover"
       }
     ]
   }
@@ -97,7 +105,14 @@ func TestLoadManifestProvidersFromDirBuildsCapabilityDescriptors(t *testing.T) {
 	if len(descriptor.Slots) != 1 || descriptor.Slots[0].Placement != "summary" {
 		t.Fatalf("expected one summary slot contribution, got %+v", descriptor.Slots)
 	}
-	if len(descriptor.ResourcePageExtensions) != 1 || descriptor.ResourcePageExtensions[0].TabID != "endpoints" {
-		t.Fatalf("expected one resource page extension, got %+v", descriptor.ResourcePageExtensions)
-	}
+    if len(descriptor.ResourcePageExtensions) != 2 {
+        t.Fatalf("expected one resource page extension, got %+v", descriptor.ResourcePageExtensions)
+    }
+    if descriptor.ResourcePageExtensions[0].TabID != "endpoints" {
+        t.Fatalf("expected endpoints tab extension first, got %+v", descriptor.ResourcePageExtensions)
+    }
+    takeover := descriptor.ResourcePageExtensions[1]
+    if takeover.CapabilityType != "page-takeover" || takeover.Priority != 60 {
+        t.Fatalf("expected takeover extension with priority 60, got %+v", takeover)
+    }
 }

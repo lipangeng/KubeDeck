@@ -39,4 +39,21 @@ func TestFrontendTemplateUsesKernelContributions(t *testing.T) {
 	if !strings.Contains(source, "registerSlots") {
 		t.Fatal("frontend template must expose registerSlots")
 	}
+	if !strings.Contains(source, "registerResourcePageExtensions") {
+		t.Fatal("frontend template must expose registerResourcePageExtensions")
+	}
+}
+
+func TestBackendTemplateShowsResourcePageExtensions(t *testing.T) {
+	content, err := os.ReadFile(
+		filepath.Join("..", "..", "..", "plugins", "templates", "backend-plugin-template", "src", "index.go"),
+	)
+	if err != nil {
+		t.Fatalf("read backend template source: %v", err)
+	}
+
+	source := string(content)
+	if !strings.Contains(source, "ResourcePageExtensions") {
+		t.Fatal("backend template should demonstrate ResourcePageExtensions")
+	}
 }

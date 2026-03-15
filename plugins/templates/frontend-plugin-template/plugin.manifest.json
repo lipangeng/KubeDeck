@@ -7,7 +7,19 @@
     "menus": [],
     "actions": [],
     "slots": [],
-    "resourcePageExtensions": []
+    "resourcePageExtensions": [
+      {
+        "kind": "StatefulSet",
+        "capabilityType": "page-takeover",
+        "tabId": "example.statefulset.takeover",
+        "priority": 50,
+        "title": {
+          "key": "exampleFrontendPlugin.resource.statefulset",
+          "fallback": "StatefulSet takeover"
+        },
+        "contentFallback": "Example frontend plugin StatefulSet takeover"
+      }
+    ]
   },
   "requiredCapabilities": []
 }
