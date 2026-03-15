@@ -12,8 +12,10 @@ import type {
   RemoteMenuDescriptor,
   RemoteMenuGroup,
   RemotePageDescriptor,
+  RemoteResourcePageExtensionDescriptor,
   RemoteSlotDescriptor,
 } from './transport';
+import type { ResourceTabExtension } from '../resource-pages/types';
 
 function toLocalizedText(text: { Key: string; Fallback: string; Description?: string }) {
   return {
@@ -164,6 +166,57 @@ function hydrateSlots(
   });
 }
 
+function resourcePageExtensionKey(extension: {
+  kind: string;
+  capabilityType?: string;
+  targetTabId?: string;
+  tabId?: string;
+}) {
+  return `${extension.kind}:${extension.capabilityType ?? 'tab'}:${extension.targetTabId ?? ''}:${extension.tabId ?? ''}`;
+}
+
+function hydrateResourcePageExtensions(
+  localExtensions: ResourceTabExtension[],
+  remoteExtensions: RemoteResourcePageExtensionDescriptor[],
+): ResourceTabExtension[] {
+  const hydratedRemote = remoteExtensions.map((extension) => ({
+    kind: extension.Kind,
+    capabilityType: extension.CapabilityType,
+    targetTabId: extension.TargetTabID,
+    tabId: extension.TabID,
+    createTab: (options: { resource?: { name: string } }) => ({
+      id: extension.TabID,
+      title: extension.Title.Fallback,
+      capabilityType: extension.CapabilityType,
+      content: options.resource?.name
+        ? `${extension.ContentFallback} for ${options.resource.name}`
+        : extension.ContentFallback,
+    }),
+  }));
+
+  const merged = [...localExtensions];
+  const existingKeys = new Set(
+    localExtensions.map((extension) =>
+      resourcePageExtensionKey({
+        kind: extension.kind,
+        capabilityType: extension.capabilityType,
+        targetTabId: extension.targetTabId,
+        tabId: extension.tabId,
+      }),
+    ),
+  );
+
+  for (const extension of hydratedRemote) {
+    const key = resourcePageExtensionKey(extension);
+    if (!existingKeys.has(key)) {
+      merged.push(extension);
+      existingKeys.add(key);
+    }
+  }
+
+  return merged;
+}
+
 export function hydrateKernelSnapshot(
   localSnapshot: KernelRegistrySnapshot,
   remoteMetadata: RemoteKernelMetadata,
@@ -178,6 +231,9 @@ export function hydrateKernelSnapshot(
         : localSnapshot.menuGroups,
     actions: hydrateActions(remoteMetadata.actions),
     slots: hydrateSlots(localSnapshot.slots, remoteMetadata.slots),
-    resourcePageExtensions: localSnapshot.resourcePageExtensions,
+    resourcePageExtensions: hydrateResourcePageExtensions(
+      localSnapshot.resourcePageExtensions,
+      remoteMetadata.resourcePageExtensions ?? [],
+    ),
   };
 }

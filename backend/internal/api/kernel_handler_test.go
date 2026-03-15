@@ -76,6 +76,9 @@ func TestKernelHandlerSnapshot(t *testing.T) {
 	if want := "slots"; !contains(body, want) {
 		t.Fatalf("expected body to contain %q, got %s", want, body)
 	}
+	if want := "resourcePageExtensions"; !contains(body, want) {
+		t.Fatalf("expected body to contain %q, got %s", want, body)
+	}
 	if want := "operations"; !contains(body, want) {
 		t.Fatalf("expected body to contain %q, got %s", want, body)
 	}

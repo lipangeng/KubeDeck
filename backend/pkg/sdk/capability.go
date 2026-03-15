@@ -9,12 +9,13 @@ type TextRef struct {
 
 // CapabilityDescriptor declares what one built-in capability or plugin provides.
 type CapabilityDescriptor struct {
-	ID      string
-	Version string
-	Pages   []PageDescriptor
-	Menus   []MenuDescriptor
-	Actions []ActionDescriptor
-	Slots   []SlotDescriptor
+	ID                     string
+	Version                string
+	Pages                  []PageDescriptor
+	Menus                  []MenuDescriptor
+	Actions                []ActionDescriptor
+	Slots                  []SlotDescriptor
+	ResourcePageExtensions []ResourcePageExtensionDescriptor
 }
 
 // CapabilityProvider exposes one capability descriptor to the kernel.

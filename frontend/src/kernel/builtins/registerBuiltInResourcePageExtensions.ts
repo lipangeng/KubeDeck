@@ -6,6 +6,7 @@ export function registerBuiltInResourcePageExtensions(): ResourceTabExtension[] 
       kind: 'Deployment',
       capabilityType: 'tab-replace',
       targetTabId: 'yaml',
+      tabId: 'yaml',
       createTab: (options) => ({
         id: 'yaml',
         title: 'YAML v2',
@@ -16,6 +17,7 @@ export function registerBuiltInResourcePageExtensions(): ResourceTabExtension[] 
     {
       kind: 'Deployment',
       capabilityType: 'tab',
+      tabId: 'runtime',
       createTab: (options) => ({
         id: 'runtime',
         title: 'Runtime',
@@ -27,6 +29,7 @@ export function registerBuiltInResourcePageExtensions(): ResourceTabExtension[] 
       kind: 'Pod',
       capabilityType: 'tab-replace',
       targetTabId: 'overview',
+      tabId: 'overview',
       createTab: (options) => ({
         id: 'overview',
         title: 'Overview',
@@ -37,6 +40,7 @@ export function registerBuiltInResourcePageExtensions(): ResourceTabExtension[] 
     {
       kind: 'Pod',
       capabilityType: 'tab',
+      tabId: 'logs',
       createTab: (options) => ({
         id: 'logs',
         title: 'Logs',
