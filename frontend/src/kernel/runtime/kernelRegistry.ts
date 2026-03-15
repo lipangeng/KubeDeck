@@ -9,6 +9,7 @@ export interface KernelContributionModule {
   menus?: MenuContribution[];
   actions?: ActionContribution[];
   slots?: SlotContribution[];
+  resourcePageExtensions?: KernelRegistrySnapshot['resourcePageExtensions'];
 }
 
 export class KernelRegistry {
@@ -20,6 +21,7 @@ export class KernelRegistry {
       menus: module.menus ?? [],
       actions: module.actions ?? [],
       slots: module.slots ?? [],
+      resourcePageExtensions: module.resourcePageExtensions ?? [],
     });
   }
 
@@ -30,6 +32,7 @@ export class KernelRegistry {
       menuGroups: [],
       actions: this.modules.flatMap((module) => module.actions ?? []),
       slots: this.modules.flatMap((module) => module.slots ?? []),
+      resourcePageExtensions: this.modules.flatMap((module) => module.resourcePageExtensions ?? []),
     };
   }
 }

@@ -3,6 +3,7 @@ import type {
   FrontendCapabilityModule,
   MenuContribution,
   PageContribution,
+  ResourceTabExtension,
   SlotContribution,
 } from '../sdk';
 import { createLocalKernelSnapshot } from './createLocalKernelSnapshot';
@@ -57,12 +58,23 @@ function createPluginSlot(): SlotContribution {
 
 describe('createLocalKernelSnapshot', () => {
   it('registers external frontend capability modules alongside built-ins', () => {
+    const resourcePageExtension: ResourceTabExtension = {
+      kind: 'Service',
+      createTab: () => ({
+        id: 'endpoints',
+        title: 'Endpoints',
+        capabilityType: 'tab',
+        content: null,
+      }),
+    };
+
     const pluginModule: FrontendCapabilityModule = {
       pluginId: 'plugin.ops-console',
       registerPages: () => [createPluginPage()],
       registerMenus: () => [createPluginMenu()],
       registerActions: () => [],
       registerSlots: () => [createPluginSlot()],
+      registerResourcePageExtensions: () => [resourcePageExtension],
     };
 
     const snapshot = createLocalKernelSnapshot([pluginModule]);
@@ -76,5 +88,6 @@ describe('createLocalKernelSnapshot', () => {
     expect(
       snapshot.slots.some((slot) => slot.identity.capabilityId === 'plugin.ops-console'),
     ).toBe(true);
+    expect(snapshot.resourcePageExtensions).toContain(resourcePageExtension);
   });
 });

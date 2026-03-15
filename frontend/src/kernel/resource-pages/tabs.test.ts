@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { registerBuiltInResourcePageExtensions } from '../builtins/registerBuiltInResourcePageExtensions';
 import { resolveResourcePage } from './resolveResourcePage';
 import { resolveDefaultTabs } from './tabs';
 
@@ -14,6 +15,7 @@ describe('resource page tabs', () => {
         name: 'api',
         namespace: 'default',
       },
+      extensions: registerBuiltInResourcePageExtensions(),
     });
 
     expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'runtime']);
@@ -49,6 +51,7 @@ describe('resource page tabs', () => {
         name: 'api-7c9d8',
         namespace: 'default',
       },
+      extensions: registerBuiltInResourcePageExtensions(),
     });
 
     expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'logs']);
@@ -63,6 +66,7 @@ describe('resource page tabs', () => {
       },
       overviewContent: 'Generic overview',
       extensions: [
+        ...registerBuiltInResourcePageExtensions(),
         {
           kind: 'Pod',
           targetTabId: 'overview',
@@ -90,6 +94,7 @@ describe('resource page tabs', () => {
       },
       yamlContent: 'Original YAML',
       yamlVariantContent: 'Deployment YAML v2 for api',
+      extensions: registerBuiltInResourcePageExtensions(),
     });
 
     expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'runtime']);

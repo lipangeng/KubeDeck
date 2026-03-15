@@ -178,5 +178,6 @@ export function hydrateKernelSnapshot(
         : localSnapshot.menuGroups,
     actions: hydrateActions(remoteMetadata.actions),
     slots: hydrateSlots(localSnapshot.slots, remoteMetadata.slots),
+    resourcePageExtensions: localSnapshot.resourcePageExtensions,
   };
 }
