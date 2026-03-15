@@ -27,6 +27,13 @@ const resourcePageExtensions = (): ResourcePageExtension[] => [
       actionId: 'restart-rollout',
     }),
   },
+  {
+    kind: 'Deployment',
+    capabilityType: 'slot',
+    placement: 'summary',
+    renderSlot: (options) =>
+      `Example frontend plugin deployment summary for ${options.resource?.name ?? 'resource'}`,
+  },
 ];
 
 const plugin: FrontendCapabilityModule = {

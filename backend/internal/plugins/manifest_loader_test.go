@@ -80,6 +80,14 @@ func TestLoadManifestProvidersFromDirBuildsCapabilityDescriptors(t *testing.T) {
         "actionId": "restart-rollout",
         "priority": 40,
         "title": { "key": "opsConsole.resource.restart", "fallback": "Restart Rollout" }
+      },
+      {
+        "kind": "Deployment",
+        "capabilityType": "slot",
+        "placement": "summary",
+        "priority": 30,
+        "title": { "key": "opsConsole.resource.summary", "fallback": "Deployment Summary" },
+        "contentFallback": "Deployment summary slot from manifest"
       }
     ]
   }
@@ -112,8 +120,8 @@ func TestLoadManifestProvidersFromDirBuildsCapabilityDescriptors(t *testing.T) {
 	if len(descriptor.Slots) != 1 || descriptor.Slots[0].Placement != "summary" {
 		t.Fatalf("expected one summary slot contribution, got %+v", descriptor.Slots)
 	}
-    if len(descriptor.ResourcePageExtensions) != 3 {
-        t.Fatalf("expected three resource page extensions, got %+v", descriptor.ResourcePageExtensions)
+    if len(descriptor.ResourcePageExtensions) != 4 {
+        t.Fatalf("expected four resource page extensions, got %+v", descriptor.ResourcePageExtensions)
     }
     if descriptor.ResourcePageExtensions[0].TabID != "endpoints" {
         t.Fatalf("expected endpoints tab extension first, got %+v", descriptor.ResourcePageExtensions)
@@ -125,5 +133,9 @@ func TestLoadManifestProvidersFromDirBuildsCapabilityDescriptors(t *testing.T) {
     action := descriptor.ResourcePageExtensions[2]
     if action.CapabilityType != "action" || action.ActionID != "restart-rollout" {
         t.Fatalf("expected action extension restart-rollout, got %+v", action)
+    }
+    slot := descriptor.ResourcePageExtensions[3]
+    if slot.CapabilityType != "slot" || slot.ContentFallback != "Deployment summary slot from manifest" {
+        t.Fatalf("expected summary slot extension, got %+v", slot)
     }
 }

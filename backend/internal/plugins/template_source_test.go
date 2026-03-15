@@ -45,6 +45,9 @@ func TestFrontendTemplateUsesKernelContributions(t *testing.T) {
 	if !strings.Contains(source, "createAction") {
 		t.Fatal("frontend template should demonstrate resource-page action extensions")
 	}
+	if !strings.Contains(source, "renderSlot") {
+		t.Fatal("frontend template should demonstrate resource-page summary slot extensions")
+	}
 }
 
 func TestBackendTemplateShowsResourcePageExtensions(t *testing.T) {
@@ -61,5 +64,8 @@ func TestBackendTemplateShowsResourcePageExtensions(t *testing.T) {
 	}
 	if !strings.Contains(source, "ResourcePageExtensionAction") {
 		t.Fatal("backend template should demonstrate resource-page action descriptors")
+	}
+	if !strings.Contains(source, "ResourcePageExtensionSlot") {
+		t.Fatal("backend template should demonstrate resource-page summary slot descriptors")
 	}
 }
