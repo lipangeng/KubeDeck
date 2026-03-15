@@ -80,4 +80,20 @@ describe('resource page tabs', () => {
     expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'logs']);
     expect(tabs[0]?.content).toBe('Pod overview replacement');
   });
+
+  it('supports replacing the yaml tab with a resource-specific variant', () => {
+    const tabs = resolveResourcePage({
+      resource: {
+        kind: 'Deployment',
+        name: 'api',
+        namespace: 'default',
+      },
+      yamlContent: 'Original YAML',
+      yamlVariantContent: 'Deployment YAML v2 for api',
+    });
+
+    expect(tabs.map((tab) => tab.id)).toEqual(['overview', 'yaml', 'runtime']);
+    expect(tabs[1]?.title).toBe('YAML v2');
+    expect(tabs[1]?.content).toBe('Deployment YAML v2 for api');
+  });
 });

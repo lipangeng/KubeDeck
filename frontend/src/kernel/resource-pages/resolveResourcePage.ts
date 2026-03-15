@@ -4,6 +4,17 @@ import type { ResolveDefaultTabsOptions, ResourcePageTab, ResourceTabExtension }
 const builtInTabExtensions: ResourceTabExtension[] = [
   {
     kind: 'Deployment',
+    capabilityType: 'tab-replace',
+    targetTabId: 'yaml',
+    createTab: (options) => ({
+      id: 'yaml',
+      title: 'YAML v2',
+      capabilityType: 'tab-replace',
+      content: options.yamlVariantContent ?? null,
+    }),
+  },
+  {
+    kind: 'Deployment',
     capabilityType: 'tab',
     createTab: (options) => ({
       id: 'runtime',
