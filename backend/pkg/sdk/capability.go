@@ -46,3 +46,21 @@ type ActionExecutor interface {
 	CapabilityProvider
 	ExecuteAction(ActionExecutionRequest) (ActionExecutionResult, error)
 }
+
+// ClusterItem describes one cluster row exposed by a cluster provider.
+type ClusterItem struct {
+	ID        string
+	Name      string
+	Status    string
+	Health    string
+	Version   string
+	Nodes     int
+	UpdatedAt string
+}
+
+// ClusterProvider exposes cluster data.
+type ClusterProvider interface {
+	CapabilityProvider
+	WorkflowDomainID() string
+	ListClusters() []ClusterItem
+}

@@ -16,7 +16,10 @@ func ExecuteAction(
 			continue
 		}
 		result, err := executor.ExecuteAction(request)
-		if err == nil || result.Accepted || result.Summary != "" {
+		if err == nil && (result.Accepted || result.Summary != "") {
+			return result, nil
+		}
+		if err != nil {
 			return result, err
 		}
 	}

@@ -937,7 +937,7 @@ describe('App', () => {
     expect(screen.getAllByText('Homepage')).toHaveLength(2);
     expect(
       screen.getByText(
-        'The shell now renders built-in workflow pages through the kernel registry.',
+        'Your Kubernetes control plane for managing workloads across clusters.',
       ),
     ).toBeTruthy();
   });

@@ -39,6 +39,7 @@ func NewKernelHandlerWithDependencies(
 ) *KernelHandler {
 	registry := plugins.NewCapabilityRegistry()
 	_ = registry.Register(builtins.HomepageCapability{})
+	_ = registry.Register(builtins.ClustersCapability{})
 	_ = registry.Register(builtins.WorkloadsCapability{})
 	_ = registry.Register(builtins.WorkloadsInsightsCapability{})
 	_ = registry.Register(builtins.OperationsCapability{})
@@ -131,6 +132,11 @@ func (h *KernelHandler) Workloads(w http.ResponseWriter, r *http.Request) {
 	}
 	cluster := r.URL.Query().Get("cluster")
 	items := plugins.ResolveWorkloads(h.registry.Providers(), workflowDomainID, cluster)
+	writeJSON(w, items)
+}
+
+func (h *KernelHandler) Clusters(w http.ResponseWriter, _ *http.Request) {
+	items := plugins.ResolveClusters(h.registry.Providers())
 	writeJSON(w, items)
 }
 

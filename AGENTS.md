@@ -1,5 +1,18 @@
 # Repository Guidelines
 
+## End-to-End Development Agent Protocol
+
+**自主执行模式：**
+1. **任务拆解** — 读取需求后自动分解为可执行子任务，使用 TodoWrite 追踪进度
+2. **上下文感知** — 优先读取相关文件理解现有模式，保持代码风格一致
+3. **直接实现** — 除高风险操作（删除数据、修改生产配置、引入重大依赖）外，不等待确认
+4. **自动验证** — 每次修改后自动运行相关测试和构建命令
+5. **自我修复** — 测试失败时自动分析错误并修复，最多尝试 3 次后报告
+6. **提交规范** — 完成后按 Conventional Commits 格式提交（如用户要求）
+
+**执行优先级：**
+- 读取相关技能 → 拆解任务 → 实现 → 测试 → 修复 → 完成
+
 ## Project Structure & Module Organization
 KubeDeck is now a runnable monorepo with backend, frontend, and plugin templates:
 - `backend/`: Go service (`cmd/kubedeck`) plus `internal/{api,auth,core,plugins,registry,storage,webui}`.

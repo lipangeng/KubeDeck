@@ -1,6 +1,7 @@
 import type { PageContribution } from '../contracts/pageContribution';
 import { HomepagePage } from './pages/HomepagePage';
 import { WorkloadsPage } from './pages/WorkloadsPage';
+import { ClustersPage } from './pages/ClustersPage';
 
 export function registerBuiltInPages(): PageContribution[] {
   return [
@@ -20,6 +21,23 @@ export function registerBuiltInPages(): PageContribution[] {
       },
       component: HomepagePage,
       order: 10,
+    },
+    {
+      identity: {
+        source: 'builtin',
+        capabilityId: 'core.clusters',
+        contributionId: 'page.clusters',
+      },
+      workflowDomainId: 'clusters',
+      route: '/clusters',
+      entryKey: 'clusters',
+      title: { key: 'clusters.title', fallback: 'Clusters' },
+      description: {
+        key: 'clusters.description',
+        fallback: 'Manage your Kubernetes clusters from a unified control plane.',
+      },
+      component: ClustersPage,
+      order: 15,
     },
     {
       identity: {

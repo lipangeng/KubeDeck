@@ -13,6 +13,7 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/api/meta/actions", kernel.Actions)
 	mux.HandleFunc("/api/meta/slots", kernel.Slots)
 	mux.HandleFunc("/api/preferences/menu", kernel.MenuPreferences)
+	mux.HandleFunc("/api/clusters/items", kernel.Clusters)
 	mux.HandleFunc("/api/workflows/workloads/items", kernel.Workloads)
 	mux.HandleFunc("/api/actions/execute", kernel.ExecuteAction)
 	mux.HandleFunc("/api/healthz", healthHandler)
