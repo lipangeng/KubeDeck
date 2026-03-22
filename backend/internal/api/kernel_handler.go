@@ -14,8 +14,13 @@ import (
 )
 
 type KernelHandler struct {
-	registry *plugins.CapabilityRegistry
-	menuRepo storage.UserMenuRepo
+	registry        *plugins.CapabilityRegistry
+	menuRepo        storage.UserMenuRepo
+	db              *storage.Database
+	roleRepo        storage.RoleRepository
+	roleBindingRepo storage.RoleBindingRepository
+	userRepo        storage.UserRepository
+	auditLogRepo    storage.AuditLogRepository
 }
 
 const defaultMenuUserID = "default-user"
@@ -48,9 +53,18 @@ func NewKernelHandlerWithDependencies(
 			_ = registry.Register(provider)
 		}
 	}
+
+	// Initialize database and repositories
+	db, _ := storage.NewDatabase(storage.DatabaseConfig{})
+
 	return &KernelHandler{
-		registry: registry,
-		menuRepo: menuRepo,
+		registry:        registry,
+		menuRepo:        menuRepo,
+		db:              db,
+		roleRepo:        db.RoleRepository(),
+		roleBindingRepo: db.RoleBindingRepository(),
+		userRepo:        db.UserRepository(),
+		auditLogRepo:    db.AuditLogRepository(),
 	}
 }
 
@@ -223,4 +237,50 @@ func resolvePluginRoot(configured string) string {
 	}
 
 	return ""
+}
+
+// ListUsers returns all users
+func (h *KernelHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := h.userRepo.GetAll()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, users)
+}
+
+// Login handles OAuth2 login redirect
+func (h *KernelHandler) Login(w http.ResponseWriter, r *http.Request) {
+	// TODO: Implement OAuth2 login
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+// OAuth2Callback handles OAuth2 callback
+func (h *KernelHandler) OAuth2Callback(w http.ResponseWriter, r *http.Request) {
+	// TODO: Implement OAuth2 callback
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+// Logout handles user logout
+func (h *KernelHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	// Clear auth cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+	})
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+// GetCurrentUser returns the current authenticated user
+func (h *KernelHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
+	// TODO: Extract user from auth context
+	writeJSON(w, map[string]interface{}{
+		"id":       "system",
+		"username": "admin",
+		"email":    "admin@kubedeck.io",
+	})
 }
