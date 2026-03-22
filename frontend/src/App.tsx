@@ -23,6 +23,7 @@ import { KernelRuntimeProvider, useKernelRuntime } from './kernel/runtime/Kernel
 import type { KernelNavigationGroup } from './kernel/runtime/menu/types';
 import type { RemoteMenuPreferences } from './kernel/runtime/transport';
 import { type ThemePreference } from './themeMode';
+import { AIFloatingChat } from './features/ai/AIFloatingChat';
 
 interface AppProps {
   themePreference: ThemePreference;
@@ -355,6 +356,9 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
           )}
         </Box>
       </Box>
+      
+      {/* AI Floating Chat */}
+      <AIFloatingChat />
     </Box>
   );
 }

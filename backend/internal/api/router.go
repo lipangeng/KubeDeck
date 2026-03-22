@@ -8,12 +8,23 @@ import (
 func NewRouter() http.Handler {
 	mux := http.NewServeMux()
 	kernel := NewKernelHandler()
+	aiHandler := NewAIHandler()
 
 	// Auth routes
 	mux.HandleFunc("/api/auth/login", kernel.Login)
 	mux.HandleFunc("/api/auth/callback", kernel.OAuth2Callback)
 	mux.HandleFunc("/api/auth/logout", kernel.Logout)
 	mux.HandleFunc("/api/auth/me", kernel.GetCurrentUser)
+
+	// AI routes
+	mux.HandleFunc("/api/ai/configure", aiHandler.ConfigureAI)
+	mux.HandleFunc("/api/ai/chat", aiHandler.Chat)
+	mux.HandleFunc("/api/ai/chat/stream", aiHandler.ChatStream)
+	mux.HandleFunc("/api/ai/approval/request", aiHandler.RequestApproval)
+	mux.HandleFunc("/api/ai/approval/approve", aiHandler.ApproveCommand)
+	mux.HandleFunc("/api/ai/execute", aiHandler.ExecuteCommand)
+	mux.HandleFunc("/api/ai/plugins", aiHandler.ListPlugins)
+	mux.HandleFunc("/api/ai/commands", aiHandler.ListCommands)
 
 	// User management routes
 	mux.HandleFunc("/api/users", kernel.ListUsers)

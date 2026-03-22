@@ -8,6 +8,14 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    resolve: {
+      alias: {
+        '@xterm/xterm': '/src/test/mocks/xterm.ts',
+        '@xterm/addon-fit': '/src/test/mocks/xterm-addons.ts',
+        '@xterm/addon-attach': '/src/test/mocks/xterm-addons.ts',
+        '@xterm/xterm/css/xterm.css': '/src/test/mocks/empty.css',
+      },
+    },
     server: {
       proxy: {
         '/api': {
