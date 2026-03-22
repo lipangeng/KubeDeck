@@ -2,6 +2,7 @@ import type { PageContribution } from '../contracts/pageContribution';
 import { HomepagePage } from './pages/HomepagePage';
 import { WorkloadsPage } from './pages/WorkloadsPage';
 import { ClustersPage } from './pages/ClustersPage';
+import { PodPage } from './pages/PodPage';
 
 export function registerBuiltInPages(): PageContribution[] {
   return [
@@ -55,6 +56,23 @@ export function registerBuiltInPages(): PageContribution[] {
       },
       component: WorkloadsPage,
       order: 20,
+    },
+    {
+      identity: {
+        source: 'builtin',
+        capabilityId: 'core.pods',
+        contributionId: 'page.pod-detail',
+      },
+      workflowDomainId: 'pods',
+      route: '/pods/:namespace/:name',
+      entryKey: 'pod-detail',
+      title: { key: 'pod.detail', fallback: 'Pod Details' },
+      description: {
+        key: 'pod.description',
+        fallback: 'View pod details, logs, and terminal access.',
+      },
+      component: PodPage,
+      order: 30,
     },
   ];
 }
