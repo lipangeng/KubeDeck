@@ -3,6 +3,8 @@ import { HomepagePage } from './pages/HomepagePage';
 import { WorkloadsPage } from './pages/WorkloadsPage';
 import { ClustersPage } from './pages/ClustersPage';
 import { PodPage } from './pages/PodPage';
+import { IngressPage } from './pages/IngressPage';
+import { RolesPage } from './pages/RolesPage';
 
 export function registerBuiltInPages(): PageContribution[] {
   return [
@@ -73,6 +75,40 @@ export function registerBuiltInPages(): PageContribution[] {
       },
       component: PodPage,
       order: 30,
+    },
+    {
+      identity: {
+        source: 'builtin',
+        capabilityId: 'core.ingress',
+        contributionId: 'page.ingress-detail',
+      },
+      workflowDomainId: 'ingress',
+      route: '/ingress/:namespace/:name',
+      entryKey: 'ingress-detail',
+      title: { key: 'ingress.detail', fallback: 'Ingress Details' },
+      description: {
+        key: 'ingress.description',
+        fallback: 'Manage Ingress routing rules and TLS configuration.',
+      },
+      component: IngressPage,
+      order: 40,
+    },
+    {
+      identity: {
+        source: 'builtin',
+        capabilityId: 'core.rbac',
+        contributionId: 'page.roles',
+      },
+      workflowDomainId: 'rbac',
+      route: '/roles',
+      entryKey: 'roles',
+      title: { key: 'rbac.roles', fallback: 'Roles' },
+      description: {
+        key: 'rbac.description',
+        fallback: 'Manage RBAC roles and cross-cluster permissions.',
+      },
+      component: RolesPage,
+      order: 50,
     },
   ];
 }

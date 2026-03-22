@@ -69,4 +69,8 @@ export const enMessages = {
   'pod.columns.ready': 'Ready',
   'actions.podLogs': 'View Logs',
   'actions.podExec': 'Terminal',
+  'ingress.detail': 'Ingress Details',
+  'ingress.description': 'Manage Ingress routing rules and TLS configuration.',
+  'rbac.roles': 'Roles',
+  'rbac.description': 'Manage RBAC roles and cross-cluster permissions.',
 } as const;
