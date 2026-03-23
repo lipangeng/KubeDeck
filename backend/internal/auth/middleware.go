@@ -14,7 +14,7 @@ const (
 )
 
 // AuthMiddleware creates authentication middleware
-func AuthMiddleware(jwtManager *JWTManager) func(http.Handler) http.Handler {
+func AuthMiddleware(manager *Manager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Skip auth for public endpoints
@@ -29,7 +29,7 @@ func AuthMiddleware(jwtManager *JWTManager) func(http.Handler) http.Handler {
 				return
 			}
 
-			claims, err := jwtManager.VerifyToken(token)
+			claims, err := manager.VerifyJWT(token)
 			if err != nil {
 				http.Error(w, "Invalid token", http.StatusUnauthorized)
 				return

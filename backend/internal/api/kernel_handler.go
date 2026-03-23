@@ -1,12 +1,17 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 
+	"github.com/google/uuid"
+	"kubedeck/backend/internal/auth"
 	"kubedeck/backend/internal/core/builtins"
 	"kubedeck/backend/internal/plugins"
 	"kubedeck/backend/internal/storage"
@@ -21,6 +26,7 @@ type KernelHandler struct {
 	roleBindingRepo storage.RoleBindingRepository
 	userRepo        storage.UserRepository
 	auditLogRepo    storage.AuditLogRepository
+	oauthManager    *auth.Manager
 }
 
 const defaultMenuUserID = "default-user"
@@ -57,6 +63,26 @@ func NewKernelHandlerWithDependencies(
 	// Initialize database and repositories
 	db, _ := storage.NewDatabase(storage.DatabaseConfig{})
 
+	// Initialize OAuth2 manager
+	oauthManager := auth.NewManager(generateJWTSecret())
+
+	// Register default OAuth2 providers (can be configured via API)
+	_ = oauthManager.RegisterProvider(&auth.OAuth2Config{
+		Provider:     "github",
+		ClientID:     os.Getenv("OAUTH_GITHUB_CLIENT_ID"),
+		ClientSecret: os.Getenv("OAUTH_GITHUB_CLIENT_SECRET"),
+		RedirectURL:  os.Getenv("OAUTH_REDIRECT_URL"),
+		Scopes:       []string{"user:email"},
+	})
+
+	_ = oauthManager.RegisterProvider(&auth.OAuth2Config{
+		Provider:     "google",
+		ClientID:     os.Getenv("OAUTH_GOOGLE_CLIENT_ID"),
+		ClientSecret: os.Getenv("OAUTH_GOOGLE_CLIENT_SECRET"),
+		RedirectURL:  os.Getenv("OAUTH_REDIRECT_URL"),
+		Scopes:       []string{"openid", "email", "profile"},
+	})
+
 	return &KernelHandler{
 		registry:        registry,
 		menuRepo:        menuRepo,
@@ -65,7 +91,26 @@ func NewKernelHandlerWithDependencies(
 		roleBindingRepo: db.RoleBindingRepository(),
 		userRepo:        db.UserRepository(),
 		auditLogRepo:    db.AuditLogRepository(),
+		oauthManager:    oauthManager,
 	}
+}
+
+func generateJWTSecret() string {
+	// Generate a random secret for JWT signing
+	// In production, this should be loaded from environment/config
+	b := make([]byte, 32)
+	rand.Read(b)
+	return base64.URLEncoding.EncodeToString(b)
+}
+
+func generateUUID() string {
+	// Simple UUID v4 generation
+	b := make([]byte, 16)
+	rand.Read(b)
+	// Set version (4) and variant bits
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
 func (h *KernelHandler) Menus(w http.ResponseWriter, r *http.Request) {
@@ -251,18 +296,104 @@ func (h *KernelHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 // Login handles OAuth2 login redirect
 func (h *KernelHandler) Login(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement OAuth2 login
-	http.Redirect(w, r, "/", http.StatusFound)
+	provider := r.URL.Query().Get("provider")
+	if provider == "" {
+		provider = "github"
+	}
+
+	redirect := r.URL.Query().Get("redirect")
+	if redirect == "" {
+		redirect = "/"
+	}
+
+	authURL, _, err := h.oauthManager.GenerateAuthURL(provider, redirect)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
 // OAuth2Callback handles OAuth2 callback
 func (h *KernelHandler) OAuth2Callback(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement OAuth2 callback
-	http.Redirect(w, r, "/", http.StatusFound)
+	provider := r.URL.Query().Get("provider")
+	code := r.URL.Query().Get("code")
+	state := r.URL.Query().Get("state")
+
+	// Validate state
+	stateData, err := h.oauthManager.ValidateState(state)
+	if err != nil {
+		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Exchange code for token and get user info
+	token, userInfo, err := h.oauthManager.ExchangeCode(r.Context(), provider, code)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Get or create user in database
+	user, err := h.getOrCreateUser(userInfo)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Generate JWT token
+	jwtToken, err := h.oauthManager.GenerateJWT(userInfo)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Create session
+	var refreshToken string
+	if token.RefreshToken != "" {
+		refreshToken = token.RefreshToken
+	}
+	session := h.oauthManager.CreateSession(user.ID.String(), refreshToken)
+
+	// Set auth cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    jwtToken,
+		Path:     "/",
+		MaxAge:   86400, // 24 hours
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	// Set session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_id",
+		Value:    session.ID,
+		Path:     "/",
+		MaxAge:   604800, // 7 days
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	// Redirect to original destination
+	redirectURL := stateData.Redirect
+	if redirectURL == "" {
+		redirectURL = "/"
+	}
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 // Logout handles user logout
 func (h *KernelHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	// Get session from cookie
+	sessionCookie, err := r.Cookie("session_id")
+	if err == nil {
+		h.oauthManager.DeleteSession(sessionCookie.Value)
+	}
+
 	// Clear auth cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "auth_token",
@@ -271,16 +402,102 @@ func (h *KernelHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
 	})
+
+	// Clear session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_id",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 // GetCurrentUser returns the current authenticated user
 func (h *KernelHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
-	// TODO: Extract user from auth context
+	claims, ok := auth.GetClaimsFromContext(r)
+	if !ok {
+		// Not authenticated, return anonymous
+		writeJSON(w, map[string]interface{}{
+			"authenticated": false,
+		})
+		return
+	}
+
+	// Get user from database
+	userID, err := uuid.Parse(claims.UserID)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{
+			"authenticated": false,
+		})
+		return
+	}
+
+	user, err := h.userRepo.GetByID(userID)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{
+			"authenticated": false,
+		})
+		return
+	}
+
 	writeJSON(w, map[string]interface{}{
-		"id":       "system",
-		"username": "admin",
-		"email":    "admin@kubedeck.io",
+		"authenticated": true,
+		"id":            user.ID,
+		"username":      user.Username,
+		"email":         user.Email,
+		"provider":      user.OAuthProvider,
 	})
+}
+
+// getOrCreateUser gets existing user or creates new one from OAuth2 info
+func (h *KernelHandler) getOrCreateUser(userInfo *auth.UserInfo) (*storage.User, error) {
+	// Try to find existing user by OAuth sub
+	user, err := h.userRepo.GetByOAuth(userInfo.Provider, userInfo.ID)
+	if err == nil {
+		return user, nil
+	}
+
+	// Create new user
+	userID := uuid.New()
+	user = &storage.User{
+		ID:            userID,
+		Username:      userInfo.Username,
+		Email:         userInfo.Email,
+		OAuthProvider: userInfo.Provider,
+		OAuthSub:      userInfo.ID,
+	}
+
+	if err := h.userRepo.Create(user); err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+// ConfigureOAuth2 allows configuring OAuth2 providers via API
+func (h *KernelHandler) ConfigureOAuth2(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var cfg auth.OAuth2Config
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		http.Error(w, "invalid config", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.oauthManager.RegisterProvider(&cfg); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "configured"})
 }

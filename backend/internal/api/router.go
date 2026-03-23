@@ -15,6 +15,7 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/api/auth/callback", kernel.OAuth2Callback)
 	mux.HandleFunc("/api/auth/logout", kernel.Logout)
 	mux.HandleFunc("/api/auth/me", kernel.GetCurrentUser)
+	mux.HandleFunc("/api/auth/configure", kernel.ConfigureOAuth2)
 
 	// AI routes
 	mux.HandleFunc("/api/ai/configure", aiHandler.ConfigureAI)
