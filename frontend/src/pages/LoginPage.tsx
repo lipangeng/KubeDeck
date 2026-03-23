@@ -6,9 +6,15 @@ import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Container from '@mui/material/Container';
 import CssBaseline from '@mui/material/CssBaseline';
+import Divider from '@mui/material/Divider';
 import Link from '@mui/material/Link';
 import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import InputAdornment from '@mui/material/InputAdornment';
+import IconButton from '@mui/material/IconButton';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import GoogleIcon from '@mui/icons-material/Google';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
@@ -16,11 +22,41 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 export function LoginPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [formData, setFormData] = useState({
+    username: '',
+    password: '',
+  });
+  const [error, setError] = useState('');
 
   const handleOAuth2Login = (provider: string) => {
     setLoading(true);
-    // Redirect to OAuth2 provider
     window.location.href = `/api/auth/login?provider=${provider}`;
+  };
+
+  const handleLocalLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/auth/login/local', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        navigate('/');
+      } else {
+        const data = await response.json();
+        setError(data.message || '登录失败，请检查用户名和密码');
+      }
+    } catch (err) {
+      setError('网络错误，请稍后重试');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -62,8 +98,71 @@ export function LoginPage() {
                 Kubernetes 控制平面
               </Typography>
 
+              {/* Local Login Form */}
+              <Box component="form" onSubmit={handleLocalLogin} sx={{ width: '100%', mt: 1 }}>
+                <Stack spacing={2}>
+                  <TextField
+                    fullWidth
+                    label="用户名"
+                    value={formData.username}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    required
+                    autoComplete="username"
+                  />
+
+                  <TextField
+                    fullWidth
+                    label="密码"
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    required
+                    autoComplete="current-password"
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            aria-label="toggle password visibility"
+                            onClick={() => setShowPassword(!showPassword)}
+                            edge="end"
+                          >
+                            {showPassword ? <VisibilityOff /> : <Visibility />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+
+                  {error && (
+                    <Typography color="error" variant="body2" align="center">
+                      {error}
+                    </Typography>
+                  )}
+
+                  <Button
+                    type="submit"
+                    fullWidth
+                    variant="contained"
+                    size="large"
+                    disabled={loading}
+                    sx={{ py: 1.5 }}
+                  >
+                    {loading ? '登录中...' : '登录'}
+                  </Button>
+                </Stack>
+              </Box>
+
+              {/* Divider */}
+              <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', my: 2 }}>
+                <Divider flexItem />
+                <Typography variant="body2" color="text.secondary" sx={{ px: 2 }}>
+                  或使用
+                </Typography>
+                <Divider flexItem />
+              </Box>
+
               {/* OAuth2 Buttons */}
-              <Stack spacing={2} sx={{ width: '100%', mt: 2 }}>
+              <Stack spacing={2} sx={{ width: '100%' }}>
                 <Button
                   fullWidth
                   variant="outlined"
@@ -89,24 +188,10 @@ export function LoginPage() {
                 </Button>
               </Stack>
 
-              {/* Divider */}
-              <Box sx={{ width: '100%', textAlign: 'center' }}>
-                <Typography variant="body2" color="text.secondary">
-                  通过 OAuth2 安全登录
-                </Typography>
-              </Box>
-
               {/* Footer */}
-              <Box sx={{ mt: 3, textAlign: 'center' }}>
+              <Box sx={{ mt: 2, textAlign: 'center' }}>
                 <Typography variant="caption" color="text.secondary">
-                  登录即表示您同意我们的{' '}
-                  <Link href="#" underline="hover">
-                    服务条款
-                  </Link>
-                  {' '}和{' '}
-                  <Link href="#" underline="hover">
-                    隐私政策
-                  </Link>
+                  首次使用？联系管理员创建账户
                 </Typography>
               </Box>
             </Stack>
