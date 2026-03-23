@@ -9,6 +9,7 @@ import { ServicePage } from './pages/ServicePage';
 import { ConfigMapPage } from './pages/ConfigMapPage';
 import { IngressPage } from './pages/IngressPage';
 import { RolesPage } from './pages/RolesPage';
+import { EventsPage } from './pages/EventsPage';
 
 export function registerBuiltInPages(): PageContribution[] {
   return [
@@ -181,6 +182,23 @@ export function registerBuiltInPages(): PageContribution[] {
       },
       component: RolesPage,
       order: 50,
+    },
+    {
+      identity: {
+        source: 'builtin',
+        capabilityId: 'core.events',
+        contributionId: 'page.events',
+      },
+      workflowDomainId: 'events',
+      route: '/events',
+      entryKey: 'events',
+      title: { key: 'events.title', fallback: 'Events' },
+      description: {
+        key: 'events.description',
+        fallback: 'View Kubernetes cluster events.',
+      },
+      component: EventsPage,
+      order: 55,
     },
   ];
 }

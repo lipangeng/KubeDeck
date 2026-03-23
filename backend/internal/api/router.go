@@ -80,6 +80,10 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/api/namespaces", kernel.NamespaceHandler)
 	mux.HandleFunc("/api/namespaces/get", kernel.GetNamespaceHandler)
 
+	// Events routes
+	mux.HandleFunc("/api/events", kernel.EventsHandler)
+	mux.HandleFunc("/api/events/get", kernel.GetEventDetailsHandler)
+
 	// Cluster config routes
 	mux.HandleFunc("/api/clusters/config/get", kernel.GetClusterConfigHandler)
 	mux.HandleFunc("/api/clusters/connect", kernel.ConnectClusterHandler)
