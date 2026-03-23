@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"kubedeck/backend/internal/auth"
 	"kubedeck/backend/internal/core/builtins"
+	"kubedeck/backend/internal/encryption"
 	"kubedeck/backend/internal/k8s"
 	"kubedeck/backend/internal/plugins"
 	"kubedeck/backend/internal/storage"
@@ -498,6 +499,17 @@ func (h *KernelHandler) ConfigureOAuth2(w http.ResponseWriter, r *http.Request) 
 	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		http.Error(w, "invalid config", http.StatusBadRequest)
 		return
+	}
+
+	// Encrypt client secret before storing
+	if cfg.ClientSecret != "" {
+		encryptor, err := encryption.NewEncryptor(os.Getenv("ENCRYPTION_KEY"))
+		if err == nil {
+			encrypted, err := encryptor.Encrypt(cfg.ClientSecret)
+			if err == nil {
+				cfg.ClientSecret = encrypted
+			}
+		}
 	}
 
 	if err := h.oauthManager.RegisterProvider(&cfg); err != nil {
