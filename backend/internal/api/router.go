@@ -4,11 +4,14 @@ import (
 	"net/http"
 	"time"
 
+	"kubedeck/backend/internal/metrics"
 	"kubedeck/backend/internal/middleware"
 )
 
 // NewRouter wires the minimal backend API surface kept during cleanup.
 func NewRouter() http.Handler {
+	metricsInstance := metrics.Global()
+
 	mux := http.NewServeMux()
 	kernel := NewKernelHandler()
 	aiHandler := NewAIHandler()
@@ -52,12 +55,18 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/api/workflows/workloads/items", kernel.Workloads)
 	mux.HandleFunc("/api/actions/execute", kernel.ExecuteAction)
 
+	// Metrics endpoint
+	mux.Handle("/metrics", metricsInstance.Handler())
+
 	// Public routes
 	mux.HandleFunc("/api/healthz", healthHandler)
 	mux.HandleFunc("/api/readyz", healthHandler)
 
 	// Apply middleware
 	var handler http.Handler = mux
+
+	// Metrics middleware (must be before other middleware)
+	handler = metricsInstance.Middleware(handler)
 
 	// Security headers
 	handler = middleware.SecurityHeadersMiddleware(handler)
