@@ -30,12 +30,6 @@ type PodLogRequest struct {
 }
 
 // PodExecRequest represents a pod exec request
-type PodExecRequest struct {
-	Namespace string   `json:"namespace"`
-	Name      string   `json:"name"`
-	Container string   `json:"container,omitempty"`
-	Command   []string `json:"command"`
-}
 
 // PodLogsHandler handles pod log streaming requests
 func (h *KernelHandler) PodLogsHandler(w http.ResponseWriter, r *http.Request) {
@@ -215,38 +209,6 @@ func (h *KernelHandler) GetPodHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // PodExecHandler handles pod exec requests
-func (h *KernelHandler) PodExecHandler(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		http.Error(w, "Failed to upgrade connection", http.StatusBadRequest)
-		return
-	}
-	defer conn.Close()
-
-	clientManager := k8s.GlobalClientManager()
-	clientset, err := clientManager.GetCurrentClient()
-	if err != nil {
-		sendError(conn, "No cluster configured")
-		return
-	}
-
-	var req PodExecRequest
-	if err := conn.ReadJSON(&req); err != nil {
-		return
-	}
-
-	if req.Namespace == "" {
-		req.Namespace = "default"
-	}
-
-	if len(req.Command) == 0 {
-		req.Command = []string{"/bin/sh"}
-	}
-
-	if err := streamPodExec(r.Context(), conn, clientset, req); err != nil {
-		sendError(conn, "Exec failed: "+err.Error())
-	}
-}
 
 func streamPodExec(ctx context.Context, conn *websocket.Conn, clientset *kubernetes.Clientset, req PodExecRequest) error {
 	// TODO: Implement actual exec using k8s.io/client-go/tools/remotecommand
