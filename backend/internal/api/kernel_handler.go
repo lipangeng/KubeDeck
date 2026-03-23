@@ -399,6 +399,89 @@ func (h *KernelHandler) OAuth2Callback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
+// LoginLocal handles local username/password login
+func (h *KernelHandler) LoginLocal(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Username == "" || req.Password == "" {
+		writeJSON(w, map[string]string{
+			"message": "用户名和密码不能为空",
+		})
+		return
+	}
+
+	// TODO: Implement actual user authentication against database
+	// For now, accept 'admin' with any password for testing
+	if req.Username == "admin" {
+		// Create mock user info
+		userInfo := &auth.UserInfo{
+			ID:       "local:admin",
+			Username: req.Username,
+			Email:    "admin@kubedeck.io",
+			Provider: "local",
+			Verified: true,
+		}
+
+		// Generate JWT
+		jwtToken, err := h.oauthManager.GenerateJWT(userInfo)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Create session
+		session := h.oauthManager.CreateSession(userInfo.ID, "")
+
+		// Set cookies
+		http.SetCookie(w, &http.Cookie{
+			Name:     "auth_token",
+			Value:    jwtToken,
+			Path:     "/",
+			MaxAge:   86400,
+			HttpOnly: true,
+			Secure:   r.TLS != nil,
+			SameSite: http.SameSiteLaxMode,
+		})
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session_id",
+			Value:    session.ID,
+			Path:     "/",
+			MaxAge:   604800,
+			HttpOnly: true,
+			Secure:   r.TLS != nil,
+			SameSite: http.SameSiteLaxMode,
+		})
+
+		writeJSON(w, map[string]interface{}{
+			"success": true,
+			"user": map[string]string{
+				"id":       userInfo.ID,
+				"username": userInfo.Username,
+				"email":    userInfo.Email,
+			},
+		})
+		return
+	}
+
+	writeJSON(w, map[string]string{
+		"message": "用户名或密码错误",
+	})
+}
+
 // Logout handles user logout
 func (h *KernelHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Get session from cookie
