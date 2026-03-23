@@ -13,7 +13,6 @@ export default defineConfig(({ mode }) => {
         '@xterm/xterm': '/src/test/mocks/xterm.ts',
         '@xterm/addon-fit': '/src/test/mocks/xterm-addons.ts',
         '@xterm/addon-attach': '/src/test/mocks/xterm-addons.ts',
-        '@xterm/xterm/css/xterm.css': '/src/test/mocks/empty.css',
       },
     },
     server: {
@@ -26,6 +25,33 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: 'jsdom',
+    },
+    build: {
+      // Code splitting optimization
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            // Vendor chunks
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-mui': ['@mui/material', '@mui/icons-material', '@mui/system'],
+            'vendor-xterm': ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-attach'],
+          },
+        },
+      },
+      // Chunk size warning limit
+      chunkSizeWarningLimit: 500,
+      // Minification
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: true,
+          drop_debugger: true,
+        },
+      },
+      // Source maps
+      sourcemap: false,
+      // Target modern browsers
+      target: 'esnext',
     },
   };
 });

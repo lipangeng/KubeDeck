@@ -23,7 +23,6 @@ import Alert from '@mui/material/Alert';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { AttachAddon } from '@xterm/addon-attach';
-import '@xterm/xterm/css/xterm.css';
 import { copy } from '../../../i18n/copy';
 import { useKernelRuntime } from '../../runtime/KernelRuntimeContext';
 
