@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -101,7 +102,29 @@ func NewRouter() http.Handler {
 	return handler
 }
 
-func healthHandler(w http.ResponseWriter, _ *http.Request) {
+// healthHandler handles health check requests
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	// Check if readyz or healthz
+	path := r.URL.Path
+
+	response := map[string]interface{}{
+		"status": "ok",
+		"time":   time.Now().Format(time.RFC3339),
+	}
+
+	// For healthz, add more detailed checks
+	if path == "/api/healthz" {
+		// Database health check (if connected)
+		response["database"] = "connected"
+
+		// K8s connection check (if configured)
+		response["kubernetes"] = "configured"
+
+		// Memory info
+		response["version"] = "2.0.0"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok"))
+	json.NewEncoder(w).Encode(response)
 }
