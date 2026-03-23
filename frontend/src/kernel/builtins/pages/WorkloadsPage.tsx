@@ -1,237 +1,203 @@
 import { useEffect, useState } from 'react';
-import Chip from '@mui/material/Chip';
-import CircularProgress from '@mui/material/CircularProgress';
-import Alert from '@mui/material/Alert';
 import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
+import Paper from '@mui/material/Paper';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
-import Typography from '@mui/material/Typography';
+import Chip from '@mui/material/Chip';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import { ListPageShell } from '../../../components/page-shell/ResourcePageShell';
-import { copy } from '../../../i18n/copy';
-import { ResourcePageShell } from '../../resource-pages/ResourcePageShell';
-import { resolveResourcePage } from '../../resource-pages/resolveResourcePage';
+import IconButton from '@mui/material/IconButton';
+import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import SearchIcon from '@mui/icons-material/Search';
+import AddIcon from '@mui/icons-material/Add';
+import { useNotification } from '../../../components/NotificationProvider';
+import { LoadingOverlay } from '../../../components/LoadingOverlay';
 import { useKernelRuntime } from '../../runtime/KernelRuntimeContext';
-import type { KernelActionExecutionResult } from '../../runtime/executeKernelAction';
-import type { WorkloadItem } from '../../runtime/fetchWorkloads';
+
+interface WorkloadItem {
+  id: string;
+  name: string;
+  kind: string;
+  namespace: string;
+  status: string;
+  health: string;
+  image?: string;
+  updated_at: string;
+}
 
 export function WorkloadsPage() {
-  const {
-    activeActions,
-    activePage,
-    activeSummarySlots,
-    currentResource,
-    executeAction,
-    enterResource,
-    exitResource,
-    fetchWorkloadsForDomain,
-    resourcePageExtensions,
-  } = useKernelRuntime();
-  const [items, setItems] = useState<WorkloadItem[]>([]);
+  const { navigate, activeCluster } = useKernelRuntime();
+  const [workloads, setWorkloads] = useState<WorkloadItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionResult, setActionResult] = useState<KernelActionExecutionResult | null>(null);
-  const workflowDomainId = activePage?.workflowDomainId;
+  const [filter, setFilter] = useState('');
+  const notification = useNotification();
 
   useEffect(() => {
-    if (!workflowDomainId) {
-      return;
+    loadWorkloads();
+  }, [activeCluster]);
+
+  const loadWorkloads = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/workflows/workloads/items?workflowDomainId=workloads&cluster=${activeCluster}`);
+      const data = await response.json();
+      setWorkloads(data || []);
+    } catch (error) {
+      notification.showError('加载工作负载失败：' + (error as Error).message);
+    } finally {
+      setLoading(false);
     }
-    const currentWorkflowDomainId = workflowDomainId;
+  };
 
-    let active = true;
-
-    async function load() {
-      try {
-        const nextItems = await fetchWorkloadsForDomain(currentWorkflowDomainId, 'default');
-        if (active) {
-          setItems(nextItems);
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
+  const getHealthColor = (health: string) => {
+    switch (health) {
+      case 'Healthy': return 'success';
+      case 'Warning': return 'warning';
+      case 'Error': return 'error';
+      default: return 'default';
     }
+  };
 
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [fetchWorkloadsForDomain, workflowDomainId]);
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Running': return 'success';
+      case 'Pending': return 'warning';
+      case 'Failed': return 'error';
+      default: return 'default';
+    }
+  };
 
-  if (currentResource) {
-    const resolvedPage = resolveResourcePage({
-      resource: currentResource,
-      overviewContent: <Typography>Resource overview for {currentResource.name}</Typography>,
-      yamlContent: (
-        <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
-          {`apiVersion: apps/v1\nkind: ${currentResource.kind}\nmetadata:\n  name: ${currentResource.name}\n  namespace: ${currentResource.namespace ?? 'default'}`}
-        </Typography>
-      ),
-      yamlVariantContent: (
-        <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
-          {`Deployment YAML v2 for ${currentResource.name}`}
-        </Typography>
-      ),
-      runtimeContent: (
-        <Typography color="text.secondary">
-          Runtime status and rollout details for {currentResource.name}
-        </Typography>
-      ),
-      logsContent: (
-        <Typography component="pre" sx={{ m: 0, fontFamily: 'monospace' }}>
-          {`${currentResource.name}: application logs stream preview`}
-        </Typography>
-      ),
-      extensions: resourcePageExtensions,
-    });
+  const filteredWorkloads = workloads.filter(workload =>
+    workload.name.toLowerCase().includes(filter.toLowerCase()) ||
+    workload.namespace.toLowerCase().includes(filter.toLowerCase()) ||
+    workload.kind.toLowerCase().includes(filter.toLowerCase())
+  );
 
-    const handleAction = async (actionId: string) => {
-      const result = await executeAction({
-        actionId,
-        workflowDomainId: activePage?.workflowDomainId ?? 'workloads',
-        target: {
-          cluster: 'default',
-          namespace: currentResource.namespace ?? 'default',
-          scope: currentResource.namespace ? 'namespace' : 'cluster',
-        },
-        input: {
-          name: currentResource.name,
-        },
-      });
-      setActionResult(result);
-    };
-
-    return (
-      <Stack spacing={2}>
-        {actionResult ? (
-          <Alert severity="success">
-            <Stack spacing={0.5}>
-              <Typography>{actionResult.Summary}</Typography>
-              {actionResult.AffectedObjects.map((item) => (
-                <Typography key={item} variant="body2">
-                  {item}
-                </Typography>
-              ))}
-            </Stack>
-          </Alert>
-        ) : null}
-        <ResourcePageShell
-          title={`${currentResource.kind}/${currentResource.name}`}
-          summary={
-            <Stack spacing={1}>
-              <Typography color="text.secondary">
-                Namespace: {currentResource.namespace ?? 'cluster'}
-              </Typography>
-              {resolvedPage.summaryContent.map((content, index) => (
-                <div key={`resource-summary-${index}`}>{content}</div>
-              ))}
-              {activeSummarySlots.map((slot) => {
-                const SlotComponent = slot.component;
-                return <SlotComponent key={slot.identity.contributionId} />;
-              })}
-            </Stack>
-          }
-          actions={
-            <Stack direction="row" spacing={1}>
-              {resolvedPage.actions.map((action) => (
-                <Button
-                  key={action.id}
-                  variant="outlined"
-                  onClick={() => void handleAction(action.actionId)}
-                >
-                  {action.title}
-                </Button>
-              ))}
-              {activeActions.map((action, index) => (
-                <Button
-                  key={action.identity.contributionId}
-                  variant={index === 0 ? 'contained' : 'outlined'}
-                  onClick={() => void handleAction(action.actionId)}
-                >
-                  {action.title.fallback}
-                </Button>
-              ))}
-              <Button variant="text" onClick={exitResource}>
-                Back to Workloads
-              </Button>
-            </Stack>
-          }
-          tabs={resolvedPage.tabs}
-          takeoverContent={resolvedPage.takeoverContent}
-        />
-      </Stack>
-    );
+  if (loading) {
+    return <LoadingOverlay message="加载工作负载..." />;
   }
 
   return (
-    <ListPageShell
-      title={copy('workloads.title')}
-      toolbar={<Chip color="primary" label={copy('workloads.badge')} size="small" />}
-      summary={
-        activeSummarySlots.length > 0 ? (
+    <Stack spacing={3}>
+      {/* Header */}
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
           <Stack spacing={1}>
-            {activeSummarySlots.map((slot) => {
-              const SlotComponent = slot.component;
-              return <SlotComponent key={slot.identity.contributionId} />;
-            })}
-          </Stack>
-        ) : null
-      }
-    >
-      <Stack spacing={1.5}>
-        <Typography color="text.secondary">{copy('workloads.description')}</Typography>
-        {loading ? (
-          <Stack direction="row" spacing={1} alignItems="center">
-            <CircularProgress size={18} />
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              工作负载
+            </Typography>
             <Typography variant="body2" color="text.secondary">
-              {copy('workloads.loading')}
+              管理 Kubernetes 工作负载
             </Typography>
           </Stack>
-        ) : (
-          <Table size="small">
-            <TableHead>
+          <Stack direction="row" spacing={1}>
+            <IconButton onClick={loadWorkloads} color="primary">
+              <RefreshIcon />
+            </IconButton>
+            <Button variant="contained" startIcon={<AddIcon />}>
+              创建
+            </Button>
+          </Stack>
+        </Stack>
+      </Paper>
+
+      {/* Filters */}
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <TextField
+            size="small"
+            placeholder="搜索工作负载..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ flexGrow: 1 }}
+          />
+          <Typography variant="body2" color="text.secondary">
+            共 {filteredWorkloads.length} 个
+          </Typography>
+        </Stack>
+      </Paper>
+
+      {/* Workloads Table */}
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>名称</TableCell>
+              <TableCell>类型</TableCell>
+              <TableCell>命名空间</TableCell>
+              <TableCell>状态</TableCell>
+              <TableCell>健康</TableCell>
+              <TableCell>更新时间</TableCell>
+              <TableCell>操作</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredWorkloads.length === 0 ? (
               <TableRow>
-                <TableCell>{copy('workloads.columns.name')}</TableCell>
-                <TableCell>{copy('workloads.columns.kind')}</TableCell>
-                <TableCell>{copy('workloads.columns.namespace')}</TableCell>
-                <TableCell>{copy('workloads.columns.status')}</TableCell>
-                <TableCell>{copy('workloads.columns.health')}</TableCell>
+                <TableCell colSpan={7} align="center">
+                  <Typography color="text.secondary" sx={{ py: 4 }}>
+                    暂无工作负载
+                  </Typography>
+                </TableCell>
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {items.map((item) => (
-                <TableRow key={item.id}>
+            ) : (
+              filteredWorkloads.map((workload) => (
+                <TableRow key={workload.id} hover>
                   <TableCell>
-                    <Button
-                      variant="text"
-                      onClick={() =>
-                        enterResource({
-                          kind: item.kind,
-                          name: item.name,
-                          namespace: item.namespace,
-                        })
-                      }
+                    <Typography fontWeight={600}>{workload.name}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={workload.kind} size="small" variant="outlined" />
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{workload.namespace}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={workload.status} 
+                      size="small" 
+                      color={getStatusColor(workload.status)} 
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={workload.health} 
+                      size="small" 
+                      color={getHealthColor(workload.health)} 
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="caption" color="text.secondary">
+                      {new Date(workload.updated_at).toLocaleString('zh-CN')}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Button 
+                      size="small" 
+                      onClick={() => navigate(`/pods/${workload.namespace}/${workload.name}`)}
                     >
-                      {item.name}
+                      详情
                     </Button>
                   </TableCell>
-                  <TableCell>{item.kind}</TableCell>
-                  <TableCell>{item.namespace}</TableCell>
-                  <TableCell>{item.status}</TableCell>
-                  <TableCell>{item.health}</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-        <Typography variant="body2" color="text.secondary">
-          {copy('workloads.placeholder')}
-        </Typography>
-      </Stack>
-    </ListPageShell>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </Paper>
+    </Stack>
   );
 }

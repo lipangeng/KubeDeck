@@ -4,6 +4,7 @@ import { discoverFrontendPluginModules } from './kernel/runtime/discoverFrontend
 import { type ThemePreference } from './themeMode';
 import { AppShell } from './AppShell';
 import { LoginPage } from './pages/LoginPage';
+import { NotificationProvider } from './components/NotificationProvider';
 
 interface AppProps {
   themePreference: ThemePreference;
@@ -13,16 +14,16 @@ interface AppProps {
 export function App({ themePreference, onThemePreferenceChange }: AppProps) {
   const pluginModules = discoverFrontendPluginModules();
 
-  // For demo: skip authentication, go directly to main app
-  // TODO: Enable authentication in production
   return (
     <BrowserRouter>
-      <KernelRuntimeProvider pluginModules={pluginModules}>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/*" element={<AppShell themePreference={themePreference} onThemePreferenceChange={onThemePreferenceChange} />} />
-        </Routes>
-      </KernelRuntimeProvider>
+      <NotificationProvider>
+        <KernelRuntimeProvider pluginModules={pluginModules}>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/*" element={<AppShell themePreference={themePreference} onThemePreferenceChange={onThemePreferenceChange} />} />
+          </Routes>
+        </KernelRuntimeProvider>
+      </NotificationProvider>
     </BrowserRouter>
   );
 }
