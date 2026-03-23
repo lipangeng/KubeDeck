@@ -68,7 +68,7 @@ export function SetupWizard() {
     const nextStep = activeStep + 1;
     if (nextStep >= steps.length) {
       saveConfiguration();
-      navigate('/login');
+      navigate('/');
     } else {
       setActiveStep(nextStep);
     }

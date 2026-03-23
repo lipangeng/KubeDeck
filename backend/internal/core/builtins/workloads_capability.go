@@ -2,9 +2,14 @@ package builtins
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	"kubedeck/backend/internal/k8s"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"kubedeck/backend/pkg/sdk"
 )
 
@@ -61,43 +66,94 @@ func (WorkloadsCapability) WorkflowDomainID() string {
 }
 
 func (WorkloadsCapability) ListWorkloads(cluster string) []sdk.WorkloadItem {
-	clientManager := k8s.GlobalClientManager()
-	
-	var clientset interface{}
-	var err error
-	
-	if cluster != "" {
-		clientset, err = clientManager.GetClient(cluster)
-	} else {
-		clientset, err = clientManager.GetCurrentClient()
+	// Try to get real workloads from K8s
+	workloads, err := getRealWorkloads(cluster)
+	if err == nil && len(workloads) > 0 {
+		return workloads
 	}
-	
+
+	// Fallback to mock data
+	return getMockWorkloads(cluster)
+}
+
+func getRealWorkloads(cluster string) ([]sdk.WorkloadItem, error) {
+	// Try in-cluster config first
+	config, err := rest.InClusterConfig()
 	if err != nil {
-		return getMockWorkloads(cluster)
+		return nil, err
 	}
-	
-	provider := k8s.NewWorkloadsProvider(clientset.(*k8s.Clientset), "default")
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
 	ctx := context.Background()
-	
-	workloads, err := provider.ListWorkloads(ctx, "default")
-	if err != nil {
-		return getMockWorkloads(cluster)
+	var items []sdk.WorkloadItem
+
+	// Get Deployments
+	deployments, err := clientset.AppsV1().Deployments("").List(ctx, metav1.ListOptions{})
+	if err == nil {
+		for _, dep := range deployments.Items {
+			items = append(items, deploymentToWorkload(dep))
+		}
 	}
-	
-	result := make([]sdk.WorkloadItem, 0, len(workloads))
-	for _, w := range workloads {
-		result = append(result, sdk.WorkloadItem{
-			ID:        w.ID,
-			Name:      w.Name,
-			Kind:      w.Kind,
-			Namespace: w.Namespace,
-			Status:    w.Status,
-			Health:    w.Health,
-			UpdatedAt: w.UpdatedAt,
-		})
+
+	// Get Pods
+	pods, err := clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
+	if err == nil {
+		for _, pod := range pods.Items {
+			items = append(items, podToWorkload(pod))
+		}
 	}
-	
-	return result
+
+	return items, nil
+}
+
+func deploymentToWorkload(dep appsv1.Deployment) sdk.WorkloadItem {
+	status := "Running"
+	health := "Healthy"
+
+	if dep.Status.ReadyReplicas != dep.Status.Replicas {
+		status = "Progressing"
+		health = "Warning"
+	}
+
+	if dep.Status.UnavailableReplicas > 0 {
+		status = "Unavailable"
+		health = "Error"
+	}
+
+	return sdk.WorkloadItem{
+		ID:        fmt.Sprintf("deployment-%s-%s", dep.Namespace, dep.Name),
+		Name:      dep.Name,
+		Kind:      "Deployment",
+		Namespace: dep.Namespace,
+		Status:    status,
+		Health:    health,
+		UpdatedAt: time.Now().Format(time.RFC3339),
+	}
+}
+
+func podToWorkload(pod corev1.Pod) sdk.WorkloadItem {
+	status := string(pod.Status.Phase)
+	health := "Healthy"
+
+	if pod.Status.Phase == corev1.PodPending {
+		health = "Warning"
+	} else if pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodUnknown {
+		health = "Error"
+	}
+
+	return sdk.WorkloadItem{
+		ID:        fmt.Sprintf("pod-%s-%s", pod.Namespace, pod.Name),
+		Name:      pod.Name,
+		Kind:      "Pod",
+		Namespace: pod.Namespace,
+		Status:    status,
+		Health:    health,
+		UpdatedAt: time.Now().Format(time.RFC3339),
+	}
 }
 
 func getMockWorkloads(cluster string) []sdk.WorkloadItem {
