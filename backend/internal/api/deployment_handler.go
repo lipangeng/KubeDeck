@@ -7,9 +7,10 @@ import (
 	"net/http"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"kubedeck/backend/internal/k8s"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 // DeploymentActionRequest represents a deployment action request
@@ -37,14 +38,24 @@ func (h *KernelHandler) DeploymentHandler(w http.ResponseWriter, r *http.Request
 		req.Namespace = "default"
 	}
 
-	clientManager := k8s.GlobalClientManager()
-	cs, err := clientManager.GetCurrentClient()
+	// Get K8s client
+	config, err := rest.InClusterConfig()
 	if err != nil {
-		http.Error(w, "No cluster configured", http.StatusInternalServerError)
+		writeJSON(w, map[string]interface{}{
+			"success": false,
+			"error":   "K8s not configured: " + err.Error(),
+		})
 		return
 	}
 
-	clientset := cs
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
 
 	var result map[string]interface{}
 	switch req.Action {
@@ -57,12 +68,15 @@ func (h *KernelHandler) DeploymentHandler(w http.ResponseWriter, r *http.Request
 	case "resume":
 		result, err = resumeDeployment(r.Context(), clientset, req)
 	default:
-		http.Error(w, "unknown action", http.StatusBadRequest)
+		http.Error(w, "unknown action: "+req.Action, http.StatusBadRequest)
 		return
 	}
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSON(w, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
 		return
 	}
 
@@ -170,10 +184,18 @@ func (h *KernelHandler) GetDeploymentHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	clientManager := k8s.GlobalClientManager()
-	clientset, err := clientManager.GetCurrentClient()
+	// Get K8s client
+	config, err := rest.InClusterConfig()
 	if err != nil {
-		http.Error(w, "No cluster configured", http.StatusInternalServerError)
+		writeJSON(w, map[string]interface{}{
+			"error": "K8s not configured",
+		})
+		return
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -202,7 +224,7 @@ func (h *KernelHandler) GetDeploymentHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	strategy := "RollingUpdate"
-	if deployment.Spec.Strategy.Type == "Recreate" {
+	if deployment.Spec.Strategy.Type == appsv1.RecreateDeploymentStrategyType {
 		strategy = "Recreate"
 	}
 
@@ -229,19 +251,27 @@ func (h *KernelHandler) ListDeploymentsHandler(w http.ResponseWriter, r *http.Re
 		namespace = "default"
 	}
 
-	clientManager := k8s.GlobalClientManager()
-	clientset, err := clientManager.GetCurrentClient()
+	// Get K8s client
+	config, err := rest.InClusterConfig()
 	if err != nil {
 		writeJSON(w, map[string]interface{}{
 			"deployments": []interface{}{},
-			"error": "No cluster configured",
 		})
+		return
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	deployments, err := clientset.AppsV1().Deployments(namespace).List(r.Context(), metav1.ListOptions{})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSON(w, map[string]interface{}{
+			"deployments": []interface{}{},
+			"error":       err.Error(),
+		})
 		return
 	}
 
@@ -265,5 +295,6 @@ func (h *KernelHandler) ListDeploymentsHandler(w http.ResponseWriter, r *http.Re
 
 	writeJSON(w, map[string]interface{}{
 		"deployments": list,
+		"total":       len(deployments.Items),
 	})
 }

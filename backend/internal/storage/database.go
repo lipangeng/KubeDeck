@@ -63,7 +63,7 @@ func NewDatabase(cfg DatabaseConfig) (*Database, error) {
 	}
 
 	// Auto migrate schema
-	err = db.AutoMigrate(&User{}, &Role{}, &RoleBinding{}, &AuditLog{})
+	err = db.AutoMigrate(&User{}, &Role{}, &RoleBinding{}, &AuditLog{}, &ClusterConfig{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to migrate schema: %w", err)
 	}

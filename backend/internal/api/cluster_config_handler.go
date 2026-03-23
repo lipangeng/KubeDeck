@@ -11,11 +11,13 @@ import (
 
 // ClusterConfigRequest represents a cluster configuration request
 type ClusterConfigRequest struct {
-	ID         string `json:"id,omitempty"`
-	Name       string `json:"name"`
-	Server     string `json:"server"`
-	Token      string `json:"token,omitempty"`
-	Kubeconfig string `json:"kubeconfig,omitempty"`
+	ID         string            `json:"id,omitempty"`
+	Name       string            `json:"name"`
+	Server     string            `json:"server"`
+	Token      string            `json:"token,omitempty"`
+	Kubeconfig string            `json:"kubeconfig,omitempty"`
+	Status     string            `json:"status,omitempty"`
+	Metadata   map[string]string `json:"metadata,omitempty"`
 }
 
 // ClustersConfigHandler handles cluster configuration requests
@@ -73,6 +75,7 @@ func (h *KernelHandler) TestClusterConnection(w http.ResponseWriter, r *http.Req
 	}
 
 	// TODO: Implement actual K8s connection test
+	// For now, return mock success
 	writeJSON(w, map[string]interface{}{
 		"success": true,
 		"message": "连接成功！Kubernetes v1.28.0",
@@ -89,13 +92,15 @@ func (h *KernelHandler) listClustersConfig(w http.ResponseWriter, r *http.Reques
 	}
 
 	type SafeCluster struct {
-		ID        string    `json:"id"`
-		Name      string    `json:"name"`
-		Server    string    `json:"server"`
-		Status    string    `json:"status"`
-		Version   string    `json:"version,omitempty"`
-		Nodes     int       `json:"nodes,omitempty"`
-		CreatedAt time.Time `json:"created_at"`
+		ID        string            `json:"id"`
+		Name      string            `json:"name"`
+		Server    string            `json:"server"`
+		Status    string            `json:"status"`
+		Version   string            `json:"version,omitempty"`
+		Nodes     int               `json:"nodes,omitempty"`
+		Metadata  map[string]string `json:"metadata,omitempty"`
+		CreatedAt time.Time         `json:"created_at"`
+		UpdatedAt time.Time         `json:"updated_at"`
 	}
 
 	safeClusters := make([]SafeCluster, 0, len(clusters))
@@ -107,12 +112,15 @@ func (h *KernelHandler) listClustersConfig(w http.ResponseWriter, r *http.Reques
 			Status:    c.Status,
 			Version:   c.Version,
 			Nodes:     c.Nodes,
+			Metadata:  nil, // Don't expose sensitive metadata
 			CreatedAt: c.CreatedAt,
+			UpdatedAt: c.UpdatedAt,
 		})
 	}
 
 	writeJSON(w, map[string]interface{}{
 		"clusters": safeClusters,
+		"total":    len(clusters),
 	})
 }
 
@@ -131,11 +139,12 @@ func (h *KernelHandler) createClusterConfig(w http.ResponseWriter, r *http.Reque
 	}
 
 	cluster := &storage.ClusterConfig{
-		ID:     uuid.New(),
-		Name:   req.Name,
-		Server: req.Server,
-		Token:  req.Token,
-		Status: "disconnected",
+		ID:        uuid.New(),
+		Name:      req.Name,
+		Server:    req.Server,
+		Token:     req.Token,
+		Kubeconfig: req.Kubeconfig,
+		Status:    "disconnected",
 	}
 
 	if err := h.clusterConfigRepo.Create(cluster); err != nil {
@@ -178,6 +187,12 @@ func (h *KernelHandler) updateClusterConfig(w http.ResponseWriter, r *http.Reque
 	cluster.Server = req.Server
 	if req.Token != "" {
 		cluster.Token = req.Token
+	}
+	if req.Kubeconfig != "" {
+		cluster.Kubeconfig = req.Kubeconfig
+	}
+	if req.Status != "" {
+		cluster.Status = req.Status
 	}
 
 	if err := h.clusterConfigRepo.Update(cluster); err != nil {
@@ -267,7 +282,6 @@ func (h *KernelHandler) ConnectClusterHandler(w http.ResponseWriter, r *http.Req
 		cluster.Token = req.Token
 	}
 
-	// Test connection
 	// TODO: Implement actual K8s connection test
 	cluster.Status = "connected"
 	now := time.Now()
