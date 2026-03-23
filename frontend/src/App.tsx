@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { BrowserRouter } from 'react-router-dom';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -38,12 +39,14 @@ function App({ themePreference, onThemePreferenceChange, pluginModules = [] }: A
     pluginModules.length > 0 ? pluginModules : discoverFrontendPluginModules();
 
   return (
-    <KernelRuntimeProvider pluginModules={resolvedPluginModules}>
-      <AppShell
-        themePreference={themePreference}
-        onThemePreferenceChange={onThemePreferenceChange}
-      />
-    </KernelRuntimeProvider>
+    <BrowserRouter>
+      <KernelRuntimeProvider pluginModules={resolvedPluginModules}>
+        <AppShell
+          themePreference={themePreference}
+          onThemePreferenceChange={onThemePreferenceChange}
+        />
+      </KernelRuntimeProvider>
+    </BrowserRouter>
   );
 }
 
@@ -366,7 +369,7 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
 
         <Box>
           {menuSurface === 'work' ? (
-            ActiveComponent ? <ActiveComponent /> : null
+            ActiveComponent ? <ActiveComponent key={activePage?.route || 'active'} /> : null
           ) : (
             <MenuSettingsPanel
               editableGroups={editableGroups}
