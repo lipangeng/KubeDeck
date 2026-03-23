@@ -1,9 +1,10 @@
 package builtins
 
 import (
-	"fmt"
+	"context"
 	"time"
 
+	"kubedeck/backend/internal/k8s"
 	"kubedeck/backend/pkg/sdk"
 )
 
@@ -52,38 +53,6 @@ func (WorkloadsCapability) CapabilityDescriptor() sdk.CapabilityDescriptor {
 				Title:            sdk.TextRef{Key: "actions.apply", Fallback: "Apply"},
 			},
 		},
-		ResourcePageExtensions: []sdk.ResourcePageExtensionDescriptor{
-			{
-				Kind:            "Deployment",
-				CapabilityType:  sdk.ResourcePageExtensionTabReplace,
-				TargetTabID:     "yaml",
-				TabID:           "yaml",
-				Title:           sdk.TextRef{Key: "resource.yaml.v2", Fallback: "YAML v2"},
-				ContentFallback: "Deployment YAML v2",
-			},
-			{
-				Kind:            "Deployment",
-				CapabilityType:  sdk.ResourcePageExtensionTab,
-				TabID:           "runtime",
-				Title:           sdk.TextRef{Key: "resource.runtime", Fallback: "Runtime"},
-				ContentFallback: "Runtime status and rollout details",
-			},
-			{
-				Kind:            "Pod",
-				CapabilityType:  sdk.ResourcePageExtensionTabReplace,
-				TargetTabID:     "overview",
-				TabID:           "overview",
-				Title:           sdk.TextRef{Key: "resource.overview", Fallback: "Overview"},
-				ContentFallback: "Pod-specific overview",
-			},
-			{
-				Kind:            "Pod",
-				CapabilityType:  sdk.ResourcePageExtensionTab,
-				TabID:           "logs",
-				Title:           sdk.TextRef{Key: "resource.logs", Fallback: "Logs"},
-				ContentFallback: "Pod logs stream preview",
-			},
-		},
 	}
 }
 
@@ -92,6 +61,46 @@ func (WorkloadsCapability) WorkflowDomainID() string {
 }
 
 func (WorkloadsCapability) ListWorkloads(cluster string) []sdk.WorkloadItem {
+	clientManager := k8s.GlobalClientManager()
+	
+	var clientset interface{}
+	var err error
+	
+	if cluster != "" {
+		clientset, err = clientManager.GetClient(cluster)
+	} else {
+		clientset, err = clientManager.GetCurrentClient()
+	}
+	
+	if err != nil {
+		return getMockWorkloads(cluster)
+	}
+	
+	provider := k8s.NewWorkloadsProvider(clientset.(*k8s.Clientset), "default")
+	ctx := context.Background()
+	
+	workloads, err := provider.ListWorkloads(ctx, "default")
+	if err != nil {
+		return getMockWorkloads(cluster)
+	}
+	
+	result := make([]sdk.WorkloadItem, 0, len(workloads))
+	for _, w := range workloads {
+		result = append(result, sdk.WorkloadItem{
+			ID:        w.ID,
+			Name:      w.Name,
+			Kind:      w.Kind,
+			Namespace: w.Namespace,
+			Status:    w.Status,
+			Health:    w.Health,
+			UpdatedAt: w.UpdatedAt,
+		})
+	}
+	
+	return result
+}
+
+func getMockWorkloads(cluster string) []sdk.WorkloadItem {
 	suffix := cluster
 	if suffix == "" {
 		suffix = "default"
@@ -105,7 +114,7 @@ func (WorkloadsCapability) ListWorkloads(cluster string) []sdk.WorkloadItem {
 			Namespace: "default",
 			Status:    "Running",
 			Health:    "Healthy",
-			UpdatedAt: time.Date(2026, 3, 10, 10, 0, 0, 0, time.UTC).Format(time.RFC3339),
+			UpdatedAt: time.Now().Format(time.RFC3339),
 		},
 		{
 			ID:        "workload-web-" + suffix,
@@ -114,48 +123,7 @@ func (WorkloadsCapability) ListWorkloads(cluster string) []sdk.WorkloadItem {
 			Namespace: "default",
 			Status:    "Pending",
 			Health:    "Warning",
-			UpdatedAt: time.Date(2026, 3, 10, 10, 5, 0, 0, time.UTC).Format(time.RFC3339),
-		},
-		{
-			ID:        "workload-api-pod-" + suffix,
-			Name:      "api-7c9d8",
-			Kind:      "Pod",
-			Namespace: "default",
-			Status:    "Running",
-			Health:    "Healthy",
-			UpdatedAt: time.Date(2026, 3, 10, 10, 6, 0, 0, time.UTC).Format(time.RFC3339),
+			UpdatedAt: time.Now().Format(time.RFC3339),
 		},
 	}
-}
-
-func (WorkloadsCapability) ExecuteAction(
-	request sdk.ActionExecutionRequest,
-) (sdk.ActionExecutionResult, error) {
-	if request.WorkflowDomainID != "workloads" {
-		return sdk.ActionExecutionResult{}, nil
-	}
-
-	switch request.ActionID {
-	case "create":
-		return sdk.ActionExecutionResult{
-			Accepted:        true,
-			Summary:         "create accepted",
-			AffectedObjects: []string{"deployment/" + targetName(request)},
-		}, nil
-	case "apply":
-		return sdk.ActionExecutionResult{
-			Accepted:        true,
-			Summary:         "apply accepted",
-			AffectedObjects: []string{"deployment/" + targetName(request)},
-		}, nil
-	default:
-		return sdk.ActionExecutionResult{}, fmt.Errorf("unsupported action id %q", request.ActionID)
-	}
-}
-
-func targetName(request sdk.ActionExecutionRequest) string {
-	if name, ok := request.Input["name"].(string); ok && name != "" {
-		return name
-	}
-	return "sample"
 }
