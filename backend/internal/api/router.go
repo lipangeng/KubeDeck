@@ -27,6 +27,11 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/api/auth/me", kernel.GetCurrentUser)
 	mux.HandleFunc("/api/auth/configure", kernel.ConfigureOAuth2)
 
+	// Cluster config routes
+	mux.HandleFunc("/api/clusters/config", kernel.ClustersConfig)
+	mux.HandleFunc("/api/clusters/config/delete", kernel.ClustersConfigDelete)
+	mux.HandleFunc("/api/clusters/test", kernel.TestClusterConnection)
+
 	// AI routes
 	mux.HandleFunc("/api/ai/configure", aiHandler.ConfigureAI)
 	mux.HandleFunc("/api/ai/chat", aiHandler.Chat)

@@ -2,6 +2,7 @@ import type { PageContribution } from '../contracts/pageContribution';
 import { HomepagePage } from './pages/HomepagePage';
 import { WorkloadsPage } from './pages/WorkloadsPage';
 import { ClustersPage } from './pages/ClustersPage';
+import { ClustersConfigPage } from './pages/ClustersConfigPage';
 import { PodPage } from './pages/PodPage';
 import { DeploymentPage } from './pages/DeploymentPage';
 import { ServicePage } from './pages/ServicePage';
@@ -44,6 +45,23 @@ export function registerBuiltInPages(): PageContribution[] {
       },
       component: ClustersPage,
       order: 15,
+    },
+    {
+      identity: {
+        source: 'builtin',
+        capabilityId: 'core.clusters-config',
+        contributionId: 'page.clusters-config',
+      },
+      workflowDomainId: 'clusters-config',
+      route: '/clusters/config',
+      entryKey: 'clusters-config',
+      title: { key: 'clusters.config', fallback: 'Cluster Configuration' },
+      description: {
+        key: 'clusters.config.description',
+        fallback: 'Manage Kubernetes cluster connections.',
+      },
+      component: ClustersConfigPage,
+      order: 16,
     },
     {
       identity: {

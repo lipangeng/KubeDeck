@@ -22,16 +22,17 @@ import (
 )
 
 type KernelHandler struct {
-	registry        *plugins.CapabilityRegistry
-	menuRepo        storage.UserMenuRepo
-	db              *storage.Database
-	roleRepo        storage.RoleRepository
-	roleBindingRepo storage.RoleBindingRepository
-	userRepo        storage.UserRepository
-	auditLogRepo    storage.AuditLogRepository
-	oauthManager    *auth.Manager
-	k8sSyncer       *k8s.RBACSyncer
-	cache           *cache.Cache
+	registry          *plugins.CapabilityRegistry
+	menuRepo          storage.UserMenuRepo
+	db                *storage.Database
+	roleRepo          storage.RoleRepository
+	roleBindingRepo   storage.RoleBindingRepository
+	userRepo          storage.UserRepository
+	auditLogRepo      storage.AuditLogRepository
+	oauthManager      *auth.Manager
+	k8sSyncer         *k8s.RBACSyncer
+	cache             *cache.Cache
+	clusterConfigRepo storage.ClusterConfigRepository
 }
 
 const defaultMenuUserID = "default-user"
@@ -94,17 +95,21 @@ func NewKernelHandlerWithDependencies(
 	// Initialize cache
 	cacheInstance := cache.Global()
 
+	// Initialize cluster config repository
+	clusterConfigRepo := storage.NewClusterConfigRepository(db.DB())
+
 	return &KernelHandler{
-		registry:        registry,
-		menuRepo:        menuRepo,
-		db:              db,
-		roleRepo:        db.RoleRepository(),
-		roleBindingRepo: db.RoleBindingRepository(),
-		userRepo:        db.UserRepository(),
-		auditLogRepo:    db.AuditLogRepository(),
-		oauthManager:    oauthManager,
-		k8sSyncer:       k8sSyncer,
-		cache:           cacheInstance,
+		registry:          registry,
+		menuRepo:          menuRepo,
+		db:                db,
+		roleRepo:          db.RoleRepository(),
+		roleBindingRepo:   db.RoleBindingRepository(),
+		userRepo:          db.UserRepository(),
+		auditLogRepo:      db.AuditLogRepository(),
+		oauthManager:      oauthManager,
+		k8sSyncer:         k8sSyncer,
+		cache:             cacheInstance,
+		clusterConfigRepo: clusterConfigRepo,
 	}
 }
 
