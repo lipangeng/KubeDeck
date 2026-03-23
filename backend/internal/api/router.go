@@ -2,6 +2,9 @@ package api
 
 import (
 	"net/http"
+	"time"
+
+	"kubedeck/backend/internal/middleware"
 )
 
 // NewRouter wires the minimal backend API surface kept during cleanup.
@@ -53,7 +56,35 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/api/healthz", healthHandler)
 	mux.HandleFunc("/api/readyz", healthHandler)
 
-	return mux
+	// Apply middleware
+	var handler http.Handler = mux
+
+	// Security headers
+	handler = middleware.SecurityHeadersMiddleware(handler)
+
+	// CORS
+	handler = middleware.CORSMiddleware(middleware.CORSConfig{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
+		MaxAge:         86400,
+	})(handler)
+
+	// Rate limiting: 100 requests per minute with burst of 10
+	rateLimiter := middleware.NewRateLimiter(middleware.RateLimitConfig{
+		Requests:  100,
+		Window:    time.Minute,
+		BurstSize: 10,
+	})
+	handler = rateLimiter.RateLimitMiddleware(handler)
+
+	// Max body size: 1MB
+	handler = middleware.MaxBytesMiddleware(1024 * 1024)(handler)
+
+	// Content-Type enforcement for write operations
+	handler = middleware.ContentTypeMiddleware("application/json")(handler)
+
+	return handler
 }
 
 func healthHandler(w http.ResponseWriter, _ *http.Request) {
