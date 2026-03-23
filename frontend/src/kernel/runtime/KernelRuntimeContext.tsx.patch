@@ -1,0 +1,22 @@
+// 在组件开头添加 useNavigate
+import { useNavigate } from 'react-router-dom';
+
+// 在组件内部添加
+const navigate = useNavigate();
+
+// 修改 navigate 函数
+const handleNavigate = useCallback(
+  (route: string) => {
+    navigate(route);
+    setActiveRoute(route);
+    const nextPage = registrySnapshot.pages.find((page) => page.route === route);
+    if (nextPage) {
+      dispatchWorkingContext({
+        type: 'enter_workflow_domain',
+        workflowDomainId: nextPage.workflowDomainId,
+        route,
+      });
+    }
+  },
+  [registrySnapshot.pages, navigate],
+);

@@ -8,6 +8,7 @@ import {
   useReducer,
   useState,
 } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { FrontendCapabilityModule } from '../sdk';
 import { composeKernelNavigation } from './composeKernelNavigation';
 import {
@@ -85,6 +86,7 @@ export function KernelRuntimeProvider({
   children,
   pluginModules = [],
 }: KernelRuntimeProviderProps) {
+  const navigate = useNavigate();
   const [activeRoute, setActiveRoute] = useState(getInitialRoute());
   const [runtimeSnapshot, setRuntimeSnapshot] = useState<KernelRegistrySnapshot | null>(null);
   const [kernelSource, setKernelSource] = useState<KernelSource>('loading');
@@ -144,8 +146,9 @@ export function KernelRuntimeProvider({
     ? resolveWorkflowSlots(activePage.workflowDomainId, registrySnapshot.slots, 'summary')
     : [];
 
-  const navigate = useCallback(
+  const handleNavigate = useCallback(
     (route: string) => {
+      navigate(route);
       setActiveRoute(route);
       const nextPage = registrySnapshot.pages.find((page) => page.route === route);
       if (nextPage) {
@@ -206,7 +209,7 @@ export function KernelRuntimeProvider({
       navigation,
       registrySnapshot,
       resourcePageExtensions: registrySnapshot.resourcePageExtensions,
-      navigate,
+      navigate: handleNavigate,
       reloadKernelMetadata,
       switchCluster,
       enterResource,
