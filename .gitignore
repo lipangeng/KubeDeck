@@ -587,3 +587,50 @@ cython_debug/
 !backend/internal/webui/dist/
 backend/internal/webui/dist/*
 !backend/internal/webui/dist/index.html
+
+# =============================================================================
+# KubeDeck Project Specific
+# =============================================================================
+
+# Build outputs
+kubedeck
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Database files (sensitive data)
+*.db
+*.sqlite
+*.sqlite3
+data/
+backend/data/
+
+# Playwright/Snapshot files
+.playwright-cli/
+*.snapshot
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Log files
+*.log
+logs/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
