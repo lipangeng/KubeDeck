@@ -1,7 +1,7 @@
 # KubeDeck Platform Verification Report
 
 **Date:** 2026-03-23  
-**Version:** v2.0.0  
+**Version:** v0.9.0  
 **Status:** ✅ PASSED
 
 ---
@@ -270,7 +270,7 @@ docker run -d -p 8080:8080 -v ./data:/data kubedeck:latest
 
 ## Conclusion
 
-KubeDeck v2.0.0 is **fully functional** and ready for use as a Kubernetes control plane. The platform now achieves feature parity with Kite in most areas:
+KubeDeck v0.9.0 is **fully functional** and ready for use as a Kubernetes control plane. The platform now achieves feature parity with Kite in most areas:
 
 - ✅ OAuth2 authentication
 - ✅ RBAC permission system  

@@ -121,7 +121,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 		response["kubernetes"] = "configured"
 
 		// Memory info
-		response["version"] = "2.0.0"
+		response["version"] = "0.9.0"
 	}
 
 	w.Header().Set("Content-Type", "application/json")

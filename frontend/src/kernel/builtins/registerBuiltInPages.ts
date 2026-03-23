@@ -3,6 +3,7 @@ import { HomepagePage } from './pages/HomepagePage';
 import { WorkloadsPage } from './pages/WorkloadsPage';
 import { ClustersPage } from './pages/ClustersPage';
 import { PodPage } from './pages/PodPage';
+import { DeploymentPage } from './pages/DeploymentPage';
 import { IngressPage } from './pages/IngressPage';
 import { RolesPage } from './pages/RolesPage';
 
@@ -75,6 +76,23 @@ export function registerBuiltInPages(): PageContribution[] {
       },
       component: PodPage,
       order: 30,
+    },
+    {
+      identity: {
+        source: 'builtin',
+        capabilityId: 'core.deployments',
+        contributionId: 'page.deployment-detail',
+      },
+      workflowDomainId: 'deployments',
+      route: '/deployments/:namespace/:name',
+      entryKey: 'deployment-detail',
+      title: { key: 'deployment.detail', fallback: 'Deployment Details' },
+      description: {
+        key: 'deployment.description',
+        fallback: 'Manage deployment replicas, rollout, and rollback.',
+      },
+      component: DeploymentPage,
+      order: 35,
     },
     {
       identity: {
