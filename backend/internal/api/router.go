@@ -88,6 +88,11 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/api/clusters/config/get", kernel.GetClusterConfigHandler)
 	mux.HandleFunc("/api/clusters/connect", kernel.ConnectClusterHandler)
 
+	// Helm routes
+	mux.HandleFunc("/api/helm", kernel.HelmHandler)
+	mux.HandleFunc("/api/helm/repo", kernel.HelmRepoHandler)
+	mux.HandleFunc("/api/helm/charts", kernel.HelmChartsHandler)
+
 	// Metrics endpoint
 	mux.Handle("/metrics", metricsInstance.Handler())
 
