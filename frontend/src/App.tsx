@@ -233,19 +233,31 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', color: 'text.primary' }}>
-      <AppBar position="sticky" color="transparent" elevation={0}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', color: 'text.primary' }} role="main">
+      <AppBar position="sticky" color="transparent" elevation={0} role="banner">
         <Toolbar sx={{ gap: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, flexGrow: 1 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, flexGrow: 1 }} component="h1">
             {copy('app.title')}
           </Typography>
-          <Button variant="outlined" onClick={cycleThemePreference}>
+          <Button 
+            variant="outlined" 
+            onClick={cycleThemePreference}
+            aria-label={`Change theme, current: ${themePreference}`}
+          >
             {copy('app.themeLabel')}: {themePreference}
           </Button>
-          <Button variant="outlined" onClick={cycleCluster}>
+          <Button 
+            variant="outlined" 
+            onClick={cycleCluster}
+            aria-label={`Change cluster, current: ${activeCluster}`}
+          >
             Cluster: {activeCluster}
           </Button>
-          <Button variant="outlined" onClick={() => setMenuSurface('system')}>
+          <Button 
+            variant="outlined" 
+            onClick={() => setMenuSurface('system')}
+            aria-label="Open system settings"
+          >
             System Settings
           </Button>
         </Toolbar>
@@ -259,19 +271,25 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
           px: { xs: 2, md: 3 },
           py: 3,
         }}
+        role="region"
+        aria-label="Main content area"
       >
-        <Paper variant="outlined" sx={{ p: 2 }}>
+        <Paper variant="outlined" sx={{ p: 2 }} role="navigation" aria-label="Kernel navigation">
           <Stack spacing={1.5}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }} id="navigation-label">
               {copy('app.kernelNavigation')}
             </Typography>
             {menuSurface === 'work' ? null : (
-              <Button variant="outlined" onClick={() => setMenuSurface('work')}>
+              <Button 
+                variant="outlined" 
+                onClick={() => setMenuSurface('work')}
+                aria-label="Go back to work menu"
+              >
                 Back to Work
               </Button>
             )}
             {visibleNavigation.map((group) => (
-              <Stack key={group.key} spacing={1}>
+              <Stack key={group.key} spacing={1} role="group" aria-labelledby="navigation-label">
                 <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
                   {group.title.fallback}
                 </Typography>
@@ -285,6 +303,8 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
                         navigate(entry.route ?? '/');
                       }
                     }}
+                    aria-label={`Navigate to ${entry.title.fallback}`}
+                    aria-current={entry.route === activePage?.route ? 'page' : undefined}
                   >
                     {entry.title.fallback}
                   </Button>
@@ -294,7 +314,12 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
             {menuSurface === 'work' ? (
               <>
                 <Divider />
-                <Button variant="contained" color="secondary" onClick={() => setMenuSurface('cluster')}>
+                <Button 
+                  variant="contained" 
+                  color="secondary" 
+                  onClick={() => setMenuSurface('cluster')}
+                  aria-label="Open cluster settings"
+                >
                   Cluster Settings
                 </Button>
               </>
@@ -325,6 +350,7 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
                     onClick={() => {
                       void handleExecuteAction(action.actionId);
                     }}
+                    aria-label={`Execute action: ${action.title.fallback}`}
                   >
                     {copy('app.runAction')} {action.title.fallback}
                   </Button>

@@ -44,10 +44,17 @@ interface ApprovalDialogProps {
 
 function ApprovalDialog({ open, command, security, onApprove, onReject }: ApprovalDialogProps) {
   return (
-    <Dialog open={open} onClose={onReject} maxWidth="sm" fullWidth>
-      <DialogTitle>Command Approval Required</DialogTitle>
-      <DialogContent>
-        <Alert severity={security === 'red' ? 'error' : 'warning'}>
+    <Dialog 
+      open={open} 
+      onClose={onReject} 
+      maxWidth="sm" 
+      fullWidth
+      aria-labelledby="approval-dialog-title"
+      aria-describedby="approval-dialog-description"
+    >
+      <DialogTitle id="approval-dialog-title">Command Approval Required</DialogTitle>
+      <DialogContent id="approval-dialog-description">
+        <Alert severity={security === 'red' ? 'error' : 'warning'} role="alert">
           <AlertTitle>Security Level: {security.toUpperCase()}</AlertTitle>
           This command requires approval before execution:
           <Box component="pre" sx={{ mt: 1, p: 1, bgcolor: 'rgba(0,0,0,0.08)', borderRadius: 1 }}>
@@ -185,6 +192,8 @@ export function AIFloatingChat() {
             boxShadow: 3,
             zIndex: 1200,
           }}
+          aria-label="Open AI assistant chat"
+          aria-expanded="false"
         >
           <ChatIcon sx={{ fontSize: 32 }} />
         </IconButton>
@@ -206,6 +215,9 @@ export function AIFloatingChat() {
             transition: 'all 0.3s ease',
             overflow: 'hidden',
           }}
+          role="dialog"
+          aria-label="AI Assistant Chat"
+          aria-modal={!minimized}
         >
           {/* Header */}
           <Box
@@ -217,12 +229,13 @@ export function AIFloatingChat() {
               alignItems: 'center',
               justifyContent: 'space-between',
             }}
+            role="banner"
           >
             <Stack direction="row" spacing={1} alignItems="center">
               <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.light' }}>
                 <ChatIcon />
               </Avatar>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }} id="chat-title">
                 AI Assistant
               </Typography>
             </Stack>
@@ -231,6 +244,8 @@ export function AIFloatingChat() {
                 size="small"
                 onClick={() => setMinimized(!minimized)}
                 sx={{ color: 'inherit' }}
+                aria-label={minimized ? 'Expand chat window' : 'Minimize chat window'}
+                aria-controls="chat-content"
               >
                 <MinimizeIcon />
               </IconButton>
@@ -238,6 +253,7 @@ export function AIFloatingChat() {
                 size="small"
                 onClick={() => setOpen(false)}
                 sx={{ color: 'inherit' }}
+                aria-label="Close chat window"
               >
                 <CloseIcon />
               </IconButton>
@@ -254,8 +270,12 @@ export function AIFloatingChat() {
                   p: 2,
                   bgcolor: 'background.default',
                 }}
+                id="chat-content"
+                role="log"
+                aria-label="Chat messages"
+                aria-live="polite"
               >
-                <List sx={{ p: 0 }}>
+                <List sx={{ p: 0 }} role="list">
                   {messages.map((msg) => (
                     <ListItem
                       key={msg.id}
@@ -264,6 +284,7 @@ export function AIFloatingChat() {
                         px: 0,
                         flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
                       }}
+                      role="listitem"
                     >
                       <ListItemAvatar>
                         <Avatar
@@ -272,6 +293,7 @@ export function AIFloatingChat() {
                             height: 32,
                             bgcolor: msg.role === 'user' ? 'primary.main' : 'secondary.main',
                           }}
+                          aria-label={msg.role === 'user' ? 'User avatar' : 'AI assistant avatar'}
                         >
                           {msg.role === 'user' ? 'U' : 'AI'}
                         </Avatar>
@@ -309,7 +331,7 @@ export function AIFloatingChat() {
                       <ListItemText
                         primary={
                           <Box sx={{ p: 1.5, bgcolor: 'grey.100', borderRadius: 2, display: 'inline-block' }}>
-                            <Typography variant="body2">Thinking...</Typography>
+                            <Typography variant="body2" role="status">Thinking...</Typography>
                           </Box>
                         }
                       />
@@ -321,7 +343,7 @@ export function AIFloatingChat() {
 
               {/* Quick Actions */}
               <Divider />
-              <Box sx={{ p: 1, bgcolor: 'background.paper' }}>
+              <Box sx={{ p: 1, bgcolor: 'background.paper' }} role="group" aria-label="Quick actions">
                 <Stack direction="row" spacing={0.5} sx={{ overflow: 'auto' }}>
                   {quickActions.map((action) => (
                     <Button
@@ -330,6 +352,7 @@ export function AIFloatingChat() {
                       variant="outlined"
                       onClick={() => sendMessage(action.query)}
                       sx={{ whiteSpace: 'nowrap' }}
+                      aria-label={`Quick action: ${action.label}`}
                     >
                       {action.label}
                     </Button>
@@ -351,6 +374,8 @@ export function AIFloatingChat() {
                   alignItems: 'center',
                   bgcolor: 'background.paper',
                 }}
+                role="searchbox"
+                aria-label="Chat input form"
               >
                 <InputBase
                   fullWidth
@@ -359,14 +384,18 @@ export function AIFloatingChat() {
                   onChange={(e) => setInputValue(e.target.value)}
                   disabled={loading}
                   sx={{ ml: 1, flex: 1 }}
+                  aria-label="Type your message"
+                  aria-describedby="chat-input-help"
                 />
                 <IconButton
                   type="submit"
                   color="primary"
                   disabled={loading || !inputValue.trim()}
+                  aria-label="Send message"
                 >
                   <SendIcon />
                 </IconButton>
+                <span id="chat-input-help" hidden>Press Enter to send your message</span>
               </Box>
             </>
           )}
