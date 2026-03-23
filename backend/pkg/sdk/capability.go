@@ -64,3 +64,15 @@ type ClusterProvider interface {
 	WorkflowDomainID() string
 	ListClusters() []ClusterItem
 }
+
+// EventItem represents a Kubernetes event
+type EventItem struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Type      string `json:"type"`
+	Reason    string `json:"reason"`
+	Message   string `json:"message"`
+	Count     int32  `json:"count"`
+	UpdatedAt string `json:"updated_at"`
+}

@@ -10,6 +10,7 @@ import { ConfigMapPage } from './pages/ConfigMapPage';
 import { IngressPage } from './pages/IngressPage';
 import { RolesPage } from './pages/RolesPage';
 import { EventsPage } from './pages/EventsPage';
+import { HelmPage } from './pages/HelmPage';
 
 export function registerBuiltInPages(): PageContribution[] {
   return [
@@ -198,6 +199,23 @@ export function registerBuiltInPages(): PageContribution[] {
         fallback: 'View Kubernetes cluster events.',
       },
       component: EventsPage,
+      order: 55,
+    },
+    {
+      identity: {
+        source: 'builtin',
+        capabilityId: 'core.helm',
+        contributionId: 'page.helm',
+      },
+      workflowDomainId: 'helm',
+      route: '/helm',
+      entryKey: 'helm',
+      title: { key: 'helm.title', fallback: 'Helm Charts' },
+      description: {
+        key: 'helm.description',
+        fallback: 'Manage Helm chart releases.',
+      },
+      component: HelmPage,
       order: 55,
     },
   ];

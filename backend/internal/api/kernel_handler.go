@@ -60,6 +60,8 @@ func NewKernelHandlerWithDependencies(
 	_ = registry.Register(builtins.WorkloadsCapability{})
 	_ = registry.Register(builtins.WorkloadsInsightsCapability{})
 	_ = registry.Register(builtins.OperationsCapability{})
+	_ = registry.Register(builtins.EventsCapability{})
+	_ = registry.Register(builtins.HelmCapability{})
 	if providers, err := plugins.LoadManifestProvidersFromDir(pluginRoot); err == nil {
 		for _, provider := range providers {
 			_ = registry.Register(provider)
