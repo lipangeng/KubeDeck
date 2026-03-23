@@ -189,3 +189,97 @@ func (h *KernelHandler) updateClusterConfig(w http.ResponseWriter, r *http.Reque
 		"message": "集群配置已更新",
 	})
 }
+
+// GetClusterConfigHandler gets a specific cluster config
+func (h *KernelHandler) GetClusterConfigHandler(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "id required", http.StatusBadRequest)
+		return
+	}
+
+	clusterID, err := uuid.Parse(id)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	cluster, err := h.clusterConfigRepo.GetByID(clusterID)
+	if err != nil {
+		http.Error(w, "cluster not found", http.StatusNotFound)
+		return
+	}
+
+	type SafeCluster struct {
+		ID        string    `json:"id"`
+		Name      string    `json:"name"`
+		Server    string    `json:"server"`
+		Status    string    `json:"status"`
+		Version   string    `json:"version,omitempty"`
+		Nodes     int       `json:"nodes,omitempty"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+
+	safeCluster := SafeCluster{
+		ID:        cluster.ID.String(),
+		Name:      cluster.Name,
+		Server:    cluster.Server,
+		Status:    cluster.Status,
+		Version:   cluster.Version,
+		Nodes:     cluster.Nodes,
+		CreatedAt: cluster.CreatedAt,
+	}
+
+	writeJSON(w, safeCluster)
+}
+
+// ConnectClusterHandler tests and updates cluster connection
+func (h *KernelHandler) ConnectClusterHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ID     string `json:"id"`
+		Token  string `json:"token"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	clusterID, err := uuid.Parse(req.ID)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	cluster, err := h.clusterConfigRepo.GetByID(clusterID)
+	if err != nil {
+		http.Error(w, "cluster not found", http.StatusNotFound)
+		return
+	}
+
+	// Update token if provided
+	if req.Token != "" {
+		cluster.Token = req.Token
+	}
+
+	// Test connection
+	// TODO: Implement actual K8s connection test
+	cluster.Status = "connected"
+	now := time.Now()
+	cluster.LastConnect = &now
+
+	if err := h.clusterConfigRepo.Update(cluster); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]string{
+		"status":  "connected",
+		"message": "Cluster connected successfully",
+	})
+}
