@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -25,6 +25,9 @@ import type { KernelNavigationGroup } from './kernel/runtime/menu/types';
 import type { RemoteMenuPreferences } from './kernel/runtime/transport';
 import { type ThemePreference } from './themeMode';
 import { AIFloatingChat } from './features/ai/AIFloatingChat';
+import { LoginPage } from './pages/LoginPage';
+import { SetupWizard } from './pages/SetupWizard';
+import { UserMenu } from './components/UserMenu';
 
 interface AppProps {
   themePreference: ThemePreference;
@@ -38,13 +41,64 @@ function App({ themePreference, onThemePreferenceChange, pluginModules = [] }: A
   const resolvedPluginModules =
     pluginModules.length > 0 ? pluginModules : discoverFrontendPluginModules();
 
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isSetupCompleted, setIsSetupCompleted] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check authentication and setup status
+    const checkStatus = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        const data = await response.json();
+        setIsAuthenticated(data.authenticated);
+        
+        const setupCompleted = localStorage.getItem('setupCompleted') === 'true';
+        setIsSetupCompleted(setupCompleted);
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        setIsAuthenticated(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkStatus();
+  }, []);
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <Typography>Loading...</Typography>
+      </Box>
+    );
+  }
+
   return (
     <BrowserRouter>
       <KernelRuntimeProvider pluginModules={resolvedPluginModules}>
-        <AppShell
-          themePreference={themePreference}
-          onThemePreferenceChange={onThemePreferenceChange}
-        />
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <LoginPage />} />
+          <Route path="/setup" element={isSetupCompleted ? <Navigate to="/" /> : <SetupWizard />} />
+          
+          {/* Protected routes */}
+          <Route
+            path="/*"
+            element={
+              isAuthenticated && isSetupCompleted ? (
+                <AppShell
+                  themePreference={themePreference}
+                  onThemePreferenceChange={onThemePreferenceChange}
+                />
+              ) : isSetupCompleted ? (
+                <Navigate to="/login" />
+              ) : (
+                <Navigate to="/setup" />
+              )
+            }
+          />
+        </Routes>
       </KernelRuntimeProvider>
     </BrowserRouter>
   );
@@ -263,6 +317,7 @@ function AppShell({ themePreference, onThemePreferenceChange }: AppProps) {
           >
             System Settings
           </Button>
+          <UserMenu />
         </Toolbar>
       </AppBar>
 
