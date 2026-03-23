@@ -10,9 +10,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     resolve: {
       alias: {
-        '@xterm/xterm': '/src/test/mocks/xterm.ts',
-        '@xterm/addon-fit': '/src/test/mocks/xterm-addons.ts',
-        '@xterm/addon-attach': '/src/test/mocks/xterm-addons.ts',
+        // Test mocks for xterm (only used in tests)
       },
     },
     server: {
