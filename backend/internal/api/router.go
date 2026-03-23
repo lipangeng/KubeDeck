@@ -64,6 +64,13 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/api/workflows/workloads/items", kernel.Workloads)
 	mux.HandleFunc("/api/actions/execute", kernel.ExecuteAction)
 
+	// Pod routes
+	mux.HandleFunc("/api/pods/logs", kernel.PodLogsHandler)
+	mux.HandleFunc("/api/pods/logs/stream", kernel.PodLogsHandler)
+	mux.HandleFunc("/api/pods/exec", kernel.PodExecHandler)
+	mux.HandleFunc("/api/pods/get", kernel.GetPodHandler)
+	mux.HandleFunc("/api/pods/logs/get", kernel.GetPodLogsHandler)
+
 	// Metrics endpoint
 	mux.Handle("/metrics", metricsInstance.Handler())
 
