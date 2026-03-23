@@ -4,6 +4,8 @@ import { WorkloadsPage } from './pages/WorkloadsPage';
 import { ClustersPage } from './pages/ClustersPage';
 import { PodPage } from './pages/PodPage';
 import { DeploymentPage } from './pages/DeploymentPage';
+import { ServicePage } from './pages/ServicePage';
+import { ConfigMapPage } from './pages/ConfigMapPage';
 import { IngressPage } from './pages/IngressPage';
 import { RolesPage } from './pages/RolesPage';
 
@@ -93,6 +95,40 @@ export function registerBuiltInPages(): PageContribution[] {
       },
       component: DeploymentPage,
       order: 35,
+    },
+    {
+      identity: {
+        source: 'builtin',
+        capabilityId: 'core.services',
+        contributionId: 'page.service-detail',
+      },
+      workflowDomainId: 'services',
+      route: '/services/:namespace/:name',
+      entryKey: 'service-detail',
+      title: { key: 'service.detail', fallback: 'Service Details' },
+      description: {
+        key: 'service.description',
+        fallback: 'View service endpoints, ports, and configuration.',
+      },
+      component: ServicePage,
+      order: 38,
+    },
+    {
+      identity: {
+        source: 'builtin',
+        capabilityId: 'core.configmaps',
+        contributionId: 'page.configmap-detail',
+      },
+      workflowDomainId: 'configmaps',
+      route: '/configmaps/:namespace/:name',
+      entryKey: 'configmap-detail',
+      title: { key: 'configmap.detail', fallback: 'ConfigMap Details' },
+      description: {
+        key: 'configmap.description',
+        fallback: 'Manage ConfigMap and Secret data.',
+      },
+      component: ConfigMapPage,
+      order: 39,
     },
     {
       identity: {
