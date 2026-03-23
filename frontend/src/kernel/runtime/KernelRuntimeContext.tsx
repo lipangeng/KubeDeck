@@ -67,11 +67,25 @@ interface KernelRuntimeProviderProps extends PropsWithChildren {
   pluginModules?: FrontendCapabilityModule[];
 }
 
+// Get initial route from URL
+const getInitialRoute = () => {
+  if (typeof window !== 'undefined') {
+    const path = window.location.pathname;
+    const knownRoutes = ['/workloads', '/clusters', '/events', '/helm', '/operations', '/roles'];
+    for (const route of knownRoutes) {
+      if (path.startsWith(route)) {
+        return route;
+      }
+    }
+  }
+  return '/';
+};
+
 export function KernelRuntimeProvider({
   children,
   pluginModules = [],
 }: KernelRuntimeProviderProps) {
-  const [activeRoute, setActiveRoute] = useState('/');
+  const [activeRoute, setActiveRoute] = useState(getInitialRoute());
   const [runtimeSnapshot, setRuntimeSnapshot] = useState<KernelRegistrySnapshot | null>(null);
   const [kernelSource, setKernelSource] = useState<KernelSource>('loading');
   const [actionSummary, setActionSummary] = useState<string | null>(null);

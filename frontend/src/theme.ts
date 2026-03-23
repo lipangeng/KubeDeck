@@ -1,5 +1,4 @@
-import { createTheme } from '@mui/material/styles';
-import type { PaletteMode } from '@mui/material/styles';
+import { createTheme, type PaletteMode } from '@mui/material';
 
 export function createAppTheme(mode: PaletteMode) {
   return createTheme({
@@ -19,27 +18,58 @@ export function createAppTheme(mode: PaletteMode) {
         main: '#0f4c81',
       },
       secondary: {
-        main: '#00897b',
+        main: '#ff6b35',
+      },
+      error: {
+        main: '#f44336',
+      },
+      warning: {
+        main: '#ff9800',
+      },
+      info: {
+        main: '#2196f3',
+      },
+      success: {
+        main: '#4caf50',
+      },
+    },
+    typography: {
+      fontFamily: '"Inter", "Helvetica", "Arial", sans-serif',
+      h1: {
+        fontWeight: 700,
+      },
+      h2: {
+        fontWeight: 700,
+      },
+      h3: {
+        fontWeight: 700,
+      },
+      h4: {
+        fontWeight: 700,
+      },
+      h5: {
+        fontWeight: 700,
+      },
+      h6: {
+        fontWeight: 700,
       },
     },
     shape: {
-      borderRadius: 14,
-    },
-    typography: {
-      fontFamily: '"IBM Plex Sans", "Noto Sans SC", sans-serif',
+      borderRadius: 8,
     },
     components: {
-      MuiPaper: {
+      MuiButton: {
         styleOverrides: {
           root: {
-            backgroundImage: 'none',
+            textTransform: 'none',
+            fontWeight: 600,
           },
         },
       },
-      MuiChip: {
+      MuiPaper: {
         styleOverrides: {
           root: {
-            fontWeight: 600,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           },
         },
       },

@@ -17,8 +17,6 @@ import SearchIcon from '@mui/icons-material/Search';
 import WarningIcon from '@mui/icons-material/Warning';
 import ErrorIcon from '@mui/icons-material/Error';
 import InfoIcon from '@mui/icons-material/Info';
-import { useNotification } from '../../../components/NotificationProvider';
-import { LoadingOverlay } from '../../../components/LoadingOverlay';
 
 interface Event {
   name: string;
@@ -37,7 +35,6 @@ export function EventsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
-  const notification = useNotification();
 
   useEffect(() => {
     loadEvents();
@@ -50,10 +47,8 @@ export function EventsPage() {
       const data = await response.json();
       setEvents(data.events || []);
       if (data.error) {
-        notification.showError('加载事件失败：' + data.error);
       }
     } catch (error) {
-      notification.showError('加载事件失败：' + (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -82,7 +77,7 @@ export function EventsPage() {
   });
 
   if (loading) {
-    return <LoadingOverlay message="加载事件..." />;
+    return <div>Loading...</div>;
   }
 
   return (

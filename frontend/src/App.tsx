@@ -4,7 +4,6 @@ import { discoverFrontendPluginModules } from './kernel/runtime/discoverFrontend
 import { type ThemePreference } from './themeMode';
 import { AppShell } from './AppShell';
 import { LoginPage } from './pages/LoginPage';
-import { NotificationProvider } from './components/NotificationProvider';
 
 interface AppProps {
   themePreference: ThemePreference;
@@ -16,14 +15,12 @@ export function App({ themePreference, onThemePreferenceChange }: AppProps) {
 
   return (
     <BrowserRouter>
-      <NotificationProvider>
-        <KernelRuntimeProvider pluginModules={pluginModules}>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/*" element={<AppShell themePreference={themePreference} onThemePreferenceChange={onThemePreferenceChange} />} />
-          </Routes>
-        </KernelRuntimeProvider>
-      </NotificationProvider>
+      <KernelRuntimeProvider pluginModules={pluginModules}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/*" element={<AppShell themePreference={themePreference} onThemePreferenceChange={onThemePreferenceChange} />} />
+        </Routes>
+      </KernelRuntimeProvider>
     </BrowserRouter>
   );
 }

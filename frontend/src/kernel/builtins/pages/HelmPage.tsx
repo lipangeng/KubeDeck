@@ -10,8 +10,6 @@ import TableRow from '@mui/material/TableRow';
 import Chip from '@mui/material/Chip';
 import Button from '@mui/material/Button';
 import Box from '@mui/material/Box';
-import { useNotification } from '../../../components/NotificationProvider';
-import { LoadingOverlay } from '../../../components/LoadingOverlay';
 
 interface HelmRelease {
   name: string;
@@ -26,7 +24,6 @@ interface HelmRelease {
 export function HelmPage() {
   const [releases, setReleases] = useState<HelmRelease[]>([]);
   const [loading, setLoading] = useState(true);
-  const notification = useNotification();
 
   useEffect(() => {
     loadReleases();
@@ -39,17 +36,15 @@ export function HelmPage() {
       const data = await response.json();
       setReleases(data.releases || []);
       if (data.error) {
-        notification.showInfo('Helm 未安装或无发布：' + data.error);
       }
     } catch (error) {
-      notification.showError('加载 Helm 发布失败：' + (error as Error).message);
     } finally {
       setLoading(false);
     }
   };
 
   if (loading) {
-    return <LoadingOverlay message="加载 Helm 发布..." />;
+    return <div>Loading...</div>;
   }
 
   return (

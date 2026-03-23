@@ -16,8 +16,6 @@ import InputAdornment from '@mui/material/InputAdornment';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import AddIcon from '@mui/icons-material/Add';
-import { useNotification } from '../../../components/NotificationProvider';
-import { LoadingOverlay } from '../../../components/LoadingOverlay';
 import { useKernelRuntime } from '../../runtime/KernelRuntimeContext';
 
 interface WorkloadItem {
@@ -36,7 +34,6 @@ export function WorkloadsPage() {
   const [workloads, setWorkloads] = useState<WorkloadItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
-  const notification = useNotification();
 
   useEffect(() => {
     loadWorkloads();
@@ -49,7 +46,6 @@ export function WorkloadsPage() {
       const data = await response.json();
       setWorkloads(data || []);
     } catch (error) {
-      notification.showError('加载工作负载失败：' + (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -74,13 +70,13 @@ export function WorkloadsPage() {
   };
 
   const filteredWorkloads = workloads.filter(workload =>
-    workload.name.toLowerCase().includes(filter.toLowerCase()) ||
-    workload.namespace.toLowerCase().includes(filter.toLowerCase()) ||
-    workload.kind.toLowerCase().includes(filter.toLowerCase())
+    workload.name?.toLowerCase().includes(filter.toLowerCase()) ||
+    workload.namespace?.toLowerCase().includes(filter.toLowerCase()) ||
+    workload.kind?.toLowerCase().includes(filter.toLowerCase())
   );
 
   if (loading) {
-    return <LoadingOverlay message="加载工作负载..." />;
+    return <div>Loading...</div>;
   }
 
   return (
