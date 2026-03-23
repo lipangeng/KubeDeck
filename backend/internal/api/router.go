@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"kubedeck/backend/internal/logging"
 	"kubedeck/backend/internal/metrics"
 	"kubedeck/backend/internal/middleware"
 )
@@ -11,6 +12,7 @@ import (
 // NewRouter wires the minimal backend API surface kept during cleanup.
 func NewRouter() http.Handler {
 	metricsInstance := metrics.Global()
+	logger := logging.Global()
 
 	mux := http.NewServeMux()
 	kernel := NewKernelHandler()
@@ -64,6 +66,9 @@ func NewRouter() http.Handler {
 
 	// Apply middleware
 	var handler http.Handler = mux
+
+	// Logging middleware (must be first)
+	handler = logger.Middleware(handler)
 
 	// Metrics middleware (must be before other middleware)
 	handler = metricsInstance.Middleware(handler)
