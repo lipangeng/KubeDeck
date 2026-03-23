@@ -298,3 +298,88 @@ func (h *KernelHandler) ListDeploymentsHandler(w http.ResponseWriter, r *http.Re
 		"total":       len(deployments.Items),
 	})
 }
+
+// BatchDeploymentActionRequest represents a batch deployment action request
+type BatchDeploymentActionRequest struct {
+	Namespace string   `json:"namespace"`
+	Names     []string `json:"names"`
+	Action    string   `json:"action"`
+	Replicas  *int32   `json:"replicas,omitempty"`
+}
+
+// BatchDeploymentHandler handles batch deployment operations
+func (h *KernelHandler) BatchDeploymentHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req BatchDeploymentActionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.Namespace == "" {
+		req.Namespace = "default"
+	}
+
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		writeJSON(w, map[string]interface{}{
+			"success": false,
+			"error":   "K8s not configured",
+		})
+		return
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	results := make([]map[string]interface{}, 0, len(req.Names))
+	
+	for _, name := range req.Names {
+		actionReq := DeploymentActionRequest{
+			Namespace: req.Namespace,
+			Name:      name,
+			Action:    req.Action,
+			Replicas:  req.Replicas,
+		}
+
+		var result map[string]interface{}
+		var err error
+
+		switch req.Action {
+		case "scale":
+			result, err = scaleDeployment(r.Context(), clientset, actionReq)
+		case "restart":
+			result, err = restartDeployment(r.Context(), clientset, actionReq)
+		case "pause":
+			result, err = pauseDeployment(r.Context(), clientset, actionReq)
+		case "resume":
+			result, err = resumeDeployment(r.Context(), clientset, actionReq)
+		}
+
+		if err != nil {
+			results = append(results, map[string]interface{}{
+				"name":    name,
+				"success": false,
+				"error":   err.Error(),
+			})
+		} else {
+			results = append(results, result)
+		}
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"success": true,
+		"results": results,
+		"total":   len(req.Names),
+	})
+}

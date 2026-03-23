@@ -72,6 +72,7 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/api/pods/logs/get", kernel.GetPodLogsHandler)
 
 	// Deployment routes
+	mux.HandleFunc("/api/deployments/batch", kernel.BatchDeploymentHandler)
 	mux.HandleFunc("/api/deployments/action", kernel.DeploymentHandler)
 	mux.HandleFunc("/api/deployments/get", kernel.GetDeploymentHandler)
 	mux.HandleFunc("/api/deployments/list", kernel.ListDeploymentsHandler)
