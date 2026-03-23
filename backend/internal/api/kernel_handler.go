@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"kubedeck/backend/internal/auth"
 	"kubedeck/backend/internal/core/builtins"
+	"kubedeck/backend/internal/k8s"
 	"kubedeck/backend/internal/plugins"
 	"kubedeck/backend/internal/storage"
 	"kubedeck/backend/pkg/sdk"
@@ -27,6 +28,7 @@ type KernelHandler struct {
 	userRepo        storage.UserRepository
 	auditLogRepo    storage.AuditLogRepository
 	oauthManager    *auth.Manager
+	k8sSyncer       *k8s.RBACSyncer
 }
 
 const defaultMenuUserID = "default-user"
@@ -83,6 +85,9 @@ func NewKernelHandlerWithDependencies(
 		Scopes:       []string{"openid", "email", "profile"},
 	})
 
+	// Initialize K8s RBAC syncer
+	k8sSyncer, _ := k8s.NewRBACSyncer(os.Getenv("K8S_NAMESPACE"))
+
 	return &KernelHandler{
 		registry:        registry,
 		menuRepo:        menuRepo,
@@ -92,6 +97,7 @@ func NewKernelHandlerWithDependencies(
 		userRepo:        db.UserRepository(),
 		auditLogRepo:    db.AuditLogRepository(),
 		oauthManager:    oauthManager,
+		k8sSyncer:       k8sSyncer,
 	}
 }
 

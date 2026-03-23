@@ -88,7 +88,14 @@ func (h *KernelHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Create role binding when auth is integrated
+	// Sync to Kubernetes RBAC if syncer is available
+	if h.k8sSyncer != nil && !req.IsBuiltin {
+		clusterScoped := len(req.ClusterIDs) > 0 && req.ClusterIDs[0] == "*"
+		if err := h.k8sSyncer.SyncRole(r.Context(), req.Name, req.Description, string(rulesJSON), clusterScoped); err != nil {
+			// Log error but don't fail the request
+			// TODO: Add proper logging
+		}
+	}
 
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, role)
