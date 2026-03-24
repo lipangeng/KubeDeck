@@ -72,7 +72,7 @@ interface KernelRuntimeProviderProps extends PropsWithChildren {
 const getInitialRoute = () => {
   if (typeof window !== 'undefined') {
     const path = window.location.pathname;
-    const knownRoutes = ['/workloads', '/clusters', '/events', '/helm', '/operations', '/roles'];
+    const knownRoutes = ['/profile', '/workloads', '/clusters', '/events', '/helm', '/operations', '/roles'];
     for (const route of knownRoutes) {
       if (path.startsWith(route)) {
         return route;
