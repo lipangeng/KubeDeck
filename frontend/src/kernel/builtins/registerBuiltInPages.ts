@@ -11,6 +11,7 @@ import { IngressPage } from './pages/IngressPage';
 import { RolesPage } from './pages/RolesPage';
 import { EventsPage } from './pages/EventsPage';
 import { HelmPage } from './pages/HelmPage';
+import { UserProfilePage } from './pages/UserProfilePage';
 
 export function registerBuiltInPages(): PageContribution[] {
   return [
@@ -217,6 +218,19 @@ export function registerBuiltInPages(): PageContribution[] {
       },
       component: HelmPage,
       order: 55,
+    },
+    {
+      identity: {
+        source: 'builtin',
+        capabilityId: 'core.profile',
+        contributionId: 'page.profile',
+      },
+      workflowDomainId: 'profile',
+      route: '/profile',
+      entryKey: 'profile',
+      title: { key: 'profile.title', fallback: 'Profile' },
+      component: UserProfilePage,
+      order: 100,
     },
   ];
 }

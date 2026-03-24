@@ -44,12 +44,12 @@ export function UserMenu({ user }: UserMenuProps) {
   };
 
   const handleProfile = () => {
-    console.log('Navigate to profile');
+    navigate('/profile');
     handleClose();
   };
 
   const handleSettings = () => {
-    console.log('Navigate to settings');
+    navigate('/clusters/config');
     handleClose();
   };
 
@@ -123,7 +123,7 @@ export function UserMenu({ user }: UserMenuProps) {
           <ListItemIcon>
             <SettingsIcon fontSize="small" />
           </ListItemIcon>
-          设置
+          集群设置
         </MenuItem>
 
         <Divider />
