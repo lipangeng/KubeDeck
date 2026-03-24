@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
@@ -10,6 +10,7 @@ import Avatar from '@mui/material/Avatar';
 import Alert from '@mui/material/Alert';
 import AlertTitle from '@mui/material/AlertTitle';
 import Divider from '@mui/material/Divider';
+import CircularProgress from '@mui/material/CircularProgress';
 
 export function UserProfilePage() {
   const navigate = useNavigate();
@@ -28,53 +29,89 @@ export function UserProfilePage() {
   });
   const [passwordError, setPasswordError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [formError, setFormError] = useState('');
 
-  const handleProfileUpdate = async (e: React.FormEvent) => {
+  const handleProfileUpdate = async (e: FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('=== 提交个人资料 ===');
     setLoading(true);
     setSuccessMessage('');
+    setFormError('');
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setSuccessMessage('个人资料已更新');
+      // TODO: Call API to update profile
+      console.log('Updating profile:', user);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      setSuccessMessage('✅ 个人资料已成功更新');
+      console.log('Profile updated successfully');
     } catch (error) {
-      setPasswordError('更新失败');
+      setFormError('❌ 更新失败：' + (error as Error).message);
+      console.error('Profile update failed:', error);
     } finally {
       setLoading(false);
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccessMessage(''), 5000);
     }
   };
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
+  const handlePasswordChange = async (e: FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('=== 提交密码修改 ===');
     setPasswordError('');
     setSuccessMessage('');
     
+    // Validate passwords
     if (passwords.newPassword !== passwords.confirmPassword) {
-      setPasswordError('两次输入的新密码不一致');
+      setPasswordError('❌ 两次输入的新密码不一致');
       return;
     }
     
     if (passwords.newPassword.length < 6) {
-      setPasswordError('新密码长度至少 6 位');
+      setPasswordError('❌ 新密码长度至少 6 位');
+      return;
+    }
+    
+    if (!passwords.currentPassword) {
+      setPasswordError('❌ 请输入当前密码');
       return;
     }
     
     setLoading(true);
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setSuccessMessage('密码已修改');
+      // TODO: Call API to change password
+      console.log('Changing password:', { 
+        hasCurrentPassword: !!passwords.currentPassword,
+        newPasswordLength: passwords.newPassword.length 
+      });
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      setSuccessMessage('✅ 密码已成功修改');
       setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      console.log('Password changed successfully');
     } catch (error) {
-      setPasswordError('修改失败');
+      setPasswordError('❌ 修改失败：' + (error as Error).message);
+      console.error('Password change failed:', error);
     } finally {
       setLoading(false);
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccessMessage(''), 5000);
     }
   };
 
   const handleLogout = async () => {
+    console.log('=== 退出登录 ===');
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', { 
+        method: 'POST',
+        credentials: 'include'
+      });
+      console.log('Logout successful');
       navigate('/login');
     } catch (error) {
       console.error('Logout failed:', error);
@@ -85,6 +122,7 @@ export function UserProfilePage() {
 
   return (
     <Stack spacing={3} sx={{ maxWidth: 800 }}>
+      {/* Header */}
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Stack direction="row" spacing={2} alignItems="center">
           <Avatar sx={{ width: 56, height: 56, bgcolor: 'primary.main', fontSize: 24 }}>
@@ -97,6 +135,7 @@ export function UserProfilePage() {
         </Stack>
       </Paper>
 
+      {/* Profile Form */}
       <Paper variant="outlined" sx={{ p: 3 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>个人资料</Typography>
         <form onSubmit={handleProfileUpdate}>
@@ -112,40 +151,84 @@ export function UserProfilePage() {
               fullWidth
               label="姓名"
               value={user.name}
-              onChange={(e) => setUser({ ...user, name: e.target.value })}
+              onChange={(e) => {
+                console.log('Name changed:', e.target.value);
+                setUser({ ...user, name: e.target.value });
+              }}
             />
             <TextField
               fullWidth
               label="邮箱"
               type="email"
               value={user.email}
-              onChange={(e) => setUser({ ...user, email: e.target.value })}
+              onChange={(e) => {
+                console.log('Email changed:', e.target.value);
+                setUser({ ...user, email: e.target.value });
+              }}
             />
+            
             {successMessage && (
-              <Alert severity="success">
+              <Alert severity="success" onClose={() => setSuccessMessage('')}>
                 <AlertTitle>成功</AlertTitle>
                 {successMessage}
               </Alert>
             )}
-            {passwordError && (
-              <Alert severity="error">
+            
+            {formError && (
+              <Alert severity="error" onClose={() => setFormError('')}>
                 <AlertTitle>错误</AlertTitle>
-                {passwordError}
+                {formError}
               </Alert>
             )}
-            <Box>
-              <Button type="submit" variant="contained" disabled={loading}>
-                {loading ? '保存中...' : '保存修改'}
+            
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button 
+                type="submit" 
+                variant="contained" 
+                disabled={loading}
+                sx={{ minWidth: 120 }}
+              >
+                {loading ? <CircularProgress size={24} /> : '保存修改'}
+              </Button>
+              <Button 
+                type="button"
+                variant="outlined"
+                onClick={() => {
+                  setUser({
+                    name: 'Admin User',
+                    email: 'admin@kubedeck.io',
+                    username: 'admin',
+                  });
+                  setFormError('');
+                  setSuccessMessage('');
+                }}
+              >
+                重置
               </Button>
             </Box>
           </Stack>
         </form>
       </Paper>
 
+      {/* Password Change */}
       <Paper variant="outlined" sx={{ p: 3 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>修改密码</Typography>
         <form onSubmit={handlePasswordChange}>
           <Stack spacing={3}>
+            {successMessage && (
+              <Alert severity="success" onClose={() => setSuccessMessage('')}>
+                <AlertTitle>成功</AlertTitle>
+                {successMessage}
+              </Alert>
+            )}
+            
+            {passwordError && (
+              <Alert severity="error" onClose={() => setPasswordError('')}>
+                <AlertTitle>错误</AlertTitle>
+                {passwordError}
+              </Alert>
+            )}
+            
             <TextField
               fullWidth
               label="当前密码"
@@ -173,26 +256,42 @@ export function UserProfilePage() {
               error={passwords.newPassword !== passwords.confirmPassword && passwords.confirmPassword !== ''}
               helperText={passwords.newPassword !== passwords.confirmPassword && passwords.confirmPassword !== '' ? '两次输入的密码不一致' : ''}
             />
-            <Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
               <Button 
                 type="submit" 
                 variant="contained" 
                 color="secondary"
                 disabled={loading || !passwords.currentPassword || !passwords.newPassword || !passwords.confirmPassword}
+                sx={{ minWidth: 120 }}
               >
-                {loading ? '修改中...' : '修改密码'}
+                {loading ? <CircularProgress size={24} /> : '修改密码'}
+              </Button>
+              <Button 
+                type="button"
+                variant="outlined"
+                onClick={() => setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' })}
+                disabled={loading}
+              >
+                清空
               </Button>
             </Box>
           </Stack>
         </form>
       </Paper>
 
+      {/* Danger Zone */}
       <Paper variant="outlined" sx={{ p: 3, borderColor: 'error.light' }}>
         <Typography variant="h6" color="error" sx={{ mb: 2 }}>危险区域</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           退出登录后需要重新登录才能访问系统。
         </Typography>
-        <Button variant="outlined" color="error" onClick={handleLogout}>
+        <Button 
+          variant="outlined" 
+          color="error" 
+          onClick={handleLogout}
+          startIcon={loading ? <CircularProgress size={20} /> : null}
+          disabled={loading}
+        >
           退出登录
         </Button>
       </Paper>
