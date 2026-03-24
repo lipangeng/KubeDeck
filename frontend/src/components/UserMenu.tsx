@@ -27,6 +27,7 @@ export function UserMenu({ user }: UserMenuProps) {
   const open = Boolean(anchorEl);
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
     setAnchorEl(event.currentTarget);
   };
 
@@ -36,7 +37,10 @@ export function UserMenu({ user }: UserMenuProps) {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', { 
+        method: 'POST',
+        credentials: 'include'
+      });
       navigate('/login');
     } catch (error) {
       console.error('Logout failed:', error);
@@ -44,16 +48,17 @@ export function UserMenu({ user }: UserMenuProps) {
   };
 
   const handleProfile = () => {
+    console.log('=== Navigating to profile ===');
     navigate('/profile');
     handleClose();
   };
 
   const handleSettings = () => {
+    console.log('=== Navigating to cluster settings ===');
     navigate('/clusters/config');
     handleClose();
   };
 
-  // Mock user data if not provided
   const displayUser = user || {
     name: 'Admin User',
     email: 'admin@kubedeck.io',
@@ -88,7 +93,7 @@ export function UserMenu({ user }: UserMenuProps) {
         id="account-menu"
         open={open}
         onClose={handleClose}
-        onClick={handleClose}
+        onClick={(e) => e.stopPropagation()}
         PaperProps={{
           elevation: 3,
           sx: {
@@ -99,7 +104,6 @@ export function UserMenu({ user }: UserMenuProps) {
         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
-        {/* User Info */}
         <Box sx={{ px: 2, py: 1.5 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
             {displayUser.name}
@@ -111,15 +115,20 @@ export function UserMenu({ user }: UserMenuProps) {
 
         <Divider />
 
-        {/* Menu Items */}
-        <MenuItem onClick={handleProfile}>
+        <MenuItem onClick={(e) => {
+          e.stopPropagation();
+          handleProfile();
+        }}>
           <ListItemIcon>
             <PersonIcon fontSize="small" />
           </ListItemIcon>
           个人资料
         </MenuItem>
 
-        <MenuItem onClick={handleSettings}>
+        <MenuItem onClick={(e) => {
+          e.stopPropagation();
+          handleSettings();
+        }}>
           <ListItemIcon>
             <SettingsIcon fontSize="small" />
           </ListItemIcon>
@@ -128,8 +137,10 @@ export function UserMenu({ user }: UserMenuProps) {
 
         <Divider />
 
-        {/* Logout */}
-        <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
+        <MenuItem onClick={(e) => {
+          e.stopPropagation();
+          handleLogout();
+        }} sx={{ color: 'error.main' }}>
           <ListItemIcon>
             <LogoutIcon fontSize="small" />
           </ListItemIcon>
